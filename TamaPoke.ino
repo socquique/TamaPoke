@@ -18,6 +18,7 @@
 #include "dex.h"
 #include "pet.h"
 #include "sdmon.h"
+#include "rtcbat.h"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -98,9 +99,12 @@ void setup() {
   panel->setBrightness(180);
 
   touch.setPins(TP_RESET, TP_INT);
-  if (!touch.begin(Wire, 0x5A, IIC_SDA, IIC_SCL)) {
-    Serial.println("CST9217 no detectado");
+  bool touchOk = false;
+  for (int i = 0; i < 3 && !touchOk; i++) {  // a veces falla al primer intento
+    touchOk = touch.begin(Wire, 0x5A, IIC_SDA, IIC_SCL);
+    if (!touchOk) delay(150);
   }
+  if (!touchOk) Serial.println("CST9217 no detectado");
   // begin() deja el chip en modo comando (lee la identidad y no sale);
   // hace falta un reset por hardware para que vuelva a reportar toques
   touch.reset();
@@ -110,6 +114,18 @@ void setup() {
   pet.begin();
   sdBegin();
   thumbs.load();
+
+  // reloj real: aplica el tiempo que estuvo apagado
+  rtcBegin();
+  batBegin();
+  uint32_t e = rtcEpoch();
+  if (e == 0) {
+    rtcSetEpoch(1767225600UL);  // RTC virgen: semilla (la hora absoluta da igual,
+    e = rtcEpoch();             // solo importan las diferencias)
+    Serial.println("RTC sin hora: sembrado, sin progresion offline esta vez");
+  }
+  pet.syncClock(e);
+
   lastInteract = millis();
 }
 
@@ -131,6 +147,14 @@ void loop() {
 
   updateBrightness(now);
 
+  // anota la hora real cada 30 s (se persiste en cada save del juego)
+  static uint32_t lastClock = 0;
+  if (now - lastClock > 30000) {
+    lastClock = now;
+    uint32_t e = rtcEpoch();
+    if (e) pet.lastSeenEpoch = e;
+  }
+
   if (now - lastRender >= 100) {  // ~10 fps
     lastRender = now;
     render();
@@ -145,7 +169,7 @@ void updateBrightness(uint32_t now) {
   }
   uint32_t idle = now - lastInteract;
   dimStage = (idle > 300000) ? 2 : (idle > 90000) ? 1 : 0;
-  uint8_t target = pet.sleeping ? 25 : 180;
+  uint8_t target = pet.sleeping ? 25 : (usbPresent() ? 180 : 145);
   if (dimStage == 1) target = pet.sleeping ? 10 : 60;
   else if (dimStage == 2) target = 8;
   static uint8_t current = 255;
@@ -178,6 +202,19 @@ void handleSerial() {
   } else if (line.startsWith("LVL ")) {
     pet.ageMinutes = (uint32_t)line.substring(4).toInt() * MINUTES_PER_LEVEL;
     Serial.println("DONE");
+  } else if (line.startsWith("TIME ")) {
+    uint32_t e = (uint32_t)line.substring(5).toInt();
+    rtcSetEpoch(e);
+    pet.setClock(e);
+    Serial.printf("rtc=%u\n", rtcEpoch());
+    Serial.println("DONE");
+  } else if (line.startsWith("RTCSET ")) {  // solo RTC (simular apagados en pruebas)
+    rtcSetEpoch((uint32_t)line.substring(7).toInt());
+    Serial.printf("rtc=%u\n", rtcEpoch());
+    Serial.println("DONE");
+  } else if (line == "TIME") {
+    Serial.printf("rtc=%u\n", rtcEpoch());
+    Serial.println("DONE");
   } else if (line == "GAL") {
     galleryOpen = !galleryOpen;
     galleryDetail = 0;
@@ -202,9 +239,10 @@ void handleSerial() {
     Serial.println();
     Serial.println("DONE");
   } else if (line == "STATS") {
-    Serial.printf("spec=%d nv=%u com=%u fel=%u ene=%u lim=%u desc=%u sd=%d mon=%d\n",
+    Serial.printf("spec=%d nv=%u com=%u fel=%u ene=%u lim=%u desc=%u sd=%d mon=%d bat=%d usb=%d rtc=%u\n",
                   pet.speciesId, pet.level(), pet.fullness, pet.joy, pet.energy,
-                  pet.hygiene, pet.careMistakes, sdReady, mon.loaded);
+                  pet.hygiene, pet.careMistakes, sdReady, mon.loaded,
+                  batPercent(), usbPresent(), rtcEpoch());
     Serial.println("DONE");
   }
 }
@@ -527,7 +565,22 @@ void galleryTap(int16_t x, int16_t y) {
   galleryMon.load(dex);
 }
 
+void drawBattery() {
+  int pc = batPercent();
+  if (pc < 0) return;  // sin bateria conectada
+  int x = CX - 14, y = 12, w = 24, h = 11;
+  uint16_t col = batCharging() ? UI_BAR_OK
+                 : (pc >= 40) ? inkColor()
+                 : (pc >= 15) ? UI_BAR_WARN
+                              : UI_BAR_BAD;
+  gfx->drawRoundRect(x, y, w, h, 2, col);
+  gfx->fillRect(x + w, y + 3, 3, 5, col);  // borne
+  int fw = (w - 4) * pc / 100;
+  if (fw > 0) gfx->fillRect(x + 2, y + 2, fw, h - 4, col);
+}
+
 void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
+  drawBattery();
   gfx->setTextColor(nameColor);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(name) * 9, 52);

@@ -31,6 +31,55 @@ void Pet::newEgg() {
   save();
 }
 
+// progresion offline: el tiempo paso aunque estuviera apagado, pero con
+// piedad — las barras bajan con suelo en 15 (vuelve hambriento, no muerto),
+// sin descuidos ni escapadas en ausencia
+static uint8_t dropTo(uint8_t v, uint8_t d, uint8_t fl) {
+  if (v <= fl) return v;
+  return (v - fl > d) ? v - d : fl;
+}
+
+void Pet::setClock(uint32_t nowEpoch) {
+  lastSeenEpoch = nowEpoch;
+  if (nowEpoch) save();  // persiste ya: un corte de luz no pierde la referencia
+}
+
+void Pet::syncClock(uint32_t nowEpoch) {
+  uint32_t seen = prefs.getUInt("seen", 0);
+  lastSeenEpoch = nowEpoch;
+  if (nowEpoch == 0) return;
+  uint32_t mins = (seen && nowEpoch > seen) ? (nowEpoch - seen) / 60 : 0;
+  if (mins < 2 || ceremony != CER_NONE) {
+    save();  // primera vez o sin tiempo que aplicar: solo persistir la hora
+    return;
+  }
+  if (mins > 14UL * 24 * 60) mins = 14UL * 24 * 60;  // tope: 2 semanas
+
+  for (uint32_t i = 0; i < mins; i++) {
+    ageMinutes++;
+    if (isEgg()) {
+      if (ageMinutes >= 3) hatch();  // eclosiona en tu ausencia
+      continue;
+    }
+    if (sleeping) {
+      energy = clamp100(energy + 6);
+      fullness = dropTo(fullness, 1, 15);
+    } else {
+      fullness = dropTo(fullness, 2, 15);
+      energy = dropTo(energy, 1, 15);
+    }
+    hygiene = dropTo(hygiene, 1, 15);
+    joy = dropTo(joy, 1, 15);
+  }
+  if (!isEgg()) {
+    uint8_t p = poops + mins / 240;
+    poops = p > 3 ? 3 : p;
+    checkEvolution();  // pudo subir de nivel mientras dormias
+  }
+  Serial.printf("offline: %u min aplicados (nv.%u)\n", mins, level());
+  save();
+}
+
 void Pet::update(uint32_t nowMs) {
   // fin de ceremonia: la criatura se va y queda un huevo nuevo
   if (ceremony != CER_NONE && millis() > ceremonyUntil) {
@@ -284,6 +333,7 @@ void Pet::save() {
   prefs.putUChar("mist", careMistakes);
   prefs.putBool("sleep", sleeping);
   prefs.putUChar("lend", lastEnd);
+  if (lastSeenEpoch) prefs.putUInt("seen", lastSeenEpoch);
   prefs.putBytes("dexreg", dexReg, sizeof(dexReg));
 }
 

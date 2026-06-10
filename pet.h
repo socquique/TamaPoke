@@ -33,6 +33,7 @@ public:
   int16_t prevSpeciesId = -1;  // para la animacion de evolucion
   uint8_t careMistakes = 0;   // descuidos: cada uno retrasa la evolucion 1 nivel
   bool sleeping = false;
+  uint32_t lastSeenEpoch = 0;   // ultima hora RTC vista (para progresion offline)
   uint8_t ceremony = CER_NONE;  // despedida/escapada/liberacion en curso
   uint8_t lastEnd = CER_NONE;   // como acabo la anterior (afecta al huevo)
   uint8_t dexReg[19] = { 0 };   // pokedex de criados (bitmap 151 bits)
@@ -49,6 +50,8 @@ public:
   void eggTap();  // tocar el huevo: 3 toques y eclosiona
   void newEgg();   // empezar de cero con un inicial aleatorio
   void release();  // soltar (pulsacion larga + confirmar)
+  void syncClock(uint32_t nowEpoch);  // aplica el tiempo transcurrido apagado
+  void setClock(uint32_t nowEpoch);   // fija la hora sin aplicar progresion
   void startFarewell();  // tambien usable desde la consola serie (BYE)
 
   bool isEgg() const { return speciesId < 0; }
