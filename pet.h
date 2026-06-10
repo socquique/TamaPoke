@@ -29,6 +29,10 @@ public:
   uint8_t hygiene = 100;  // limpieza
   uint8_t poops = 0;      // cacas en pantalla (max 3)
   uint8_t weight = 0;     // 0-100: las chuches engordan, el minijuego quema
+  // genes (90-110%, se tiran al eclosionar) y entrenamiento (0-100)
+  uint8_t geneAtk = 100, geneDef = 100, geneSpe = 100;
+  uint8_t trAtk = 0, trDef = 0, trSpe = 0;
+  bool berryKnown = false;  // ya descubrio su baya favorita
   uint32_t ageMinutes = 0;
   int16_t speciesId = -1;      // numero de Pokedex (1-151), -1 = huevo
   int16_t prevSpeciesId = -1;  // para la animacion de evolucion
@@ -49,7 +53,12 @@ public:
   bool lovesBerry(uint8_t color) const {
     return !isEgg() && (speciesId % 3) == color;  // gusto oculto por especie
   }
-  void playResult(uint8_t score);  // recompensa del minijuego
+  void playResult(uint8_t score);  // recompensa del minijuego (entrena VEL)
+
+  // stats de combate: base real de gen 1 x genes + nivel + entrenamiento
+  uint16_t atkStat() const;
+  uint16_t defStat() const;
+  uint16_t speStat() const;
   void play();
   void toggleLight();  // dormir / despertar
   void clean();
@@ -88,6 +97,7 @@ private:
   uint8_t mistakeCooldown = 0;
   uint8_t ticksSinceSave = 0;
   uint8_t neglectTicks = 0;
+  uint16_t goodTicks = 0;  // racha bien cuidado: forja la DEF
   uint32_t ceremonyUntil = 0;
 
   void tick();

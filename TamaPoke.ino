@@ -42,6 +42,7 @@ int galleryPage = 0;        // 10 paginas de 16
 int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 
 bool screenOff = false;       // pulsacion corta del boton PWR
+bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 uint32_t feedMenuUntil = 0;   // selector de comida abierto hasta este millis
 
 // minijuego "toques": mantener la pokeball en el aire
@@ -264,7 +265,10 @@ void handleSerial() {
                   pet.speciesId, pet.level(), pet.fullness, pet.joy, pet.energy,
                   pet.hygiene, pet.careMistakes, sdReady, mon.loaded,
                   batPercent(), usbPresent(), rtcEpoch());
-    Serial.printf("peso=%u\n", pet.weight);
+    Serial.printf("peso=%u fue=%u def=%u vel=%u genes=%u/%u/%u tr=%u/%u/%u baya=%d\n",
+                  pet.weight, pet.atkStat(), pet.defStat(), pet.speStat(),
+                  pet.geneAtk, pet.geneDef, pet.geneSpe,
+                  pet.trAtk, pet.trDef, pet.trSpe, pet.berryKnown);
     Serial.println("DONE");
   }
 }
@@ -307,15 +311,26 @@ void handleTouch() {
     uint32_t dt = millis() - tStart;
     if (!holdFired && !swallowGesture) {
       if (abs(dx) > 80 && abs(dy) < 70 && dt < 800) onSwipe(dx > 0 ? 1 : -1);
+      else if (abs(dy) > 80 && abs(dx) < 70 && dt < 800) onSwipeV();
       else if (dt < 1500 && abs(dx) < 40 && abs(dy) < 40) onTap(tX0, tY0);
     }
   }
   wasPressed = pressed;
 }
 
+// deslizar vertical: abre/cierra la ficha del bicho
+void onSwipeV() {
+  if (gameOpen || galleryOpen || pet.ceremony) return;
+  if (cardOpen) {
+    cardOpen = false;
+  } else if (!pet.isEgg() && !confirmUntil && !feedMenuUntil) {
+    cardOpen = true;
+  }
+}
+
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
-  if (gameOpen) return;
+  if (gameOpen || cardOpen) return;
   if (!galleryOpen) {
     if (!pet.ceremony && !confirmUntil) {
       galleryOpen = true;
@@ -351,6 +366,10 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
   if (pet.ceremony) return;  // durante la despedida no hay botones
+  if (cardOpen) {
+    cardOpen = false;  // cualquier toque cierra la ficha
+    return;
+  }
   if (gameOpen) {
     gameTap(x, y);
     return;
@@ -409,6 +428,10 @@ void render() {
   }
   if (gameOpen) {
     renderGame();
+    return;
+  }
+  if (cardOpen) {
+    renderCard();
     return;
   }
   gfx->fillScreen(RGB565_BLACK);
@@ -632,6 +655,77 @@ void renderGame() {
   // la pokeball
   drawMap(SPR_ICON_PLAY, 16, (int)ballX - 24, (int)ballY - 24, 3, false);
 
+  gfx->flush();
+}
+
+// ---------- ficha del bicho (deslizar vertical) ----------
+
+void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color) {
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(96, y);
+  gfx->print(label);
+  char num[8];
+  snprintf(num, sizeof(num), "%u", val);
+  gfx->setCursor(330, y);
+  gfx->print(num);
+  int bw = 160;
+  int fw = (int)val * bw / maxBar;
+  if (fw > bw) fw = bw;
+  gfx->fillRoundRect(150, y + 2, bw, 11, 3, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(150, y + 2, fw, 11, 3, color);
+}
+
+void renderCard() {
+  gfx->fillScreen(RGB565_BLACK);
+  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  const DexEntry &d = DEX_TBL[pet.speciesId];
+
+  char head[26];
+  snprintf(head, sizeof(head), "%s Nv.%u", d.name, pet.level());
+  gfx->setTextColor(d.accent);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(head) * 9, 44);
+  gfx->print(head);
+
+  // retrato pequeno animado
+  if (mon.loaded) {
+    int s = (mon.h > 60) ? 1 : 2;
+    uint16_t fm = mon.frameMs ? mon.frameMs : 100;
+    uint16_t fi = (millis() / fm) % mon.frames;
+    const uint8_t *fr = mon.data + (uint32_t)fi * mon.w * mon.h;
+    int px = CX - mon.w * s / 2, py = 130 - mon.h * s / 2;
+    for (int r = 0; r < mon.h; r++)
+      for (int c = 0; c < mon.w; c++) {
+        uint8_t idx = fr[r * mon.w + c];
+        if (idx != 0xFF) gfx->fillRect(px + c * s, py + r * s, s, s, mon.pal[idx]);
+      }
+  }
+
+  drawCardStat(192, "FUE", pet.atkStat(), 260, UI_BAR_BAD);
+  drawCardStat(220, "DEF", pet.defStat(), 260, 0x4C98);
+  drawCardStat(248, "VEL", pet.speStat(), 260, UI_BAR_WARN);
+  drawCardStat(276, "PES", pet.weight, 100, UI_BAR_OK);
+
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  char line[30];
+  snprintf(line, sizeof(line), "EDAD %lud %luh   DESC %u",
+           (unsigned long)(pet.ageMinutes / 1440),
+           (unsigned long)((pet.ageMinutes / 60) % 24), pet.careMistakes);
+  gfx->setCursor(CX - strlen(line) * 6, 318);
+  gfx->print(line);
+
+  const char *berry = !pet.berryKnown ? "BAYA ???"
+                      : pet.lovesBerry(0) ? "BAYA ROJA"
+                      : pet.lovesBerry(1) ? "BAYA AZUL"
+                                          : "BAYA VERDE";
+  gfx->setCursor(CX - strlen(berry) * 6, 348);
+  gfx->print(berry);
+
+  gfx->setTextColor(UI_TRACK);
+  gfx->setCursor(CX - 96, 398);
+  gfx->print("toca para volver");
   gfx->flush();
 }
 

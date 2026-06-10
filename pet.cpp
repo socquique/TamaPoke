@@ -116,6 +116,16 @@ void Pet::tick() {
   if (weight > 50 && !sleeping) energy = clamp100(energy - 1);
   if (weight > 0 && ageMinutes % 3 == 0) weight--;
 
+  // la disciplina forja la defensa: 12 h seguidas bien cuidado = +1 DEF
+  if (lowestStat() >= 40) {
+    if (++goodTicks >= 720) {
+      goodTicks = 0;
+      if (trDef < 100) trDef++;
+    }
+  } else {
+    goodTicks = 0;
+  }
+
   int dJoy = -1;
   if (fullness < 30) dJoy -= 2;
   if (hygiene < 30) dJoy -= 2;
@@ -206,6 +216,20 @@ void Pet::registerSpecies(int16_t dex) {
   dexReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
 }
 
+static uint16_t calcStat(uint8_t base, uint8_t gene, uint8_t lvl, uint8_t tr) {
+  return (uint16_t)base * gene / 100 + lvl + tr;
+}
+
+uint16_t Pet::atkStat() const {
+  return isEgg() ? 0 : calcStat(DEX_TBL[speciesId].bAtk, geneAtk, level(), trAtk);
+}
+uint16_t Pet::defStat() const {
+  return isEgg() ? 0 : calcStat(DEX_TBL[speciesId].bDef, geneDef, level(), trDef);
+}
+uint16_t Pet::speStat() const {
+  return isEgg() ? 0 : calcStat(DEX_TBL[speciesId].bSpe, geneSpe, level(), trSpe);
+}
+
 uint16_t Pet::registeredCount() const {
   uint16_t n = 0;
   for (int i = 1; i <= 151; i++)
@@ -241,6 +265,12 @@ void Pet::release() {
 
 void Pet::hatch() {
   speciesId = eggTarget;
+  // genes del individuo: 90-110% por stat (cada crianza es unica)
+  geneAtk = 90 + random(21);
+  geneDef = 90 + random(21);
+  geneSpe = 90 + random(21);
+  trAtk = trDef = trSpe = 0;
+  berryKnown = false;
   registerSpecies(speciesId);  // criado = registrado en la pokedex
   save();
 }
@@ -282,6 +312,7 @@ void Pet::feedBerry(uint8_t color) {
     fullness = clamp100(fullness + 35);
     joy = clamp100(joy + 10);
     heartUntil = millis() + HEART_MS;  // "le encanta!"
+    berryKnown = true;                 // descubierto: se muestra en la ficha
   } else {
     fullness = clamp100(fullness + 25);
   }
@@ -301,6 +332,8 @@ void Pet::feedCandy() {
 
 void Pet::playResult(uint8_t score) {
   if (ceremony != CER_NONE || isEgg()) return;
+  uint8_t v = trSpe + score / 5;  // jugar entrena la velocidad
+  trSpe = v > 100 ? 100 : v;
   joy = clamp100(joy + 5 + (score > 15 ? 30 : score * 2));
   energy = dropTo(energy, 10 + score / 2, 5);
   fullness = dropTo(fullness, 5, 5);
@@ -362,6 +395,13 @@ void Pet::save() {
   prefs.putUChar("hyg", hygiene);
   prefs.putUChar("poop", poops);
   prefs.putUChar("wgt", weight);
+  prefs.putUChar("gatk", geneAtk);
+  prefs.putUChar("gdef", geneDef);
+  prefs.putUChar("gspe", geneSpe);
+  prefs.putUChar("tatk", trAtk);
+  prefs.putUChar("tdef", trDef);
+  prefs.putUChar("tspe", trSpe);
+  prefs.putBool("bk", berryKnown);
   prefs.putUInt("age", ageMinutes);
   prefs.putShort("dexn", speciesId);
   prefs.putShort("eggT2", eggTarget);
@@ -380,6 +420,18 @@ void Pet::load() {
   hygiene = prefs.getUChar("hyg", 100);
   poops = prefs.getUChar("poop", 0);
   weight = prefs.getUChar("wgt", 0);
+  geneAtk = prefs.getUChar("gatk", 0);
+  geneDef = prefs.getUChar("gdef", 0);
+  geneSpe = prefs.getUChar("gspe", 0);
+  if (geneAtk == 0) {  // mascota anterior a los genes: tirada unica ahora
+    geneAtk = 90 + random(21);
+    geneDef = 90 + random(21);
+    geneSpe = 90 + random(21);
+  }
+  trAtk = prefs.getUChar("tatk", 0);
+  trDef = prefs.getUChar("tdef", 0);
+  trSpe = prefs.getUChar("tspe", 0);
+  berryKnown = prefs.getBool("bk", false);
   ageMinutes = prefs.getUInt("age", 0);
   if (prefs.isKey("dexn")) {
     speciesId = prefs.getShort("dexn", -1);
