@@ -55,6 +55,11 @@ int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 
 bool screenOff = false;       // pulsacion corta del boton PWR
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
+
+// escena de bano: espuma sobre el bicho y limpieza al reventar
+uint32_t bathUntil = 0;
+bool bathPending = false;
+struct { int16_t x, y; uint8_t r, ph; } bubbles[14];
 uint32_t feedMenuUntil = 0;   // selector de comida abierto hasta este millis
 
 // minijuego "toques": mantener la pokeball en el aire
@@ -430,7 +435,7 @@ void onTap(int16_t x, int16_t y) {
       } else if (i == 2) {
         pet.toggleLight();
       } else {
-        pet.clean();
+        startBath();
       }
       return;
     }
@@ -504,6 +509,7 @@ void render() {
     snprintf(name, sizeof(name), "%s%s Nv.%u", pet.shiny ? "*" : "", d.name, pet.level());
     drawHeader(name, pet.sleeping ? UI_INK_NIGHT : d.accent, statusMsg());
     drawPet();
+    drawBath();
     drawPoops();
     drawBars();
     drawButtons();
@@ -962,6 +968,61 @@ void drawPet() {
   if (pet.showHeart()) drawMap(SPR_HEART, 32, x + 20 * s, y - 2 * s, 2, false);
 }
 
+// ---------- escena de bano ----------
+
+void startBath() {
+  if (pet.isEgg() || pet.sleeping || pet.ceremony || bathUntil) return;
+  bathUntil = millis() + 3000;
+  bathPending = true;
+  int cx = (int)beh.x;
+  for (auto &b : bubbles) {
+    b.x = cx - 70 + random(140);
+    b.y = PET_GROUND - random(150);
+    b.r = 8 + random(16);
+    b.ph = random(64);
+  }
+}
+
+void drawBath() {
+  uint32_t now = millis();
+  if (now > bathUntil) {
+    bathUntil = 0;
+    if (bathPending) {
+      bathPending = false;
+      pet.clean();
+      // brinco de alegria al quedar limpio
+      if (pmd.has(PMD_HOP)) {
+        beh.mode = 2;
+        beh.act = PMD_HOP;
+        beh.t0 = now;
+        beh.until = now + pmdActTotalMs(pmd.acts[PMD_HOP]) * 2;
+      }
+    }
+    return;
+  }
+  uint32_t left = bathUntil - now;
+  if (left > 800) {
+    // espuma: pompas meciendose y subiendo poco a poco
+    float t = now / 220.0f;
+    for (auto &b : bubbles) {
+      int bx = b.x + (int)(sinf(t + b.ph) * 6);
+      int by = b.y - (int)((3000 - left) / 90);
+      gfx->fillCircle(bx, by, b.r, UI_WHITE);
+      gfx->drawCircle(bx, by, b.r, 0x7E3D);
+      gfx->fillCircle(bx - b.r / 3, by - b.r / 3, b.r / 4, UI_BG_DAY);
+    }
+  } else {
+    // las pompas revientan: destellos
+    for (int i = 0; i < 8; i++) {
+      auto &b = bubbles[i];
+      int sx = b.x + (i % 3) * 6 - 6, sy = b.y - 18;
+      uint16_t col = (i % 2) ? UI_BAR_WARN : UI_WHITE;
+      gfx->fillRect(sx - 6, sy - 1, 13, 3, col);
+      gfx->fillRect(sx - 1, sy - 6, 3, 13, col);
+    }
+  }
+}
+
 // ---------- mascota PMD: comportamiento ----------
 
 uint32_t pmdActTotalMs(const PmdAct &a) {
@@ -1171,6 +1232,7 @@ const char *eggMsg() {
 
 const char *statusMsg() {
   if (pet.evolving()) return "Esta evolucionando!";
+  if (bathUntil) return "Splish splash!";
   if (pet.sleeping) return "Zzz...";
   if (pet.eating()) return "Nam nam!";
   if (pet.showHeart()) return "Le gusta!";
