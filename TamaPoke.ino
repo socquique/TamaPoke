@@ -990,12 +990,12 @@ void drawBath() {
     if (bathPending) {
       bathPending = false;
       pet.clean();
-      // brinco de alegria al quedar limpio
-      if (pmd.has(PMD_HOP)) {
+      // pose de alegria al quedar limpio
+      if (pmd.has(PMD_POSE)) {
         beh.mode = 2;
-        beh.act = PMD_HOP;
+        beh.act = PMD_POSE;
         beh.t0 = now;
-        beh.until = now + pmdActTotalMs(pmd.acts[PMD_HOP]) * 2;
+        beh.until = now + pmdActTotalMs(pmd.acts[PMD_POSE]) * 2;
       }
     }
     return;
@@ -1076,14 +1076,15 @@ void behNext() {
     beh.until = now + 15000;
   } else if (r < 60) {
     // gesto aleatorio entre los disponibles
-    static const uint8_t flair[] = { PMD_POSE, PMD_HOP, PMD_NOD, PMD_BREATH, PMD_SIT };
-    uint8_t pick[5], n = 0;
+    // (Hop fuera: salta demasiado alto; Sit fuera: mira hacia atras)
+    static const uint8_t flair[] = { PMD_POSE, PMD_NOD, PMD_BREATH };
+    uint8_t pick[3], n = 0;
     for (uint8_t f : flair)
       if (pmd.has(f)) pick[n++] = f;
     if (n) {
       beh.mode = 2;
       beh.act = pick[random(n)];
-      beh.until = now + pmdActTotalMs(pmd.acts[beh.act]) * (beh.act == PMD_SIT ? 3 : 1);
+      beh.until = now + pmdActTotalMs(pmd.acts[beh.act]);
       return;
     }
     beh.mode = 0;

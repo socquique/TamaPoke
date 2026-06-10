@@ -81,8 +81,8 @@ def load_animdata(folder):
                 anims[name] = ('copy', copy.text)
             continue
         anims[name] = (int(a.find('FrameWidth').text), int(a.find('FrameHeight').text),
-                       [int(d.text) for d in a.find('Durations')])
-    # resuelve alias
+                       [int(d.text) for d in a.find('Durations')], name)
+    # resuelve alias (el PNG es el de la animacion original)
     for k, v in list(anims.items()):
         if isinstance(v, tuple) and v[0] == 'copy':
             anims[k] = anims.get(v[1])
@@ -102,9 +102,9 @@ def pack(dexnum, shiny=False):
     for aid, name, row in ACTIONS:
         if name not in anims or anims[name] is None:
             continue
-        fw, fh, durs = anims[name]
-        png = os.path.join(folder, f'{name}-Anim.png')
-        if not fetch(f'{base}/{name}-Anim.png', png):
+        fw, fh, durs, srcname = anims[name]
+        png = os.path.join(folder, f'{srcname}-Anim.png')
+        if not fetch(f'{base}/{srcname}-Anim.png', png):
             continue
         im = Image.open(png).convert('RGBA')
         rows = im.size[1] // fh
