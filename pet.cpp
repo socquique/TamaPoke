@@ -15,6 +15,7 @@ void Pet::begin() {
 void Pet::newEgg() {
   ceremony = CER_NONE;
   neglectTicks = 0;
+  weight = 0;
   speciesId = -1;
   prevSpeciesId = -1;
   eggTarget = pickEggSpecies();  // especie oculta segun rareza y pokedex
@@ -111,6 +112,9 @@ void Pet::tick() {
   }
 
   hygiene = clamp100(hygiene - 1 - 4 * poops);
+  // el sobrepeso da pereza: la energia cae el doble
+  if (weight > 50 && !sleeping) energy = clamp100(energy - 1);
+  if (weight > 0 && ageMinutes % 3 == 0) weight--;
 
   int dJoy = -1;
   if (fullness < 30) dJoy -= 2;
@@ -268,10 +272,41 @@ void Pet::checkEvolution() {
 }
 
 void Pet::feed() {
+  feedBerry(0);
+}
+
+void Pet::feedBerry(uint8_t color) {
   if (ceremony != CER_NONE) return;
   if (isEgg() || sleeping) return;
-  fullness = clamp100(fullness + 30);
+  if (lovesBerry(color)) {
+    fullness = clamp100(fullness + 35);
+    joy = clamp100(joy + 10);
+    heartUntil = millis() + HEART_MS;  // "le encanta!"
+  } else {
+    fullness = clamp100(fullness + 25);
+  }
   eatUntil = millis() + EAT_ANIM_MS;
+  save();
+}
+
+void Pet::feedCandy() {
+  if (ceremony != CER_NONE) return;
+  if (isEgg() || sleeping) return;
+  fullness = clamp100(fullness + 10);
+  joy = clamp100(joy + 12);
+  weight = clamp100(weight + 12);  // las chuches pasan factura
+  eatUntil = millis() + EAT_ANIM_MS;
+  save();
+}
+
+void Pet::playResult(uint8_t score) {
+  if (ceremony != CER_NONE || isEgg()) return;
+  joy = clamp100(joy + 5 + (score > 15 ? 30 : score * 2));
+  energy = dropTo(energy, 10 + score / 2, 5);
+  fullness = dropTo(fullness, 5, 5);
+  int burn = (int)weight - score * 2;  // el ejercicio quema peso
+  weight = burn > 0 ? burn : 0;
+  if (score >= 5) heartUntil = millis() + HEART_MS;
   save();
 }
 
@@ -326,6 +361,7 @@ void Pet::save() {
   prefs.putUChar("ene", energy);
   prefs.putUChar("hyg", hygiene);
   prefs.putUChar("poop", poops);
+  prefs.putUChar("wgt", weight);
   prefs.putUInt("age", ageMinutes);
   prefs.putShort("dexn", speciesId);
   prefs.putShort("eggT2", eggTarget);
@@ -343,6 +379,7 @@ void Pet::load() {
   energy = prefs.getUChar("ene", 80);
   hygiene = prefs.getUChar("hyg", 100);
   poops = prefs.getUChar("poop", 0);
+  weight = prefs.getUChar("wgt", 0);
   ageMinutes = prefs.getUInt("age", 0);
   if (prefs.isKey("dexn")) {
     speciesId = prefs.getShort("dexn", -1);

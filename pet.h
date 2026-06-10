@@ -28,6 +28,7 @@ public:
   uint8_t energy = 80;    // energia
   uint8_t hygiene = 100;  // limpieza
   uint8_t poops = 0;      // cacas en pantalla (max 3)
+  uint8_t weight = 0;     // 0-100: las chuches engordan, el minijuego quema
   uint32_t ageMinutes = 0;
   int16_t speciesId = -1;      // numero de Pokedex (1-151), -1 = huevo
   int16_t prevSpeciesId = -1;  // para la animacion de evolucion
@@ -42,7 +43,13 @@ public:
   void update(uint32_t nowMs);  // llamar en cada loop()
 
   // Acciones (botones tactiles)
-  void feed();
+  void feed();              // baya roja (compatibilidad)
+  void feedBerry(uint8_t color);  // 0 roja, 1 azul, 2 verde
+  void feedCandy();
+  bool lovesBerry(uint8_t color) const {
+    return !isEgg() && (speciesId % 3) == color;  // gusto oculto por especie
+  }
+  void playResult(uint8_t score);  // recompensa del minijuego
   void play();
   void toggleLight();  // dormir / despertar
   void clean();

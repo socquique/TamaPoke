@@ -58,3 +58,19 @@ bool batCharging() {
 bool usbPresent() {
   return !pmuOk || pmu.isVbusIn();  // sin PMU asumimos USB (no recortar brillo)
 }
+
+void pwrSetup() {
+  if (!pmuOk) return;
+  pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S);
+  pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
+  pmu.enableIRQ(XPOWERS_AXP2101_PKEY_SHORT_IRQ);
+  pmu.clearIrqStatus();
+}
+
+bool pwrShortPressed() {
+  if (!pmuOk) return false;
+  pmu.getIrqStatus();
+  bool hit = pmu.isPekeyShortPressIrq();
+  if (hit) pmu.clearIrqStatus();
+  return hit;
+}

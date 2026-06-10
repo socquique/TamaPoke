@@ -41,6 +41,15 @@ bool galleryDirty = false;
 int galleryPage = 0;        // 10 paginas de 16
 int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 
+bool screenOff = false;       // pulsacion corta del boton PWR
+uint32_t feedMenuUntil = 0;   // selector de comida abierto hasta este millis
+
+// minijuego "toques": mantener la pokeball en el aire
+bool gameOpen = false;
+uint32_t gameOverUntil = 0;
+float ballX, ballY, ballVX, ballVY, gamePetX;
+uint8_t gameScore, gameMisses;
+
 // las 9 especies con sprite propio en flash (respaldo sin SD): dex -> indice
 int flashIdxForDex(int16_t dex) {
   static const int8_t IDX[10] = { -1, 3, 4, 5, 0, 1, 2, 6, 7, 8 };
@@ -118,6 +127,7 @@ void setup() {
   // reloj real: aplica el tiempo que estuvo apagado
   rtcBegin();
   batBegin();
+  pwrSetup();
   uint32_t e = rtcEpoch();
   if (e == 0) {
     rtcSetEpoch(1767225600UL);  // RTC virgen: semilla (la hora absoluta da igual,
@@ -145,6 +155,16 @@ void loop() {
   handleSerial();
   ensureMon();
 
+  // pulsacion corta del PWR: pantalla on/off
+  static uint32_t lastPwr = 0;
+  if (now - lastPwr > 250) {
+    lastPwr = now;
+    if (pwrShortPressed()) {
+      screenOff = !screenOff;
+      if (!screenOff) lastInteract = now;
+    }
+  }
+
   updateBrightness(now);
 
   // anota la hora real cada 30 s (se persiste en cada save del juego)
@@ -155,7 +175,7 @@ void loop() {
     if (e) pet.lastSeenEpoch = e;
   }
 
-  if (now - lastRender >= 100) {  // ~10 fps
+  if (now - lastRender >= (uint32_t)(gameOpen ? 40 : 100)) {  // 25 fps jugando
     lastRender = now;
     render();
   }
@@ -172,6 +192,7 @@ void updateBrightness(uint32_t now) {
   uint8_t target = pet.sleeping ? 25 : (usbPresent() ? 180 : 145);
   if (dimStage == 1) target = pet.sleeping ? 10 : 60;
   else if (dimStage == 2) target = 8;
+  if (screenOff) target = 0;
   static uint8_t current = 255;
   if (target != current) {
     current = target;
@@ -243,6 +264,7 @@ void handleSerial() {
                   pet.speciesId, pet.level(), pet.fullness, pet.joy, pet.energy,
                   pet.hygiene, pet.careMistakes, sdReady, mon.loaded,
                   batPercent(), usbPresent(), rtcEpoch());
+    Serial.printf("peso=%u\n", pet.weight);
     Serial.println("DONE");
   }
 }
@@ -266,7 +288,8 @@ void handleTouch() {
     tY0 = tYl = y;
     tStart = millis();
     holdFired = false;
-    swallowGesture = (dimStage > 0);  // si estaba atenuada, este toque solo despierta
+    swallowGesture = (dimStage > 0) || screenOff;  // si estaba a oscuras, solo despierta
+    screenOff = false;
     lastInteract = millis();
   } else if (pressed) {  // sigue apoyado
     tXl = x;
@@ -292,6 +315,7 @@ void handleTouch() {
 
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
+  if (gameOpen) return;
   if (!galleryOpen) {
     if (!pet.ceremony && !confirmUntil) {
       galleryOpen = true;
@@ -327,11 +351,24 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
   if (pet.ceremony) return;  // durante la despedida no hay botones
+  if (gameOpen) {
+    gameTap(x, y);
+    return;
+  }
   if (confirmUntil) {        // dialogo "soltar?": SI / NO
     if (millis() < confirmUntil && x >= 118 && x <= 218 && y >= 252 && y <= 304) {
       pet.release();
     }
     confirmUntil = 0;
+    return;
+  }
+  if (feedMenuUntil) {       // selector de comida
+    if (millis() < feedMenuUntil && y >= 288 && y <= 352 && x >= 101 && x <= 365) {
+      int item = (x - 101) / 66;
+      if (item == 3) pet.feedCandy();
+      else pet.feedBerry(item);
+    }
+    feedMenuUntil = 0;
     return;
   }
   if (pet.isEgg()) {
@@ -342,10 +379,15 @@ void onTap(int16_t x, int16_t y) {
     int dx = x - buttons[i].cx, dy = y - buttons[i].cy;
     if (dx * dx + dy * dy <= BTN_HIT * BTN_HIT) {
       Serial.printf("BTN %d\n", i);
-      if (i == 0) pet.feed();
-      else if (i == 1) pet.play();
-      else if (i == 2) pet.toggleLight();
-      else pet.clean();
+      if (i == 0) {
+        if (!pet.sleeping) feedMenuUntil = millis() + 6000;
+      } else if (i == 1) {
+        startGame();
+      } else if (i == 2) {
+        pet.toggleLight();
+      } else {
+        pet.clean();
+      }
       return;
     }
   }
@@ -363,6 +405,10 @@ uint16_t inkColor() { return pet.sleeping ? UI_INK_NIGHT : UI_INK; }
 void render() {
   if (galleryOpen) {
     renderGallery();
+    return;
+  }
+  if (gameOpen) {
+    renderGame();
     return;
   }
   gfx->fillScreen(RGB565_BLACK);
@@ -422,6 +468,20 @@ void render() {
     gfx->print("Zz");
   }
 
+  // selector de comida
+  if (feedMenuUntil) {
+    if (millis() > feedMenuUntil) {
+      feedMenuUntil = 0;
+    } else {
+      gfx->fillRoundRect(101, 288, 264, 64, 14, UI_WHITE);
+      gfx->drawRoundRect(101, 288, 264, 64, 14, inkColor());
+      drawMap(SPR_ICON_FOOD, 16, 110, 296, 3, false);
+      drawMap(SPR_ICON_BERRY_B, 16, 176, 296, 3, false);
+      drawMap(SPR_ICON_BERRY_G, 16, 242, 296, 3, false);
+      drawMap(SPR_ICON_CANDY, 16, 308, 296, 3, false);
+    }
+  }
+
   // dialogo "soltar?" (pulsacion larga sobre el bicho)
   if (confirmUntil) {
     if (millis() > confirmUntil) {
@@ -444,6 +504,133 @@ void render() {
       gfx->print("NO");
     }
   }
+
+  gfx->flush();
+}
+
+// ---------- minijuego: toques con la pokeball ----------
+
+void startGame() {
+  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+  gameOpen = true;
+  gameOverUntil = 0;
+  gameScore = 0;
+  gameMisses = 0;
+  gamePetX = 233;
+  respawnBall();
+}
+
+void respawnBall() {
+  ballX = 140 + random(186);
+  ballY = 90;
+  ballVX = random(2) ? 2.2f : -2.2f;
+  ballVY = 0;
+}
+
+void gameTap(int16_t x, int16_t y) {
+  if (gameOverUntil) return;
+  if (y < 72) {  // tocar la cabecera = abandonar sin premio
+    gameOpen = false;
+    return;
+  }
+  float dx = ballX - x, dy = ballY - y;
+  if (dx * dx + dy * dy < 70 * 70) {  // toque a la bola!
+    gameScore++;
+    ballVY = -(8.5f + (gameScore > 20 ? 4 : gameScore * 0.2f));
+    ballVX += dx * 0.16f;
+    if (ballVX > 8) ballVX = 8;
+    if (ballVX < -8) ballVX = -8;
+  }
+}
+
+void stepGame() {
+  ballVY += 0.55f;
+  ballX += ballVX;
+  ballY += ballVY;
+  // rebote en la pared circular
+  float dx = ballX - CX, dy = ballY - CY;
+  float d = sqrtf(dx * dx + dy * dy);
+  if (d > 205) {
+    float nx = dx / d, ny = dy / d;
+    float dot = ballVX * nx + ballVY * ny;
+    if (dot > 0) {
+      ballVX = (ballVX - 2 * dot * nx) * 0.85f;
+      ballVY = (ballVY - 2 * dot * ny) * 0.85f;
+    }
+    ballX = CX + nx * 205;
+    ballY = CY + ny * 205;
+  }
+  if (ballY > 380) {  // al suelo
+    if (++gameMisses >= 3) {
+      pet.playResult(gameScore);
+      gameOverUntil = millis() + 3500;
+    } else {
+      respawnBall();
+    }
+  }
+  // el bicho la sigue por abajo
+  float chase = (ballX - gamePetX) * 0.12f;
+  if (chase > 7) chase = 7;
+  if (chase < -7) chase = -7;
+  gamePetX += chase;
+}
+
+void renderGame() {
+  gfx->fillScreen(RGB565_BLACK);
+  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+
+  if (gameOverUntil) {
+    if (millis() > gameOverUntil) {
+      gameOpen = false;
+      return;
+    }
+    char buf[20];
+    snprintf(buf, sizeof(buf), "PUNTOS: %u", gameScore);
+    gfx->setTextColor(UI_INK);
+    gfx->setTextSize(4);
+    gfx->setCursor(CX - strlen(buf) * 12, 190);
+    gfx->print(buf);
+    gfx->setTextSize(2);
+    const char *msg = gameScore >= 10 ? "Que felicidad!" : "+felicidad";
+    gfx->setCursor(CX - strlen(msg) * 6, 250);
+    gfx->print(msg);
+    gfx->flush();
+    return;
+  }
+
+  stepGame();
+
+  // marcador y vidas
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%u", gameScore);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(4);
+  gfx->setCursor(CX - strlen(buf) * 12, 36);
+  gfx->print(buf);
+  for (int i = 0; i < 3; i++) {
+    if (i < 3 - gameMisses) gfx->fillCircle(203 + i * 30, 84, 6, UI_BAR_BAD);
+    else gfx->drawCircle(203 + i * 30, 84, 6, UI_TRACK);
+  }
+
+  // suelo y bicho persiguiendo
+  gfx->fillRect(110, 396, 246, 3, UI_TRACK);
+  if (mon.loaded) {
+    int s = (mon.h * 2 > 130) ? 1 : 2;
+    int w = mon.w * s, h = mon.h * s;
+    uint16_t fm = mon.frameMs ? mon.frameMs : 100;
+    uint16_t fi = (millis() / fm) % mon.frames;
+    const uint8_t *fr = mon.data + (uint32_t)fi * mon.w * mon.h;
+    int px = (int)gamePetX - w / 2, py = 394 - h;
+    for (int r = 0; r < mon.h; r++)
+      for (int c = 0; c < mon.w; c++) {
+        uint8_t idx = fr[r * mon.w + c];
+        if (idx == 0xFF) continue;
+        gfx->fillRect(px + c * s, py + r * s, s, s, mon.pal[idx]);
+      }
+  }
+
+  // la pokeball
+  drawMap(SPR_ICON_PLAY, 16, (int)ballX - 24, (int)ballY - 24, 3, false);
 
   gfx->flush();
 }
@@ -740,6 +927,7 @@ const char *statusMsg() {
   if (pet.hygiene < 25) return "Necesita un bano!";
   if (pet.energy < 25) return "Esta agotado...";
   if (pet.joy < 25) return "Esta triste...";
+  if (pet.weight > 60) return "Esta rellenito...";
   return "Esta feliz";
 }
 
