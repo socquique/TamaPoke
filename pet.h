@@ -33,6 +33,7 @@ public:
   uint8_t geneAtk = 100, geneDef = 100, geneSpe = 100;
   uint8_t trAtk = 0, trDef = 0, trSpe = 0;
   bool berryKnown = false;  // ya descubrio su baya favorita
+  bool shiny = false;       // variante de color rara (se sortea en el huevo)
   uint32_t ageMinutes = 0;
   int16_t speciesId = -1;      // numero de Pokedex (1-151), -1 = huevo
   int16_t prevSpeciesId = -1;  // para la animacion de evolucion
@@ -41,7 +42,8 @@ public:
   uint32_t lastSeenEpoch = 0;   // ultima hora RTC vista (para progresion offline)
   uint8_t ceremony = CER_NONE;  // despedida/escapada/liberacion en curso
   uint8_t lastEnd = CER_NONE;   // como acabo la anterior (afecta al huevo)
-  uint8_t dexReg[19] = { 0 };   // pokedex de criados (bitmap 151 bits)
+  uint8_t dexReg[19] = { 0 };       // pokedex de criados (bitmap 151 bits)
+  uint8_t dexShinyReg[19] = { 0 };  // criados en version shiny
 
   void begin();                 // carga estado de NVS (o crea el primer huevo)
   void update(uint32_t nowMs);  // llamar en cada loop()
@@ -79,6 +81,9 @@ public:
   bool isRegistered(int16_t dex) const {
     return dex >= 1 && dex <= 151 && (dexReg[(dex - 1) >> 3] & (1 << ((dex - 1) & 7)));
   }
+  bool isShinyRegistered(int16_t dex) const {
+    return dex >= 1 && dex <= 151 && (dexShinyReg[(dex - 1) >> 3] & (1 << ((dex - 1) & 7)));
+  }
   uint16_t registeredCount() const;
   bool lineHasUnregistered(int16_t base) const;
   uint8_t eggRarity() const;       // rareza del huevo actual (sin revelar especie)
@@ -93,6 +98,7 @@ private:
   uint32_t heartUntil = 0;
   uint32_t evolveUntil = 0;
   int16_t eggTarget = 1;       // dex oculto que saldra del huevo
+  bool eggShiny = false;       // sorpresa sorteada al crear el huevo
   uint8_t eggTaps = 0;
   uint8_t mistakeCooldown = 0;
   uint8_t ticksSinceSave = 0;

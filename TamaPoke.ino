@@ -33,6 +33,7 @@ Pet pet;
 // sprite animado de la SD para la especie actual (si existe el archivo)
 SdMon mon;
 int16_t monFor = -2;
+bool monShinyFor = false;
 SdMon galleryMon;  // sprite grande de la vista detalle de la galeria
 
 // galeria pokedex
@@ -142,11 +143,12 @@ void setup() {
 
 // carga/descarga el sprite de SD cuando cambia la especie
 void ensureMon() {
-  if (pet.speciesId == monFor && !sdDirty) return;
+  if (pet.speciesId == monFor && monShinyFor == pet.shiny && !sdDirty) return;
   sdDirty = false;
   monFor = pet.speciesId;
+  monShinyFor = pet.shiny;
   mon.unload();
-  if (pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) mon.load(pet.speciesId);
+  if (pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) mon.load(pet.speciesId, pet.shiny);
 }
 
 void loop() {
@@ -251,6 +253,10 @@ void handleSerial() {
     }
     Serial.println();
     Serial.println("DONE");
+  } else if (line == "SHINY") {  // alterna shiny del actual (pruebas)
+    pet.shiny = !pet.shiny;
+    Serial.printf("shiny=%d\n", pet.shiny);
+    Serial.println("DONE");
   } else if (line == "BYE") {
     pet.startFarewell();
     Serial.println("DONE");
@@ -269,6 +275,7 @@ void handleSerial() {
                   pet.weight, pet.atkStat(), pet.defStat(), pet.speStat(),
                   pet.geneAtk, pet.geneDef, pet.geneSpe,
                   pet.trAtk, pet.trDef, pet.trSpe, pet.berryKnown);
+    Serial.printf("shiny=%d\n", pet.shiny);
     Serial.println("DONE");
   }
 }
@@ -476,7 +483,7 @@ void render() {
   } else {
     const DexEntry &d = DEX_TBL[pet.speciesId];
     char name[28];
-    snprintf(name, sizeof(name), "%s Nv.%u", d.name, pet.level());
+    snprintf(name, sizeof(name), "%s%s Nv.%u", pet.shiny ? "*" : "", d.name, pet.level());
     drawHeader(name, pet.sleeping ? UI_INK_NIGHT : d.accent, statusMsg());
     drawPet();
     drawPoops();
@@ -682,7 +689,7 @@ void renderCard() {
   const DexEntry &d = DEX_TBL[pet.speciesId];
 
   char head[26];
-  snprintf(head, sizeof(head), "%s Nv.%u", d.name, pet.level());
+  snprintf(head, sizeof(head), "%s%s Nv.%u", pet.shiny ? "*" : "", d.name, pet.level());
   gfx->setTextColor(d.accent);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(head) * 9, 44);
@@ -759,7 +766,8 @@ void renderGallery() {
     const DexEntry &d = DEX_TBL[galleryDetail];
     bool reg = pet.isRegistered(galleryDetail);
     char head[24];
-    snprintf(head, sizeof(head), "N.%03d %s", galleryDetail, reg ? d.name : "???");
+    snprintf(head, sizeof(head), "N.%03d %s%s", galleryDetail,
+             pet.isShinyRegistered(galleryDetail) ? "*" : "", reg ? d.name : "???");
     gfx->setTextColor(reg ? d.accent : UI_INK);
     gfx->setTextSize(3);
     gfx->setCursor(CX - strlen(head) * 9, 56);
@@ -808,6 +816,12 @@ void renderGallery() {
       const uint8_t *t = thumbs.get(dex);
       if (t) {
         drawThumb(t, x, y, 2, !pet.isRegistered(dex));
+        if (pet.isShinyRegistered(dex)) {
+          gfx->setTextColor(UI_BAR_WARN);
+          gfx->setTextSize(2);
+          gfx->setCursor(x + 62, y + 4);
+          gfx->print("*");
+        }
       } else {
         char num[6];
         snprintf(num, sizeof(num), "%d", dex);
@@ -843,7 +857,7 @@ void galleryTap(int16_t x, int16_t y) {
   int16_t dex = galleryPage * 16 + r * 4 + c + 1;
   if (dex > 151) return;
   galleryDetail = dex;
-  galleryMon.load(dex);
+  galleryMon.load(dex, pet.isShinyRegistered(dex));
 }
 
 void drawBattery() {
@@ -1022,6 +1036,7 @@ const char *statusMsg() {
   if (pet.energy < 25) return "Esta agotado...";
   if (pet.joy < 25) return "Esta triste...";
   if (pet.weight > 60) return "Esta rellenito...";
+  if (pet.shiny && pet.ageMinutes < 15) return "Es SHINY!!";
   return "Esta feliz";
 }
 

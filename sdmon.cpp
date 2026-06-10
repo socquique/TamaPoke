@@ -48,13 +48,17 @@ bool sdBegin() {
   return sdReady;
 }
 
-bool SdMon::load(uint8_t dexNum) {
+bool SdMon::load(uint8_t dexNum, bool shiny) {
   unload();
   if (!sdReady) return false;
 
   char path[24];
-  snprintf(path, sizeof(path), "/mons/%03u.bin", dexNum);
+  snprintf(path, sizeof(path), "/mons/%s%03u.bin", shiny ? "s" : "", dexNum);
   File f = SD_MMC.open(path, FILE_READ);
+  if (!f && shiny) {  // sin variante shiny: usa la normal
+    snprintf(path, sizeof(path), "/mons/%03u.bin", dexNum);
+    f = SD_MMC.open(path, FILE_READ);
+  }
   if (!f) {
     Serial.printf("no existe %s\n", path);
     return false;

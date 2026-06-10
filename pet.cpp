@@ -19,6 +19,8 @@ void Pet::newEgg() {
   speciesId = -1;
   prevSpeciesId = -1;
   eggTarget = pickEggSpecies();  // especie oculta segun rareza y pokedex
+  // sorteo shiny: 1/48 normal, 1/24 si el anterior completo su ciclo
+  eggShiny = (random(lastEnd == CER_FAREWELL ? 24 : 48) == 0);
   eggTaps = 0;
   fullness = 80;
   joy = 80;
@@ -214,6 +216,7 @@ int16_t Pet::pickEggSpecies() {
 void Pet::registerSpecies(int16_t dex) {
   if (dex < 1 || dex > 151) return;
   dexReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+  if (shiny) dexShinyReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
 }
 
 static uint16_t calcStat(uint8_t base, uint8_t gene, uint8_t lvl, uint8_t tr) {
@@ -265,6 +268,7 @@ void Pet::release() {
 
 void Pet::hatch() {
   speciesId = eggTarget;
+  shiny = eggShiny;
   // genes del individuo: 90-110% por stat (cada crianza es unica)
   geneAtk = 90 + random(21);
   geneDef = 90 + random(21);
@@ -402,6 +406,9 @@ void Pet::save() {
   prefs.putUChar("tdef", trDef);
   prefs.putUChar("tspe", trSpe);
   prefs.putBool("bk", berryKnown);
+  prefs.putBool("shy", shiny);
+  prefs.putBool("eshy", eggShiny);
+  prefs.putBytes("dexsh", dexShinyReg, sizeof(dexShinyReg));
   prefs.putUInt("age", ageMinutes);
   prefs.putShort("dexn", speciesId);
   prefs.putShort("eggT2", eggTarget);
@@ -432,6 +439,9 @@ void Pet::load() {
   trDef = prefs.getUChar("tdef", 0);
   trSpe = prefs.getUChar("tspe", 0);
   berryKnown = prefs.getBool("bk", false);
+  shiny = prefs.getBool("shy", false);
+  eggShiny = prefs.getBool("eshy", false);
+  prefs.getBytes("dexsh", dexShinyReg, sizeof(dexShinyReg));
   ageMinutes = prefs.getUInt("age", 0);
   if (prefs.isKey("dexn")) {
     speciesId = prefs.getShort("dexn", -1);
