@@ -3,7 +3,6 @@ build/
 
 # cacheas y artefactos regenerables del taller
 tools/downloads/
-tools/sdcard/
 tools/__pycache__/
 __pycache__/
 tools/sheet.png
