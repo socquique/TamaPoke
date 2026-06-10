@@ -15,6 +15,32 @@ struct SdMon {
   void unload();
 };
 
+// acciones de los sprites PMD (formato TPK2)
+enum : uint8_t {
+  PMD_IDLE = 0, PMD_WALKL, PMD_WALKR, PMD_SLEEP, PMD_EAT, PMD_HURT,
+  PMD_ATTACK, PMD_POSE, PMD_HOP, PMD_NOD, PMD_BREATH, PMD_SIT,
+  PMD_NACTS
+};
+
+struct PmdAct {
+  uint8_t w = 0, h = 0, frames = 0;
+  uint16_t ms[24];
+  const uint8_t *data = nullptr;  // frames * w * h en el blob
+};
+
+// sprite PMD multi-accion cargado de la SD a PSRAM
+struct PmdMon {
+  bool loaded = false;
+  uint16_t palCount = 0;
+  uint16_t pal[256];
+  uint8_t *blob = nullptr;
+  PmdAct acts[PMD_NACTS];
+
+  bool load(uint8_t dexNum, bool shiny = false);
+  void unload();
+  bool has(uint8_t a) const { return loaded && a < PMD_NACTS && acts[a].frames > 0; }
+};
+
 // miniaturas de la galeria (thumbs.bin entero en PSRAM)
 struct SdThumbs {
   bool loaded = false;

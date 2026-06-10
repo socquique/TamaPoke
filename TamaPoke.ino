@@ -31,9 +31,20 @@ TouchDrvCST92xx touch;
 Pet pet;
 
 // sprite animado de la SD para la especie actual (si existe el archivo)
-SdMon mon;
+SdMon mon;          // sprite B/N (respaldo y minijuego si no hay PMD)
+PmdMon pmd;         // sprite PMD multi-accion (pantalla principal)
 int16_t monFor = -2;
 bool monShinyFor = false;
+
+// comportamiento del bicho en pantalla
+struct {
+  uint8_t mode = 0;     // 0 idle, 1 paseo, 2 gesto one-shot
+  uint8_t act = PMD_IDLE;
+  uint32_t t0 = 0;      // inicio de la animacion en curso
+  uint32_t until = 0;   // fin del estado actual
+  float x = 233, targetX = 233;
+} beh;
+#define PET_GROUND 304  // linea de suelo de la mascota
 SdMon galleryMon;  // sprite grande de la vista detalle de la galeria
 
 // galeria pokedex
@@ -148,7 +159,14 @@ void ensureMon() {
   monFor = pet.speciesId;
   monShinyFor = pet.shiny;
   mon.unload();
-  if (pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) mon.load(pet.speciesId, pet.shiny);
+  pmd.unload();
+  beh.x = beh.targetX = 233;
+  beh.mode = 0;
+  beh.until = 0;
+  if (pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) {
+    pmd.load(pet.speciesId, pet.shiny);          // principal: PMD
+    if (!pmd.loaded) mon.load(pet.speciesId, pet.shiny);  // respaldo: B/N
+  }
 }
 
 void loop() {
@@ -644,7 +662,11 @@ void renderGame() {
 
   // suelo y bicho persiguiendo
   gfx->fillRect(110, 396, 246, 3, UI_TRACK);
-  if (mon.loaded) {
+  if (pmd.loaded) {
+    uint8_t act = (ballX > gamePetX + 4) ? PMD_WALKR : (ballX < gamePetX - 4) ? PMD_WALKL : PMD_IDLE;
+    if (!pmd.has(act)) act = PMD_IDLE;
+    drawPmdAct(act, (int)gamePetX, 394, millis(), true, false, 3);
+  } else if (mon.loaded) {
     int s = (mon.h * 2 > 130) ? 1 : 2;
     int w = mon.w * s, h = mon.h * s;
     uint16_t fm = mon.frameMs ? mon.frameMs : 100;
@@ -696,7 +718,9 @@ void renderCard() {
   gfx->print(head);
 
   // retrato pequeno animado
-  if (mon.loaded) {
+  if (pmd.loaded) {
+    drawPmdAct(PMD_IDLE, CX, 172, millis(), true, false, 3);
+  } else if (mon.loaded) {
     int s = (mon.h > 60) ? 1 : 2;
     uint16_t fm = mon.frameMs ? mon.frameMs : 100;
     uint16_t fi = (millis() / fm) % mon.frames;
@@ -887,6 +911,10 @@ void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
 }
 
 void drawPet() {
+  if (pmd.loaded) {
+    drawPetPMD();
+    return;
+  }
   if (mon.loaded) {
     drawPetSD();
     return;
@@ -932,6 +960,121 @@ void drawPet() {
   else if (m == MOOD_SAD) overlayMouth(sp, x, y, s, false);
 
   if (pet.showHeart()) drawMap(SPR_HEART, 32, x + 20 * s, y - 2 * s, 2, false);
+}
+
+// ---------- mascota PMD: comportamiento ----------
+
+uint32_t pmdActTotalMs(const PmdAct &a) {
+  uint32_t t = 0;
+  for (uint8_t i = 0; i < a.frames; i++) t += a.ms[i];
+  return t ? t : 100;
+}
+
+uint8_t pmdFrameAt(const PmdAct &a, uint32_t t, bool loop) {
+  uint32_t total = pmdActTotalMs(a);
+  if (!loop && t >= total) return a.frames - 1;
+  t %= total;
+  uint8_t i = 0;
+  while (t >= a.ms[i]) {
+    t -= a.ms[i];
+    i = (i + 1) % a.frames;
+  }
+  return i;
+}
+
+// dibuja una accion anclada por la base (centro-x, suelo) y devuelve su escala
+void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
+  const PmdAct &a = pmd.acts[actId];
+  if (!a.frames) return;
+  uint8_t sBase = pmd.acts[PMD_IDLE].h ? 170 / pmd.acts[PMD_IDLE].h : 5;
+  if (sBase < 2) sBase = 2;
+  if (sBase > maxS) sBase = maxS;
+  uint8_t s = sBase;
+  while (s > 2 && a.h * s > 250) s--;  // acciones con frame grande (ataque)
+  uint8_t fi = pmdFrameAt(a, t, loop);
+  const uint8_t *fr = a.data + (uint32_t)fi * a.w * a.h;
+  int x0 = cx - a.w * s / 2, y0 = groundY - a.h * s;
+  for (int r = 0; r < a.h; r++) {
+    const uint8_t *row = fr + r * a.w;
+    for (int c = 0; c < a.w; c++) {
+      uint8_t idx = row[c];
+      if (idx == 0xFF) continue;
+      gfx->fillRect(x0 + c * s, y0 + r * s, s, s, sil ? INK_K : pmd.pal[idx]);
+    }
+  }
+}
+
+// elige el siguiente capricho del bicho cuando esta contento
+void behNext() {
+  uint32_t now = millis();
+  beh.t0 = now;
+  int r = random(100);
+  if (r < 35 && (pmd.has(PMD_WALKL) || pmd.has(PMD_WALKR))) {
+    beh.mode = 1;  // paseo
+    beh.targetX = 150 + random(176);
+    beh.until = now + 15000;
+  } else if (r < 60) {
+    // gesto aleatorio entre los disponibles
+    static const uint8_t flair[] = { PMD_POSE, PMD_HOP, PMD_NOD, PMD_BREATH, PMD_SIT };
+    uint8_t pick[5], n = 0;
+    for (uint8_t f : flair)
+      if (pmd.has(f)) pick[n++] = f;
+    if (n) {
+      beh.mode = 2;
+      beh.act = pick[random(n)];
+      beh.until = now + pmdActTotalMs(pmd.acts[beh.act]) * (beh.act == PMD_SIT ? 3 : 1);
+      return;
+    }
+    beh.mode = 0;
+    beh.until = now + 2000 + random(3000);
+  } else {
+    beh.mode = 0;  // mirar al frente
+    beh.until = now + 2000 + random(3000);
+  }
+}
+
+void drawPetPMD() {
+  uint32_t now = millis();
+
+  if (pet.evolving()) {
+    bool flash = (now / 300) % 2;
+    drawPmdAct(PMD_IDLE, CX, PET_GROUND, 0, true, flash, 5);
+    return;
+  }
+
+  PetMood m = pet.mood();
+  uint8_t act;
+  bool loop = true;
+  if (m == MOOD_SLEEPING && pmd.has(PMD_SLEEP)) {
+    act = PMD_SLEEP;
+    beh.mode = 0;
+  } else if (m == MOOD_EATING && pmd.has(PMD_EAT)) {
+    act = PMD_EAT;
+    beh.t0 = 0;
+  } else if (m == MOOD_SAD && pmd.has(PMD_HURT)) {
+    act = PMD_HURT;
+  } else {
+    // contento: el planificador decide (idle / paseo / gesto)
+    if (now > beh.until) behNext();
+    if (beh.mode == 1) {
+      float d = beh.targetX - beh.x;
+      if (fabsf(d) < 4) {
+        behNext();
+        act = PMD_IDLE;
+      } else {
+        beh.x += (d > 0 ? 3.0f : -3.0f);
+        act = (d > 0) ? PMD_WALKR : PMD_WALKL;
+      }
+    } else {
+      act = (beh.mode == 2) ? beh.act : PMD_IDLE;
+      loop = false;
+    }
+    if (!pmd.has(act)) act = PMD_IDLE;
+  }
+
+  drawPmdAct(act, (int)beh.x, PET_GROUND, now - beh.t0, loop || act == PMD_IDLE, false, 5);
+
+  if (pet.showHeart()) drawMap(SPR_HEART, 32, (int)beh.x + 50, PET_GROUND - 190, 2, false);
 }
 
 // sprite animado desde la SD: zoom entero por pixel, frames a su ritmo

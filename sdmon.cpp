@@ -7,6 +7,67 @@ bool sdReady = false;
 bool sdDirty = false;
 SdThumbs thumbs;
 
+bool PmdMon::load(uint8_t dexNum, bool shiny) {
+  unload();
+  if (!sdReady) return false;
+
+  char path[28];
+  snprintf(path, sizeof(path), "/mons/p%s%03u.bin", shiny ? "s" : "", dexNum);
+  File f = SD_MMC.open(path, FILE_READ);
+  if (!f && shiny) {  // sin shiny PMD: usa el normal
+    snprintf(path, sizeof(path), "/mons/p%03u.bin", dexNum);
+    f = SD_MMC.open(path, FILE_READ);
+  }
+  if (!f) return false;
+
+  uint32_t size = f.size();
+  blob = (uint8_t *)ps_malloc(size);
+  if (!blob || f.read(blob, size) != size || memcmp(blob, "TPK2", 4) != 0) {
+    if (blob) { free(blob); blob = nullptr; }
+    f.close();
+    return false;
+  }
+  f.close();
+
+  uint8_t nActs = blob[4];
+  memcpy(&palCount, blob + 5, 2);
+  if (palCount > 256) { unload(); return false; }
+  memcpy(pal, blob + 7, palCount * 2);
+
+  const uint8_t *p = blob + 7 + palCount * 2;
+  const uint8_t *end = blob + size;
+  for (uint8_t i = 0; i < nActs && p + 4 <= end; i++) {
+    uint8_t id = p[0], w = p[1], h = p[2], nf = p[3];
+    p += 4;
+    if (id >= PMD_NACTS || nf > 24) { unload(); return false; }
+    PmdAct &a = acts[id];
+    a.w = w;
+    a.h = h;
+    a.frames = nf;
+    for (uint8_t k = 0; k < nf; k++) {
+      a.ms[k] = p[0] | (p[1] << 8);
+      p += 2;
+    }
+    a.data = p;
+    p += (uint32_t)w * h * nf;
+  }
+  loaded = true;
+  Serial.printf("cargado %s (%u KB)\n", path, size / 1024);
+  return true;
+}
+
+void PmdMon::unload() {
+  if (blob) {
+    free(blob);
+    blob = nullptr;
+  }
+  for (auto &a : acts) {
+    a.w = a.h = a.frames = 0;
+    a.data = nullptr;
+  }
+  loaded = false;
+}
+
 bool SdThumbs::load() {
   if (!sdReady) return false;
   File f = SD_MMC.open("/mons/thumbs.bin", FILE_READ);
