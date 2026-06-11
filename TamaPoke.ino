@@ -208,7 +208,9 @@ void loop() {
     if (e) pet.lastSeenEpoch = e;
   }
 
-  if (now - lastRender >= (uint32_t)(gameOpen ? 40 : 100)) {  // 25 fps jugando
+  // 65 ms en el juego: fluido pero sin pisar el envio DMA del frame anterior
+  // (a 40 ms el redibujado solapaba con el flush y causaba flashes negros)
+  if (now - lastRender >= (uint32_t)(gameOpen ? 65 : 100)) {
     lastRender = now;
     render();
   }
@@ -413,7 +415,7 @@ void onSwipe(int dir) {
 }
 
 void onTap(int16_t x, int16_t y) {
-  Serial.printf("TOUCH %d %d\n", x, y);  // diagnostico
+  // Serial.printf("TOUCH %d %d\n", x, y);  // diagnostico (silenciado: satura el log)
   if (galleryOpen) {
     galleryTap(x, y);
     return;
@@ -610,7 +612,8 @@ void render() {
   }
   int h = sceneHour();
   gNight = pet.sleeping || h < 6 || h >= 20;
-  gfx->fillScreen(RGB565_BLACK);
+  // drawScene cubre los 466x466 completos: sin fillScreen(NEGRO) previo para
+  // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo)
   drawScene(pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome, millis(), gNight);
 
   if (pet.ceremony) {
@@ -810,7 +813,9 @@ void drawGameScene() {
 }
 
 void renderGame() {
-  gfx->fillScreen(RGB565_BLACK);
+  // sin fillScreen(NEGRO): drawGameScene cubre los 466x466 completos. Si el
+  // DMA del flush anterior aun lee el buffer, vera contenido valido (no negro
+  // a medio pintar), que era el parpadeo a 25 fps.
   bool night = sceneHour() < 6 || sceneHour() >= 20;
   uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
 
