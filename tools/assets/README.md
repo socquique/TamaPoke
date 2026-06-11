@@ -1,56 +1,50 @@
-# Formato de sprites para importar a TamaPoke
+# Assets de TamaPoke — de dónde salen los sprites
 
-Suelta aquí los sprites y el importador (`tools/sprites.py import`, pendiente de
-activar cuando haya assets) los convertirá a `species.h`.
+Los sprites NO se editan a mano ni se guardan aquí: se **descargan de sus
+fuentes y se empaquetan** con los scripts de `tools/`. Esta carpeta es solo
+documentación del flujo (antes contenía una propuesta de importación por PNG
+que quedó obsoleta).
 
-## Formato ideal: PNG-strip horizontal
+## El flujo real
 
-Un PNG por animación, con los frames en fila y todas las celdas del mismo tamaño:
+Tres formatos conviven en la microSD (`/mons/`), cada uno con su empaquetador:
 
+| Formato | Script | Fuente | Qué es |
+|---|---|---|---|
+| **TPK2** `pNNN.bin` / `psNNN.bin` | `pack_pmd.py` | [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab) | Animaciones multi-acción (idle, walk, sleep, eat, hurt, attack, gestos) de la **pantalla principal** |
+| **TPK1** `NNN.bin` / `sNNN.bin` | `pack_sd.py` | [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/gen5ani/) | Sprites B/N animados de la **Pokédex / galería** (y respaldo) |
+| **TPTH** `thumbs.bin` | `make_thumbs.py` | (deriva de los TPK1) | Miniaturas 40×40 de la galería |
+
+```bash
+python3 tools/pack_pmd.py     # los 151 + shiny -> tools/sdcard/mons/p[s]NNN.bin
+python3 tools/pack_sd.py      # los 151 + shiny -> tools/sdcard/mons/[s]NNN.bin
+python3 tools/make_thumbs.py  # -> tools/sdcard/mons/thumbs.bin
+python3 tools/send_sd.py      # envia todo a la SD de la placa por USB
 ```
-tools/assets/
-  004_charmander/
-    idle.png      ← OBLIGATORIO: 2-4 frames en fila (p.ej. 4 frames 48×48 → 192×48)
-    sleep.png     ← opcional, 2 frames
-    eat.png       ← opcional, 2 frames
-    sad.png       ← opcional, 1-2 frames
-    meta.txt      ← opcional: "evolvesTo=005 evolveLevel=16 type=fuego"
-  025_pikachu/
-    idle.png
-```
 
-## Reglas que evitan dolores
+(`s` = variante shiny. Ambos empaquetadores aceptan números de Pokédex sueltos,
+p. ej. `python3 tools/pack_pmd.py 7 25`.)
 
-1. **Escala nativa**: 1 píxel de arte = 1 píxel de PNG. Sin reescalar, sin suavizado.
-   Tamaño de celda recomendado: **48×48** (también vale 32×32, 56×56, 64×64 — el
-   importador encaja con vecino-más-cercano a la rejilla del juego).
-2. **Transparencia real**: fondo alpha 0, no blanco ni magenta. Alpha binario
-   (0 o 255); las semitransparencias se binarizan y pierden el degradado.
-3. **Sin antialiasing**: bordes duros de pixel art. Colores libres, sin límite
-   de paleta (cada especie lleva su propia paleta al convertir).
-4. **Misma celda en todos los frames** de un strip, criatura centrada y apoyada
-   en la misma línea de suelo en cada frame (si "baila" entre frames, vibrará).
-5. **Nombre de carpeta `NNN_nombre`** para ordenar el dex.
+## Formatos binarios
 
-## También se aceptan GIF animados
+Definidos en las cabeceras de cada empaquetador y parseados en `sdmon.cpp`:
 
-El importador puede leer GIF directamente (frames + tiempos). Útil para los
-sprites animados que circulan por ahí (suelen ser GIF de 96×96 con 20-40 frames):
-se reducen a 3-4 keyframes automáticamente. Para arte propio, mejor PNG-strip
-(el GIF limita a 256 colores y su transparencia da problemas).
+- **TPK1** (`SdMon`): `"TPK1"`, `u16 w,h,frames,frameMs`, `u16 palCount`,
+  `u16 pal[]` (RGB565), `u8 data[frames*w*h]` (índice de paleta, `0xFF`
+  transparente).
+- **TPK2** (`PmdMon`): `"TPK2"`, `u8 nActs`, `u16 palCount`, `u16 pal[]`, y por
+  acción `u8 id,w,h,nFrames` + `u16 ms[nFrames]` + `u8 data[w*h*nFrames]`.
+- **TPTH** (`SdThumbs`): `"TPTH"`, `u16 count`, `u32 offset[count]`, y por
+  miniatura `u8 w,h,palCount` + `u16 pal[]` + `u8 data[w*h]`.
 
-## Cuántos frames usa el juego
+El firmware valida tamaños al cargar, así que un `.bin` truncado se rechaza sin
+romper nada.
 
-- **idle**: bucle a ~3 fps. Con 2 frames ya vive; 4 es lujo.
-- **sleep/eat/sad**: 2 frames. Si faltan, el juego usa idle + emote
-  (Zzz, corazón, gota de sudor) — totalmente válido, es lo clásico tamagotchi.
+## Caché de descargas
 
-## Presupuesto (no es problema)
+`pack_pmd.py` y `pack_sd.py` cachean los GIF/PNG originales en
+`tools/pmd_cache/` y `tools/downloads/` (ignorados por git, regenerables). Los
+`.bin` finales sí se versionan en `tools/sdcard/mons/` como respaldo.
 
-151 especies × 4 frames × 48×48 × RGB565 ≈ 2.8 MB de los 16 MB de flash.
-
-## Nota legal
-
-Los sprites oficiales son de Nintendo/Game Freak: para uso personal en tu
-dispositivo no hay problema práctico, pero no los publiques con el proyecto.
-Para publicar: arte propio o packs con licencia libre.
+> Ver [CREDITS.md](../../CREDITS.md) sobre la procedencia y los términos de los
+> sprites. Son de terceros: no redistribuir con fines comerciales.

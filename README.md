@@ -197,9 +197,12 @@ Para probar rápido: baja `PET_TICK_MS` y `MINUTES_PER_LEVEL` en `pet.h`.
   bloqueante, no hay solape que resolver; el parpadeo a alto fps es del panel).
   La vía real sería flush parcial de la región que cambia. 85 ms es el compromiso.
 - **Soak test** 24-48 h (instrumentación lista: comando/latido `HEALTH`).
-- **Publicación**: instalador web (ESP Web Tools + empaquetado en JS), `CREDITS.md`,
-  carcasa 3D para MakerWorld.
-- Conectar la **batería** cuando llegue.
+- **Publicación**: ✅ instalador web (`web/`, ESP Web Tools + cargador de sprites
+  por Web Serial) y ✅ [`CREDITS.md`](CREDITS.md). Falta: carcasa 3D para
+  MakerWorld y, para usar GitHub Pages gratis, hacer el repo público sacando
+  antes los sprites (de terceros) del historial. Mejora: empaquetar sprites en
+  el navegador para no pedírselos al usuario.
+- **Combate / encuentros salvajes** (diseñado, sin implementar) y **sonido**.
 
 ## Créditos
 

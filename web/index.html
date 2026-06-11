@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TamaPoke · Instalador</title>
+<style>
+  :root { --bg:#f2efe1; --ink:#2a2a36; --accent:#4f93c4; --ok:#58b868; --bad:#e8503a; --track:#d8d2bd; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, sans-serif; background:var(--bg);
+         color:var(--ink); line-height:1.6; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 .5rem; }
+  .sub { color:#6b6b76; margin: 0 0 1.5rem; }
+  .step { background:#fff; border:1px solid var(--track); border-radius:14px; padding:1.25rem 1.5rem; margin: 1rem 0; }
+  .num { display:inline-flex; width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff;
+         align-items:center; justify-content:center; font-weight:600; margin-right:.5rem; font-size:.9rem; }
+  button { font: inherit; font-weight:500; padding:.6rem 1.2rem; border-radius:10px; border:1px solid var(--ink);
+           background:#fff; cursor:pointer; }
+  button:hover { background:var(--bg); }
+  button:disabled { opacity:.5; cursor:default; }
+  esp-web-install-button { display:inline-block; }
+  esp-web-install-button[install-unsupported] { display:none; }
+  .unsupported { display:none; color:var(--bad); font-weight:500; }
+  .row { display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; }
+  #log { font-family: ui-monospace, monospace; font-size:.85rem; background:#1b1b25; color:#d8dcf0;
+         border-radius:10px; padding:.75rem 1rem; margin-top:1rem; max-height:220px; overflow:auto; white-space:pre-wrap; display:none; }
+  .bar { height:10px; background:var(--track); border-radius:5px; overflow:hidden; margin-top:.75rem; display:none; }
+  .bar > div { height:100%; width:0; background:var(--ok); transition: width .15s; }
+  code { background:#0001; padding:.1em .4em; border-radius:5px; }
+  a { color:var(--accent); }
+  .note { font-size:.9rem; color:#6b6b76; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🐢 TamaPoke</h1>
+  <p class="sub">Tamagotchi de los 151 para la Waveshare ESP32-S3-Touch-AMOLED-1.75.
+     Instálalo desde el navegador, sin Arduino ni drivers.</p>
+
+  <p class="unsupported" id="unsupported">
+    ⚠️ Tu navegador no soporta Web Serial. Usa <b>Chrome</b> o <b>Edge</b> en ordenador.
+  </p>
+
+  <h2><span class="num">1</span>Flashea el firmware</h2>
+  <div class="step">
+    <p>Conecta la placa por USB y pulsa instalar. Elige el puerto y espera.</p>
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">⚡ Instalar TamaPoke</button>
+      <span slot="unsupported">Navegador no compatible (usa Chrome/Edge).</span>
+      <span slot="not-allowed">Necesita HTTPS.</span>
+    </esp-web-install-button>
+  </div>
+
+  <h2><span class="num">2</span>Carga los sprites en la microSD</h2>
+  <div class="step">
+    <p>Mete una microSD en la placa (se formatea sola). Selecciona los archivos
+       <code>.bin</code> de los sprites (carpeta <code>tools/sdcard/mons/</code>
+       del repo, o genéralos con <code>tools/pack_*.py</code>) y se copian por USB
+       sin sacar la tarjeta.</p>
+    <p class="note">Cierra la pestaña de instalación del paso 1 antes (solo un
+       programa puede usar el puerto a la vez).</p>
+    <div class="row">
+      <button id="connect">🔌 Conectar placa</button>
+      <input id="files" type="file" accept=".bin" multiple disabled>
+    </div>
+    <div class="bar" id="bar"><div></div></div>
+    <pre id="log"></pre>
+  </div>
+
+  <h2>Cómo se juega</h2>
+  <p>Cuida tu huevo hasta que eclosione, dale de comer, juega, entrénalo y
+     complétalos todos. Toca el bicho para mimarlo; desliza para abrir la
+     Pokédex (horizontal), la ficha (arriba) o ajustar la hora (abajo); el botón
+     físico PWR apaga la pantalla (corto) o todo (largo).
+     Más en el <a href="https://github.com/socquique/TamaPoke" target="_blank">repositorio</a>.</p>
+
+  <p class="note">Sprites de <a href="https://github.com/PMDCollab/SpriteCollab" target="_blank">PMD SpriteCollab</a>
+     y <a href="https://play.pokemonshowdown.com" target="_blank">Pokémon Showdown</a>.
+     Pokémon es ™ de Nintendo / Game Freak. Proyecto sin ánimo de lucro.</p>
+</div>
+
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+<script>
+const log = (m) => { const el = document.getElementById('log'); el.style.display='block';
+  el.textContent += m + '\n'; el.scrollTop = el.scrollHeight; };
+const supported = 'serial' in navigator;
+if (!supported) { document.getElementById('unsupported').style.display='block';
+  document.getElementById('connect').disabled = true; }
+
+let port, reader, writer, lineBuf = '';
+
+async function readLine(timeoutMs = 6000) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const nl = lineBuf.indexOf('\n');
+    if (nl >= 0) { const l = lineBuf.slice(0, nl).trim(); lineBuf = lineBuf.slice(nl + 1); return l; }
+    if (Date.now() > deadline) return null;
+    const { value, done } = await reader.read();
+    if (done) return null;
+    lineBuf += new TextDecoder().decode(value);
+  }
+}
+
+async function waitFor(token, timeoutMs = 6000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const l = await readLine(deadline - Date.now());
+    if (l === null) return false;
+    if (l === token) return true;
+    if (l === 'ERR') return false;
+  }
+  return false;
+}
+
+document.getElementById('connect').onclick = async () => {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    reader = port.readable.getReader();
+    writer = port.writable.getWriter();
+    lineBuf = '';
+    log('Conectado. Ya puedes elegir los .bin.');
+    document.getElementById('files').disabled = false;
+    document.getElementById('connect').disabled = true;
+  } catch (e) { log('No se pudo conectar: ' + e.message); }
+};
+
+document.getElementById('files').onchange = async (ev) => {
+  const files = [...ev.target.files];
+  const bar = document.getElementById('bar'); bar.style.display = 'block';
+  const fill = bar.firstElementChild;
+  const enc = new TextEncoder();
+  let done = 0;
+  for (const file of files) {
+    const data = new Uint8Array(await file.arrayBuffer());
+    log(`-> mons/${file.name} (${Math.round(data.length/1024)} KB)`);
+    await writer.write(enc.encode(`PUT mons/${file.name} ${data.length}\n`));
+    if (!await waitFor('OK')) { log('   rechazado'); continue; }
+    let ok = true;
+    for (let i = 0; i < data.length; i += 2048) {
+      await writer.write(data.slice(i, i + 2048));
+      if (!await waitFor('#')) { ok = false; break; }
+    }
+    if (ok && await waitFor('DONE', 30000)) log('   ok');
+    else log('   fallo en la transferencia');
+    done++;
+    fill.style.width = (done / files.length * 100) + '%';
+  }
+  log('Listo. Reinicia la placa (boton PWR) para ver los sprites.');
+};
+</script>
+</body>
+</html>
