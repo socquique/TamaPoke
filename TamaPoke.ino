@@ -1022,7 +1022,7 @@ void renderGame() {
   gfx->setCursor(CX - strlen(buf) * 12, 30);
   gfx->print(buf);
   char rec[12];
-  snprintf(rec, sizeof(rec), "REC %u", pet.gameHi);
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameHi);
   gfx->setTextSize(2);
   gfx->setCursor(CX - strlen(rec) * 6, 76);
   gfx->print(rec);

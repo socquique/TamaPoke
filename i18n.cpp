@@ -26,6 +26,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MEDALLAS %d/%d", "toca: volver",
     "NOMBRE:", "toca para volver",
     "COM", "FEL", "ENE", "LIM",
+    "REC %u",
   },
   // ---------------- EN ----------------
   {
@@ -46,6 +47,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MEDALS %d/%d", "tap: back",
     "NAME:", "tap to go back",
     "FOOD", "JOY", "ENE", "HYG",
+    "BEST %u",
   },
 };
 

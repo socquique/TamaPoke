@@ -39,6 +39,8 @@ enum StrId : uint8_t {
   S_NAME, S_DETAIL_BACK,
   // barras
   S_BAR_FOOD, S_BAR_JOY, S_BAR_ENE, S_BAR_HYG,
+  // marcador en vivo del minijuego
+  S_REC_FMT,
   STR_COUNT
 };
 
