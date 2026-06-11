@@ -426,6 +426,26 @@ void Pet::playResult(uint8_t score) {
   save();
 }
 
+// saco de entrenamiento: los golpes entrenan la fuerza. Devuelve la subida.
+uint8_t Pet::trainStrength(uint16_t hits) {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  uint8_t gain = hits / 4;          // ~4 golpes = 1 punto de entrenamiento
+  if (gain > 18) gain = 18;         // tope por sesion: la FUE se forja a fuego lento
+  uint8_t v = trAtk + gain;
+  trAtk = v > 100 ? 100 : v;
+  energy = dropTo(energy, 12, 5);   // cansa
+  fullness = dropTo(fullness, 5, 5);
+  int burn = (int)weight - hits / 3;  // tambien quema peso
+  weight = burn > 0 ? burn : 0;
+  joy = clamp100(joy + 6);
+  if (hits >= 20) heartUntil = millis() + HEART_MS;
+  if (hits > strHi) strHi = hits;   // record de golpes
+  addBond(2);
+  registerCare();
+  save();
+  return gain;
+}
+
 void Pet::play() {
   if (ceremony != CER_NONE) return;
   if (isEgg() || sleeping) return;
@@ -511,6 +531,7 @@ void Pet::save() {
   prefs.putUShort("tmedal", totalMedals);
   prefs.putUShort("mstone", lastMilestone);
   prefs.putUShort("ghi", gameHi);
+  prefs.putUShort("shi", strHi);
   prefs.putString("nick", nick);
 }
 
@@ -561,6 +582,7 @@ void Pet::load() {
   totalMedals = prefs.getUShort("tmedal", 0);
   lastMilestone = prefs.getUShort("mstone", 0);
   gameHi = prefs.getUShort("ghi", 0);
+  strHi = prefs.getUShort("shi", 0);
   prefs.getString("nick", nick, sizeof(nick));
   // siembra: la mascota actual cuenta como criada (guardados antiguos)
   if (speciesId >= 1) registerSpecies(speciesId);

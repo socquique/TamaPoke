@@ -75,6 +75,14 @@ float hitX, hitY;             // ultimo golpe (anillo de impacto)
 uint32_t hitTime = 0;
 bool gameNewHi = false;
 
+// saco de entrenamiento (entrena la fuerza)
+bool sackOpen = false;
+uint32_t sackUntil = 0, sackOverUntil = 0;
+uint16_t sackHits = 0;
+float sackShake = 0;
+uint8_t sackGain = 0;
+bool sackNewHi = false;
+
 // las 9 especies con sprite propio en flash (respaldo sin SD): dex -> indice
 int flashIdxForDex(int16_t dex) {
   static const int8_t IDX[10] = { -1, 3, 4, 5, 0, 1, 2, 6, 7, 8 };
@@ -208,10 +216,10 @@ void loop() {
     if (e) pet.lastSeenEpoch = e;
   }
 
-  // 85 ms en el juego: margen seguro para que el redibujado no pise el envio
+  // 85 ms en juego/saco: margen seguro para que el redibujado no pise el envio
   // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
   // sprites grandes el dibujo tarda mas, asi que se deja colchon)
-  if (now - lastRender >= (uint32_t)(gameOpen ? 85 : 100)) {
+  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen) ? 85 : 100)) {
     lastRender = now;
     render();
   }
@@ -338,6 +346,17 @@ void handleTouch() {
   int16_t x, y;
   bool pressed = touch.getPoint(&x, &y, 1) > 0;
 
+  // saco de entrenamiento: cada toque cuenta al instante (aporrear rapido)
+  if (sackOpen) {
+    if (pressed && !wasPressed) {
+      lastInteract = millis();
+      if (y < 72) sackOpen = false;  // tocar arriba = abandonar
+      else sackTap();
+    }
+    wasPressed = pressed;
+    return;
+  }
+
   if (pressed && !wasPressed) {  // empieza el gesto
     tX0 = tXl = x;
     tY0 = tYl = y;
@@ -428,7 +447,12 @@ void onTap(int16_t x, int16_t y) {
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
     if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
-    else cardOpen = false;
+    else if (cardPage == 1 && y >= 344 && y <= 378 && x >= 96 && x <= 370) {
+      cardOpen = false;            // boton ENTRENAR FUERZA
+      startSack();
+    } else {
+      cardOpen = false;
+    }
     return;
   }
   if (gameOpen) {
@@ -601,6 +625,10 @@ void render() {
   }
   if (gameOpen) {
     renderGame();
+    return;
+  }
+  if (sackOpen) {
+    renderSack();
     return;
   }
   if (kbOpen) {
@@ -791,6 +819,104 @@ void stepGame() {
   if (chase > 7) chase = 7;
   if (chase < -7) chase = -7;
   gamePetX += chase;
+}
+
+// ---------- saco de entrenamiento (entrena la fuerza) ----------
+
+void startSack() {
+  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+  sackOpen = true;
+  sackUntil = millis() + 10000;
+  sackOverUntil = 0;
+  sackHits = 0;
+  sackShake = 0;
+  sackNewHi = false;
+}
+
+void sackTap() {
+  if (millis() >= sackUntil) return;  // ya termino el tiempo
+  sackHits++;
+  sackShake = 16;  // sacude el saco
+}
+
+void drawGameScene();  // prototipo (definida mas abajo)
+
+void renderSack() {
+  uint32_t now = millis();
+  drawGameScene();  // fondo del habitat
+  bool night = sceneHour() < 6 || sceneHour() >= 20;
+  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+
+  // pantalla de resultado
+  if (sackOverUntil) {
+    if (now > sackOverUntil) { sackOpen = false; return; }
+    char b[18];
+    snprintf(b, sizeof(b), "%u GOLPES", sackHits);
+    gfx->setTextColor(ink);
+    gfx->setTextSize(4);
+    gfx->setCursor(CX - strlen(b) * 12, 150);
+    gfx->print(b);
+    char g[16];
+    snprintf(g, sizeof(g), "FUERZA +%u", sackGain);
+    gfx->setTextColor(UI_BAR_BAD);
+    gfx->setTextSize(3);
+    gfx->setCursor(CX - strlen(g) * 9, 210);
+    gfx->print(g);
+    gfx->setTextSize(2);
+    if (sackNewHi && sackHits > 0) {
+      gfx->setTextColor(UI_BAR_WARN);
+      gfx->setCursor(CX - 11 * 6, 256);
+      gfx->print("NUEVO RECORD!");
+    } else {
+      char r[18];
+      snprintf(r, sizeof(r), "RECORD: %u", pet.strHi);
+      gfx->setTextColor(ink);
+      gfx->setCursor(CX - strlen(r) * 6, 256);
+      gfx->print(r);
+    }
+    gfx->flush();
+    return;
+  }
+
+  // se acabaron los 10 s: aplicar entrenamiento
+  if (now >= sackUntil) {
+    sackNewHi = (sackHits > pet.strHi);
+    sackGain = pet.trainStrength(sackHits);
+    sackOverUntil = now + 3500;
+    gfx->flush();
+    return;
+  }
+
+  // aporreo activo
+  sackShake *= 0.84f;
+  int off = (int)(sackShake * sinf(now * 0.05f));
+  int sx = CX + off, top = 86, sy = 150;
+  gfx->fillRect(CX - 3, 56, 6, top - 56, ink);          // gancho/cuerda
+  gfx->fillRect(sx - 4, top - 30, 8, 34, ink);          // cadena
+  gfx->fillRoundRect(sx - 42, top, 84, 150, 26, C565(0xb5, 0x3a, 0x3a));  // saco
+  gfx->fillRoundRect(sx - 42, top, 84, 22, 18, C565(0x7e, 0x28, 0x28));   // tapa
+  gfx->drawRoundRect(sx - 42, top, 84, 150, 26, ink);
+  gfx->fillRect(sx - 42, top + 70, 84, 4, C565(0x7e, 0x28, 0x28));        // costura
+
+  // contador de golpes
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%u", sackHits);
+  gfx->setTextColor(ink);
+  gfx->setTextSize(6);
+  gfx->setCursor(CX - strlen(buf) * 18, 268);
+  gfx->print(buf);
+
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - 9 * 6, 322);
+  gfx->print("APORREA RAPIDO!");
+
+  // barra de tiempo
+  uint32_t left = sackUntil - now;
+  int bw = 280, fw = (int)((uint32_t)bw * left / 10000);
+  gfx->fillRoundRect(CX - bw / 2, 350, bw, 16, 5, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 350, fw, 16, 5, UI_BAR_OK);
+
+  gfx->flush();
 }
 
 // fondo del minijuego: hatibat del bicho (cielo por hora + suelo del bioma)
@@ -1041,10 +1167,17 @@ void renderCardStats() {
 
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - 8 * 6, 252);
+  gfx->setCursor(CX - 8 * 6, 248);
   gfx->print("MEDALLAS");
   for (int i = 0; i < MED_COUNT; i++)
-    drawMedalBadge(24 + (i % 4) * 106, 280 + (i / 4) * 34, i);
+    drawMedalBadge(24 + (i % 4) * 106, 272 + (i / 4) * 32, i);
+
+  // boton: saco de entrenamiento de fuerza
+  gfx->fillRoundRect(96, 344, 274, 34, 10, UI_BAR_BAD);
+  gfx->setTextColor(UI_BG_DAY);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - 13 * 6, 352);
+  gfx->print("ENTRENAR FUERZA");
 }
 
 void renderCard() {
