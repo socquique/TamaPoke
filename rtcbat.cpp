@@ -46,18 +46,25 @@ bool batBegin() {
   return pmuOk;
 }
 
-int batPercent() {
-  if (!pmuOk || !pmu.isBatteryConnect()) return -1;
-  return pmu.getBatteryPercent();
+// el estado de energia (I2C) se cachea ~2 s: leerlo en cada frame del loop
+// metia trafico I2C inutil y podia oscilar (parpadeo de brillo)
+static uint32_t powerCacheT = 0;
+static int cachedPct = -1;
+static bool cachedCharging = false, cachedUsb = true;
+
+static void refreshPower() {
+  uint32_t now = millis();
+  if (powerCacheT && now - powerCacheT < 2000) return;
+  powerCacheT = now ? now : 1;
+  if (!pmuOk) { cachedPct = -1; cachedCharging = false; cachedUsb = true; return; }
+  cachedPct = pmu.isBatteryConnect() ? pmu.getBatteryPercent() : -1;
+  cachedCharging = pmu.isCharging();
+  cachedUsb = pmu.isVbusIn();
 }
 
-bool batCharging() {
-  return pmuOk && pmu.isCharging();
-}
-
-bool usbPresent() {
-  return !pmuOk || pmu.isVbusIn();  // sin PMU asumimos USB (no recortar brillo)
-}
+int batPercent() { refreshPower(); return cachedPct; }
+bool batCharging() { refreshPower(); return cachedCharging; }
+bool usbPresent() { refreshPower(); return cachedUsb; }
 
 void pwrSetup() {
   if (!pmuOk) return;

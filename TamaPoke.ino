@@ -59,6 +59,8 @@ bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
 uint8_t cardPage = 0;         // 0 perfil, 1 stats+medallas
+bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
+int clockH = 12, clockM = 0;  // hora en edicion
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
@@ -216,6 +218,14 @@ void loop() {
     if (e) pet.lastSeenEpoch = e;
   }
 
+  // latido de salud cada 5 min (para el soak test; se descarta si no hay monitor)
+  static uint32_t lastHealth = 0;
+  if (now - lastHealth > 300000) {
+    lastHealth = now;
+    Serial.printf("HEALTH up=%lus heap=%u min=%u\n", (unsigned long)(now / 1000),
+                  ESP.getFreeHeap(), ESP.getMinFreeHeap());
+  }
+
   // 85 ms en juego/saco: margen seguro para que el redibujado no pise el envio
   // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
   // sprites grandes el dibujo tarda mas, asi que se deja colchon)
@@ -316,6 +326,11 @@ void handleSerial() {
       if (pet.isRegistered(i)) Serial.printf(" %d", i);
     Serial.println();
     Serial.println("DONE");
+  } else if (line == "HEALTH") {
+    Serial.printf("up=%lus heap=%u min=%u sd=%d mon=%d\n",
+                  (unsigned long)(millis() / 1000), ESP.getFreeHeap(),
+                  ESP.getMinFreeHeap(), sdReady, pmd.loaded || mon.loaded);
+    Serial.println("DONE");
   } else if (line == "STATS") {
     Serial.printf("spec=%d nv=%u com=%u fel=%u ene=%u lim=%u desc=%u sd=%d mon=%d bat=%d usb=%d rtc=%u\n",
                   pet.speciesId, pet.level(), pet.fullness, pet.joy, pet.energy,
@@ -369,7 +384,7 @@ void handleTouch() {
     tXl = x;
     tYl = y;
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
-    if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && millis() - tStart > 3000 &&
+    if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && millis() - tStart > 3000 &&
         abs(tXl - tX0) < 30 && abs(tYl - tY0) < 30 && inPetZone(tX0, tY0) &&
         !pet.isEgg() && !confirmUntil && !pet.ceremony) {
       confirmUntil = millis() + 10000;
@@ -381,7 +396,7 @@ void handleTouch() {
     uint32_t dt = millis() - tStart;
     if (!holdFired && !swallowGesture) {
       if (abs(dx) > 80 && abs(dy) < 70 && dt < 800) onSwipe(dx > 0 ? 1 : -1);
-      else if (abs(dy) > 80 && abs(dx) < 70 && dt < 800) onSwipeV();
+      else if (abs(dy) > 80 && abs(dx) < 70 && dt < 800) onSwipeV(dy > 0 ? 1 : -1);
       else if (dt < 1500 && abs(dx) < 40 && abs(dy) < 40) onTap(tX0, tY0);
     }
   }
@@ -389,19 +404,26 @@ void handleTouch() {
 }
 
 // deslizar vertical: abre/cierra la ficha del bicho
-void onSwipeV() {
-  if (gameOpen || galleryOpen || kbOpen || pet.ceremony) return;
+void openClock();  // prototipo
+
+void onSwipeV(int dir) {
+  if (gameOpen || galleryOpen || kbOpen || sackOpen || pet.ceremony) return;
+  if (clockOpen) { clockOpen = false; return; }
   if (cardOpen) {
-    cardOpen = false;
+    if (dir < 0) cardOpen = false;  // arriba cierra la ficha
+    return;
+  }
+  if (dir > 0) {                    // deslizar abajo: ajustar hora
+    if (!confirmUntil && !feedMenuUntil) openClock();
   } else if (!pet.isEgg() && !confirmUntil && !feedMenuUntil) {
-    cardOpen = true;
+    cardOpen = true;                // deslizar arriba: ficha
     cardPage = 0;
   }
 }
 
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
-  if (gameOpen || kbOpen) return;
+  if (gameOpen || kbOpen || clockOpen) return;
   if (cardOpen) {  // dentro de la ficha: cambiar entre las 3 paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
     cardPage = p < 0 ? 0 : (p > 2 ? 2 : p);
@@ -443,6 +465,10 @@ void onTap(int16_t x, int16_t y) {
   }
   if (kbOpen) {
     keyboardTap(x, y);
+    return;
+  }
+  if (clockOpen) {
+    clockTap(x, y);
     return;
   }
   if (pet.ceremony) return;  // durante la despedida no hay botones
@@ -634,6 +660,10 @@ void render() {
   }
   if (kbOpen) {
     renderKeyboard();
+    return;
+  }
+  if (clockOpen) {
+    renderClock();
     return;
   }
   if (cardOpen) {
@@ -1048,6 +1078,83 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
   if (fw > bw) fw = bw;
   gfx->fillRoundRect(150, y + 2, bw, 11, 3, UI_TRACK);
   if (fw > 2) gfx->fillRoundRect(150, y + 2, fw, 11, 3, color);
+}
+
+// ---------- ajuste de hora en pantalla (deslizar abajo) ----------
+// El usuario pone su hora LOCAL a ojo; el firmware la usa tal cual, asi que
+// no hay que gestionar zona horaria. Preserva el dia (no rompe racha/edad).
+
+void openClock() {
+  uint32_t e = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
+  clockH = (e / 3600) % 24;
+  clockM = (e / 60) % 60;
+  clockOpen = true;
+}
+
+void applyClock() {
+  uint32_t base = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
+  uint32_t e = (base / 86400) * 86400 + (uint32_t)clockH * 3600 + (uint32_t)clockM * 60;
+  rtcSetEpoch(e);
+  pet.setClock(e);
+  clockOpen = false;
+}
+
+void drawClockBtn(int x, int y, const char *l) {
+  gfx->fillRoundRect(x, y, 58, 58, 12, UI_WHITE);
+  gfx->drawRoundRect(x, y, 58, 58, 12, UI_INK);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(4);
+  gfx->setCursor(x + 17, y + 15);
+  gfx->print(l);
+}
+
+void renderClock() {
+  gfx->fillScreen(RGB565_BLACK);
+  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - 11 * 9, 50);
+  gfx->print("AJUSTAR HORA");
+
+  char t[8];
+  snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
+  gfx->setTextSize(7);
+  gfx->setCursor(CX - 105, 116);
+  gfx->print(t);
+
+  drawClockBtn(104, 198, "-");  // hora -
+  drawClockBtn(170, 198, "+");  // hora +
+  drawClockBtn(252, 198, "-");  // min -
+  drawClockBtn(318, 198, "+");  // min +
+  gfx->setTextSize(2);
+  gfx->setTextColor(UI_TRACK);
+  gfx->setCursor(120, 268);
+  gfx->print("HORA");
+  gfx->setCursor(276, 268);
+  gfx->print("MIN");
+
+  gfx->fillRoundRect(133, 312, 200, 50, 14, UI_BAR_OK);
+  gfx->setTextColor(UI_BG_DAY);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - 18, 325);
+  gfx->print("OK");
+
+  gfx->setTextColor(UI_TRACK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - 132, 400);
+  gfx->print("desliza arriba: cancelar");
+  gfx->flush();
+}
+
+void clockTap(int16_t x, int16_t y) {
+  if (y >= 198 && y <= 256) {  // fila de botones +/-
+    if (x >= 104 && x < 162) clockH = (clockH + 23) % 24;
+    else if (x >= 170 && x < 228) clockH = (clockH + 1) % 24;
+    else if (x >= 252 && x < 310) clockM = (clockM + 59) % 60;
+    else if (x >= 318 && x < 376) clockM = (clockM + 1) % 60;
+    return;
+  }
+  if (y >= 312 && y <= 362 && x >= 133 && x <= 333) { applyClock(); return; }
 }
 
 // llama + numero de racha arriba a la izquierda
