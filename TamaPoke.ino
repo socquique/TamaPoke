@@ -208,9 +208,10 @@ void loop() {
     if (e) pet.lastSeenEpoch = e;
   }
 
-  // 65 ms en el juego: fluido pero sin pisar el envio DMA del frame anterior
-  // (a 40 ms el redibujado solapaba con el flush y causaba flashes negros)
-  if (now - lastRender >= (uint32_t)(gameOpen ? 65 : 100)) {
+  // 85 ms en el juego: margen seguro para que el redibujado no pise el envio
+  // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
+  // sprites grandes el dibujo tarda mas, asi que se deja colchon)
+  if (now - lastRender >= (uint32_t)(gameOpen ? 85 : 100)) {
     lastRender = now;
     render();
   }
