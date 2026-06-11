@@ -55,6 +55,9 @@ int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 
 bool screenOff = false;       // pulsacion corta del boton PWR
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
+bool kbOpen = false;          // teclado para renombrar al bicho
+char nameBuf[12] = "";
+uint8_t nameLen = 0;
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
@@ -280,6 +283,15 @@ void handleSerial() {
     pet.shiny = !pet.shiny;
     Serial.printf("shiny=%d\n", pet.shiny);
     Serial.println("DONE");
+  } else if (line.startsWith("NICK ")) {
+    pet.rename(line.substring(5).c_str());
+    Serial.printf("nick=%s\n", pet.nick);
+    Serial.println("DONE");
+  } else if (line == "CAREDAY") {  // simula un dia nuevo cuidado (pruebas)
+    pet.setClock(pet.lastSeenEpoch + 86400);
+    pet.caress();
+    Serial.printf("streak=%u bond=%u medals=0x%X\n", pet.streak, pet.bond, pet.medals);
+    Serial.println("DONE");
   } else if (line == "BYE") {
     pet.startFarewell();
     Serial.println("DONE");
@@ -298,7 +310,9 @@ void handleSerial() {
                   pet.weight, pet.atkStat(), pet.defStat(), pet.speStat(),
                   pet.geneAtk, pet.geneDef, pet.geneSpe,
                   pet.trAtk, pet.trDef, pet.trSpe, pet.berryKnown);
-    Serial.printf("shiny=%d\n", pet.shiny);
+    Serial.printf("shiny=%d streak=%u/%u bond=%u medals=0x%X(%u) nick=%s\n",
+                  pet.shiny, pet.streak, pet.bestStreak, pet.bond, pet.medals,
+                  pet.totalMedals, pet.nick);
     Serial.println("DONE");
   }
 }
@@ -329,7 +343,7 @@ void handleTouch() {
     tXl = x;
     tYl = y;
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
-    if (!holdFired && !swallowGesture && !galleryOpen && millis() - tStart > 3000 &&
+    if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && millis() - tStart > 3000 &&
         abs(tXl - tX0) < 30 && abs(tYl - tY0) < 30 && inPetZone(tX0, tY0) &&
         !pet.isEgg() && !confirmUntil && !pet.ceremony) {
       confirmUntil = millis() + 10000;
@@ -350,7 +364,7 @@ void handleTouch() {
 
 // deslizar vertical: abre/cierra la ficha del bicho
 void onSwipeV() {
-  if (gameOpen || galleryOpen || pet.ceremony) return;
+  if (gameOpen || galleryOpen || kbOpen || pet.ceremony) return;
   if (cardOpen) {
     cardOpen = false;
   } else if (!pet.isEgg() && !confirmUntil && !feedMenuUntil) {
@@ -360,7 +374,7 @@ void onSwipeV() {
 
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
-  if (gameOpen || cardOpen) return;
+  if (gameOpen || cardOpen || kbOpen) return;
   if (!galleryOpen) {
     if (!pet.ceremony && !confirmUntil) {
       galleryOpen = true;
@@ -395,9 +409,14 @@ void onTap(int16_t x, int16_t y) {
     galleryTap(x, y);
     return;
   }
+  if (kbOpen) {
+    keyboardTap(x, y);
+    return;
+  }
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
-    cardOpen = false;  // cualquier toque cierra la ficha
+    if (y < 84) openKeyboard();  // tocar el nombre = renombrar
+    else cardOpen = false;
     return;
   }
   if (gameOpen) {
@@ -572,6 +591,10 @@ void render() {
     renderGame();
     return;
   }
+  if (kbOpen) {
+    renderKeyboard();
+    return;
+  }
   if (cardOpen) {
     renderCard();
     return;
@@ -617,8 +640,10 @@ void render() {
   } else {
     const DexEntry &d = DEX_TBL[pet.speciesId];
     char name[28];
-    snprintf(name, sizeof(name), "%s%s Nv.%u", pet.shiny ? "*" : "", d.name, pet.level());
+    const char *base = pet.nick[0] ? pet.nick : d.name;
+    snprintf(name, sizeof(name), "%s%s Nv.%u", pet.shiny ? "*" : "", base, pet.level());
     drawHeader(name, gNight ? UI_INK_NIGHT : d.accent, statusMsg());
+    drawStreakBadge();
     drawPet();
     drawBath();
     drawPoops();
@@ -626,6 +651,7 @@ void render() {
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     drawBars();
     drawButtons();
+    drawCelebration();
   }
 
   if (pet.sleeping) {
@@ -824,59 +850,183 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
   if (fw > 2) gfx->fillRoundRect(150, y + 2, fw, 11, 3, color);
 }
 
+// llama + numero de racha arriba a la izquierda
+void drawStreakBadge() {
+  if (pet.streak < 1) return;
+  int x = 26, y = 16;
+  gfx->fillTriangle(x + 8, y, x + 1, y + 17, x + 15, y + 17, UI_BAR_BAD);
+  gfx->fillTriangle(x + 8, y + 7, x + 4, y + 17, x + 12, y + 17, UI_BAR_WARN);
+  char s[6];
+  snprintf(s, sizeof(s), "%u", pet.streak);
+  gfx->setTextColor(inkColor());
+  gfx->setTextSize(2);
+  gfx->setCursor(x + 22, y + 2);
+  gfx->print(s);
+}
+
+// banner temporal: medalla nueva o hito de racha
+void drawCelebration() {
+  const char *l1 = nullptr, *l2 = nullptr;
+  char buf[20];
+  if (pet.showMedal()) {
+    static const char *MN[MED_COUNT] = { "Nv.10", "Nv.25", "Nv.50", "BAYA",
+                                         "RACHA 7", "VINCULO", "FORMA TOPE", "EN FORMA" };
+    for (int i = 0; i < MED_COUNT; i++)
+      if (pet.newMedal & (1 << i)) { l2 = MN[i]; break; }
+    l1 = "MEDALLA!";
+  } else if (pet.showMilestone()) {
+    snprintf(buf, sizeof(buf), "RACHA %u DIAS!", pet.streak);
+    l1 = "GENIAL!";
+    l2 = buf;
+  }
+  if (!l1) return;
+  gfx->fillRoundRect(73, 150, 320, 96, 16, UI_BAR_WARN);
+  gfx->drawRoundRect(73, 150, 320, 96, 16, UI_INK);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(l1) * 9, 176);
+  gfx->print(l1);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(l2) * 6, 212);
+  gfx->print(l2);
+}
+
+// medallas en la ficha: badge con etiqueta, color si conseguida
+static const char *MED_LABEL[MED_COUNT] = { "Nv10", "Nv25", "Nv50", "BAYA",
+                                            "7DIAS", "VINC", "TOPE", "SANO" };
+void drawMedalBadge(int x, int y, int i) {
+  bool got = pet.hasMedal(1 << i);
+  gfx->fillRoundRect(x, y, 100, 24, 6, got ? UI_BAR_OK : UI_TRACK);
+  if (!got) gfx->drawRoundRect(x, y, 100, 24, 6, UI_TRACK);
+  gfx->setTextColor(got ? UI_BG_DAY : 0x9492);
+  gfx->setTextSize(2);
+  gfx->setCursor(x + (100 - (int)strlen(MED_LABEL[i]) * 12) / 2, y + 5);
+  gfx->print(MED_LABEL[i]);
+}
+
 void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   const DexEntry &d = DEX_TBL[pet.speciesId];
 
+  // nombre (apodo si tiene) + nivel
   char head[26];
-  snprintf(head, sizeof(head), "%s%s Nv.%u", pet.shiny ? "*" : "", d.name, pet.level());
+  const char *nm = pet.nick[0] ? pet.nick : d.name;
+  snprintf(head, sizeof(head), "%s%s Nv.%u", pet.shiny ? "*" : "", nm, pet.level());
   gfx->setTextColor(d.accent);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(head) * 9, 44);
+  gfx->setCursor(CX - strlen(head) * 9, 36);
   gfx->print(head);
-
-  // retrato pequeno animado
-  if (pmd.loaded) {
-    drawPmdAct(PMD_IDLE, CX, 172, millis(), true, false, 3);
-  } else if (mon.loaded) {
-    int s = (mon.h > 60) ? 1 : 2;
-    uint16_t fm = mon.frameMs ? mon.frameMs : 100;
-    uint16_t fi = (millis() / fm) % mon.frames;
-    const uint8_t *fr = mon.data + (uint32_t)fi * mon.w * mon.h;
-    int px = CX - mon.w * s / 2, py = 130 - mon.h * s / 2;
-    for (int r = 0; r < mon.h; r++)
-      for (int c = 0; c < mon.w; c++) {
-        uint8_t idx = fr[r * mon.w + c];
-        if (idx != 0xFF) gfx->fillRect(px + c * s, py + r * s, s, s, mon.pal[idx]);
-      }
+  if (pet.nick[0]) {  // especie real bajo el apodo
+    gfx->setTextColor(UI_TRACK);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (strlen(d.name) + 2) * 6, 66);
+    gfx->printf("(%s)", d.name);
   }
 
-  drawCardStat(192, "FUE", pet.atkStat(), 260, UI_BAR_BAD);
-  drawCardStat(220, "DEF", pet.defStat(), 260, 0x4C98);
-  drawCardStat(248, "VEL", pet.speStat(), 260, UI_BAR_WARN);
-  drawCardStat(276, "PES", pet.weight, 100, UI_BAR_OK);
+  // retrato animado
+  if (pmd.loaded) drawPmdAct(PMD_IDLE, CX, 150, millis(), true, false, 2);
 
+  // racha + edad
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
-  char line[30];
-  snprintf(line, sizeof(line), "EDAD %lud %luh   DESC %u",
-           (unsigned long)(pet.ageMinutes / 1440),
-           (unsigned long)((pet.ageMinutes / 60) % 24), pet.careMistakes);
-  gfx->setCursor(CX - strlen(line) * 6, 318);
+  char line[34];
+  snprintf(line, sizeof(line), "RACHA %u (rec %u)  %lud",
+           pet.streak, pet.bestStreak, (unsigned long)(pet.ageMinutes / 1440));
+  gfx->setCursor(CX - strlen(line) * 6, 162);
   gfx->print(line);
 
+  // 5 barras: combate + vinculo
+  drawCardStat(186, "FUE", pet.atkStat(), 260, UI_BAR_BAD);
+  drawCardStat(208, "DEF", pet.defStat(), 260, 0x4C98);
+  drawCardStat(230, "VEL", pet.speStat(), 260, UI_BAR_WARN);
+  drawCardStat(252, "PES", pet.weight, 100, 0xB3C8);
+  drawCardStat(274, "VIN", pet.bond, 100, C565(0xd4, 0x52, 0x7e));
+
+  // baya favorita
   const char *berry = !pet.berryKnown ? "BAYA ???"
                       : pet.lovesBerry(0) ? "BAYA ROJA"
                       : pet.lovesBerry(1) ? "BAYA AZUL"
                                           : "BAYA VERDE";
-  gfx->setCursor(CX - strlen(berry) * 6, 348);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(berry) * 6, 300);
   gfx->print(berry);
 
+  // medallas en 2 filas de 4
+  for (int i = 0; i < MED_COUNT; i++)
+    drawMedalBadge(24 + (i % 4) * 106, 326 + (i / 4) * 30, i);
+
   gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(CX - 96, 398);
-  gfx->print("toca para volver");
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - 132, 400);
+  gfx->print("arriba: renombrar  toca: volver");
   gfx->flush();
+}
+
+// ---------- teclado para renombrar ----------
+
+static const char KB_KEYS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-";  // 28 + DEL + OK = 30
+#define KB_COLS 6
+#define KB_X 40
+#define KB_Y 150
+#define KB_W 64
+#define KB_H 52
+
+void openKeyboard() {
+  kbOpen = true;
+  strncpy(nameBuf, pet.nick, sizeof(nameBuf) - 1);
+  nameBuf[sizeof(nameBuf) - 1] = 0;
+  nameLen = strlen(nameBuf);
+}
+
+void renderKeyboard() {
+  gfx->fillScreen(RGB565_BLACK);
+  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - 60, 56);
+  gfx->print("NOMBRE:");
+  // buffer actual
+  gfx->fillRoundRect(83, 84, 300, 40, 8, UI_WHITE);
+  gfx->drawRoundRect(83, 84, 300, 40, 8, UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(95, 94);
+  gfx->print(nameLen ? nameBuf : "_");
+
+  for (int i = 0; i < 30; i++) {
+    int x = KB_X + (i % KB_COLS) * KB_W, y = KB_Y + (i / KB_COLS) * KB_H;
+    bool special = (i >= 28);
+    gfx->fillRoundRect(x, y, KB_W - 6, KB_H - 6, 6, special ? UI_BAR_WARN : UI_WHITE);
+    gfx->drawRoundRect(x, y, KB_W - 6, KB_H - 6, 6, UI_INK);
+    gfx->setTextColor(UI_INK);
+    gfx->setTextSize(2);
+    if (i < 28) {
+      gfx->setCursor(x + KB_W / 2 - 9, y + KB_H / 2 - 10);
+      gfx->print(KB_KEYS[i]);
+    } else {
+      const char *lab = (i == 28) ? "<-" : "OK";
+      gfx->setCursor(x + KB_W / 2 - 15, y + KB_H / 2 - 10);
+      gfx->print(lab);
+    }
+  }
+  gfx->flush();
+}
+
+void keyboardTap(int16_t x, int16_t y) {
+  int col = (x - KB_X) / KB_W, row = (y - KB_Y) / KB_H;
+  if (col < 0 || col >= KB_COLS || row < 0 || row >= 5) return;
+  int i = row * KB_COLS + col;
+  if (i >= 30) return;
+  if (i == 28) {  // borrar
+    if (nameLen) nameBuf[--nameLen] = 0;
+  } else if (i == 29) {  // OK
+    pet.rename(nameBuf);
+    kbOpen = false;
+  } else if (nameLen < sizeof(nameBuf) - 1) {
+    nameBuf[nameLen++] = KB_KEYS[i];
+    nameBuf[nameLen] = 0;
+  }
 }
 
 // ---------- galeria pokedex ----------

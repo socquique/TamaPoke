@@ -19,8 +19,10 @@ void Pet::newEgg() {
   speciesId = -1;
   prevSpeciesId = -1;
   eggTarget = pickEggSpecies();  // especie oculta segun rareza y pokedex
-  // sorteo shiny: 1/48 normal, 1/24 si el anterior completo su ciclo
-  eggShiny = (random(lastEnd == CER_FAREWELL ? 24 : 48) == 0);
+  // sorteo shiny: 1/48 base, mejor con despedida y con racha/vinculo altos
+  int shinyBase = (lastEnd == CER_FAREWELL ? 24 : 48) - careBonus();
+  if (shinyBase < 8) shinyBase = 8;
+  eggShiny = (random(shinyBase) == 0);
   eggTaps = 0;
   fullness = 80;
   joy = 80;
@@ -139,9 +141,11 @@ void Pet::tick() {
   if (lowestStat() <= 10 && mistakeCooldown == 0) {
     careMistakes++;
     mistakeCooldown = 30;
+    if (bond > 3) bond -= 3;  // el descuido enfria el vinculo
   }
 
   checkEvolution();
+  checkMedals();
 
   // abandono total: con TODO a cero durante una hora, se escapa
   if (fullness == 0 && joy == 0 && energy == 0 && hygiene == 0) {
@@ -189,8 +193,8 @@ int16_t Pet::pickEggSpecies() {
   uint8_t tier = R_COMUN;
   if (lastEnd != CER_RUNAWAY) {
     bool blessed = (lastEnd == CER_FAREWELL);
-    int rare = blessed ? 45 : 27;
-    int leg = (registeredCount() >= 25) ? (blessed ? 10 : 3) : 0;
+    int rare = (blessed ? 45 : 27) + careBonus();
+    int leg = (registeredCount() >= 25) ? (blessed ? 10 : 3) + careBonus() / 3 : 0;
     int r = random(100);
     if (r < leg) tier = R_LEGENDARIO;
     else if (r < leg + rare) tier = R_RARO;
@@ -217,6 +221,69 @@ void Pet::registerSpecies(int16_t dex) {
   if (dex < 1 || dex > 151) return;
   dexReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
   if (shiny) dexShinyReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+}
+
+// la racha y el vinculo mejoran el sorteo del huevo (0..~14)
+int Pet::careBonus() const {
+  int s = streak > 30 ? 30 : streak;
+  return s / 3 + bond / 25;
+}
+
+// primer cuidado del dia: avanza la racha y afianza el vinculo
+void Pet::registerCare() {
+  if (isEgg() || ceremony != CER_NONE) return;
+  uint32_t d = today();
+  if (d == 0 || d == lastCareDay) return;  // sin reloj, o ya conto hoy
+  if (lastCareDay == 0 || d == lastCareDay + 1) {
+    streak++;
+  } else {
+    streak = 1;        // hubo un hueco de dias
+    lastMilestone = 0;
+  }
+  lastCareDay = d;
+  bondToday = 0;
+  if (streak > bestStreak) bestStreak = streak;
+  bond = clamp100(bond + 4);
+  uint16_t ms = (streak >= 100) ? 100 : (streak >= 30) ? 30
+              : (streak >= 7)   ? 7   : (streak >= 3)  ? 3 : 0;
+  if (ms > lastMilestone) {
+    lastMilestone = ms;
+    milestoneUntil = millis() + 4500;
+  }
+  checkMedals();
+  save();
+}
+
+void Pet::addBond(uint8_t amt) {
+  if (bondToday >= 8) return;  // tope diario: el vinculo no se farmea
+  bond = clamp100(bond + amt);
+  bondToday += amt;
+}
+
+void Pet::checkMedals() {
+  if (isEgg()) return;
+  uint16_t before = medals;
+  if (level() >= 10) medals |= MED_LV10;
+  if (level() >= 25) medals |= MED_LV25;
+  if (level() >= 50) medals |= MED_LV50;
+  if (berryKnown) medals |= MED_BERRY;
+  if (streak >= 7) medals |= MED_STREAK7;
+  if (bond >= 100) medals |= MED_BOND;
+  if (DEX_TBL[speciesId].evolvesTo == 0) medals |= MED_FINAL;
+  if (weight == 0 && level() >= 5 && careMistakes == 0) medals |= MED_FIT;
+  uint16_t gained = medals & ~before;
+  if (gained) {
+    for (uint16_t m = gained; m; m &= (m - 1)) totalMedals++;
+    newMedal = gained;
+    medalUntil = millis() + 4000;
+    save();
+  }
+}
+
+void Pet::rename(const char *name) {
+  strncpy(nick, name, sizeof(nick) - 1);
+  nick[sizeof(nick) - 1] = 0;
+  save();
 }
 
 static uint16_t calcStat(uint8_t base, uint8_t gene, uint8_t lvl, uint8_t tr) {
@@ -275,7 +342,13 @@ void Pet::hatch() {
   geneSpe = 90 + random(21);
   trAtk = trDef = trSpe = 0;
   berryKnown = false;
+  bond = 0;          // vinculo, medallas y nombre son del individuo
+  bondToday = 0;
+  medals = 0;
+  newMedal = 0;
+  nick[0] = 0;
   registerSpecies(speciesId);  // criado = registrado en la pokedex
+  checkMedals();     // por si nace ya en forma final (legendario)
   save();
 }
 
@@ -317,10 +390,12 @@ void Pet::feedBerry(uint8_t color) {
     joy = clamp100(joy + 10);
     heartUntil = millis() + HEART_MS;  // "le encanta!"
     berryKnown = true;                 // descubierto: se muestra en la ficha
+    addBond(2);
   } else {
     fullness = clamp100(fullness + 25);
   }
   eatUntil = millis() + EAT_ANIM_MS;
+  registerCare();
   save();
 }
 
@@ -331,6 +406,7 @@ void Pet::feedCandy() {
   joy = clamp100(joy + 12);
   weight = clamp100(weight + 12);  // las chuches pasan factura
   eatUntil = millis() + EAT_ANIM_MS;
+  registerCare();
   save();
 }
 
@@ -344,6 +420,8 @@ void Pet::playResult(uint8_t score) {
   int burn = (int)weight - score * 2;  // el ejercicio quema peso
   weight = burn > 0 ? burn : 0;
   if (score >= 5) heartUntil = millis() + HEART_MS;
+  addBond(2);
+  registerCare();
   save();
 }
 
@@ -354,6 +432,8 @@ void Pet::play() {
   energy = clamp100(energy - 10);
   fullness = clamp100(fullness - 5);
   heartUntil = millis() + HEART_MS;
+  addBond(2);
+  registerCare();
   save();
 }
 
@@ -368,6 +448,8 @@ void Pet::clean() {
   if (ceremony != CER_NONE) return;
   poops = 0;
   hygiene = 100;
+  addBond(1);
+  registerCare();
   save();
 }
 
@@ -376,6 +458,8 @@ void Pet::caress() {
   if (isEgg() || sleeping) return;
   joy = clamp100(joy + 5);
   heartUntil = millis() + HEART_MS;
+  addBond(1);
+  registerCare();
 }
 
 void Pet::eggTap() {
@@ -418,6 +502,14 @@ void Pet::save() {
   prefs.putUChar("lend", lastEnd);
   if (lastSeenEpoch) prefs.putUInt("seen", lastSeenEpoch);
   prefs.putBytes("dexreg", dexReg, sizeof(dexReg));
+  prefs.putUShort("strk", streak);
+  prefs.putUShort("bstrk", bestStreak);
+  prefs.putUInt("cday", lastCareDay);
+  prefs.putUChar("bond", bond);
+  prefs.putUShort("medal", medals);
+  prefs.putUShort("tmedal", totalMedals);
+  prefs.putUShort("mstone", lastMilestone);
+  prefs.putString("nick", nick);
 }
 
 void Pet::load() {
@@ -459,6 +551,14 @@ void Pet::load() {
   sleeping = prefs.getBool("sleep", false);
   lastEnd = prefs.getUChar("lend", CER_NONE);
   prefs.getBytes("dexreg", dexReg, sizeof(dexReg));
+  streak = prefs.getUShort("strk", 0);
+  bestStreak = prefs.getUShort("bstrk", 0);
+  lastCareDay = prefs.getUInt("cday", 0);
+  bond = prefs.getUChar("bond", 0);
+  medals = prefs.getUShort("medal", 0);
+  totalMedals = prefs.getUShort("tmedal", 0);
+  lastMilestone = prefs.getUShort("mstone", 0);
+  prefs.getString("nick", nick, sizeof(nick));
   // siembra: la mascota actual cuenta como criada (guardados antiguos)
   if (speciesId >= 1) registerSpecies(speciesId);
 }
