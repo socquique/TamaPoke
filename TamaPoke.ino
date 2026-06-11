@@ -58,6 +58,7 @@ bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
+uint8_t cardPage = 0;         // 0 perfil, 1 stats+medallas
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
@@ -369,12 +370,17 @@ void onSwipeV() {
     cardOpen = false;
   } else if (!pet.isEgg() && !confirmUntil && !feedMenuUntil) {
     cardOpen = true;
+    cardPage = 0;
   }
 }
 
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
-  if (gameOpen || cardOpen || kbOpen) return;
+  if (gameOpen || kbOpen) return;
+  if (cardOpen) {  // dentro de la ficha: cambiar de pagina
+    cardPage = (dir > 0) ? 0 : 1;
+    return;
+  }
   if (!galleryOpen) {
     if (!pet.ceremony && !confirmUntil) {
       galleryOpen = true;
@@ -415,7 +421,7 @@ void onTap(int16_t x, int16_t y) {
   }
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
-    if (y < 84) openKeyboard();  // tocar el nombre = renombrar
+    if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
     else cardOpen = false;
     return;
   }
@@ -904,63 +910,92 @@ void drawMedalBadge(int x, int y, int i) {
   gfx->print(MED_LABEL[i]);
 }
 
-void renderCard() {
-  gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+// pagina 0: perfil (retrato grande, identidad, racha, vinculo, baya)
+void renderCardProfile() {
   const DexEntry &d = DEX_TBL[pet.speciesId];
-
-  // nombre (apodo si tiene) + nivel
-  char head[26];
   const char *nm = pet.nick[0] ? pet.nick : d.name;
+  char head[26];
   snprintf(head, sizeof(head), "%s%s Nv.%u", pet.shiny ? "*" : "", nm, pet.level());
   gfx->setTextColor(d.accent);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(head) * 9, 36);
+  gfx->setCursor(CX - strlen(head) * 9, 34);
   gfx->print(head);
   if (pet.nick[0]) {  // especie real bajo el apodo
     gfx->setTextColor(UI_TRACK);
     gfx->setTextSize(2);
-    gfx->setCursor(CX - (strlen(d.name) + 2) * 6, 66);
+    gfx->setCursor(CX - (strlen(d.name) + 2) * 6, 64);
     gfx->printf("(%s)", d.name);
   }
 
-  // retrato animado
-  if (pmd.loaded) drawPmdAct(PMD_IDLE, CX, 150, millis(), true, false, 2);
+  // retrato grande animado
+  if (pmd.loaded) drawPmdAct(PMD_IDLE, CX, 206, millis(), true, false, 4);
 
-  // racha + edad
+  // racha con llama
+  int sx = 138, sy = 224;
+  gfx->fillTriangle(sx + 8, sy, sx + 1, sy + 18, sx + 15, sy + 18, UI_BAR_BAD);
+  gfx->fillTriangle(sx + 8, sy + 7, sx + 4, sy + 18, sx + 12, sy + 18, UI_BAR_WARN);
+  char rl[26];
+  snprintf(rl, sizeof(rl), "RACHA %u  rec %u", pet.streak, pet.bestStreak);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
-  char line[34];
-  snprintf(line, sizeof(line), "RACHA %u (rec %u)  %lud",
-           pet.streak, pet.bestStreak, (unsigned long)(pet.ageMinutes / 1440));
-  gfx->setCursor(CX - strlen(line) * 6, 162);
-  gfx->print(line);
+  gfx->setCursor(sx + 24, sy + 2);
+  gfx->print(rl);
 
-  // 5 barras: combate + vinculo
-  drawCardStat(186, "FUE", pet.atkStat(), 260, UI_BAR_BAD);
-  drawCardStat(208, "DEF", pet.defStat(), 260, 0x4C98);
-  drawCardStat(230, "VEL", pet.speStat(), 260, UI_BAR_WARN);
-  drawCardStat(252, "PES", pet.weight, 100, 0xB3C8);
-  drawCardStat(274, "VIN", pet.bond, 100, C565(0xd4, 0x52, 0x7e));
+  drawCardStat(258, "VIN", pet.bond, 100, C565(0xd4, 0x52, 0x7e));
 
-  // baya favorita
   const char *berry = !pet.berryKnown ? "BAYA ???"
                       : pet.lovesBerry(0) ? "BAYA ROJA"
                       : pet.lovesBerry(1) ? "BAYA AZUL"
                                           : "BAYA VERDE";
+  char info[34];
+  snprintf(info, sizeof(info), "%s   EDAD %lud", berry,
+           (unsigned long)(pet.ageMinutes / 1440));
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(berry) * 6, 300);
-  gfx->print(berry);
-
-  // medallas en 2 filas de 4
-  for (int i = 0; i < MED_COUNT; i++)
-    drawMedalBadge(24 + (i % 4) * 106, 326 + (i / 4) * 30, i);
+  gfx->setCursor(CX - strlen(info) * 6, 296);
+  gfx->print(info);
 
   gfx->setTextColor(UI_TRACK);
+  gfx->setCursor(CX - 144, 332);
+  gfx->print("toca el nombre: renombrar");
+}
+
+// pagina 1: combate + medallas
+void renderCardStats() {
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - 7 * 9, 40);
+  gfx->print("COMBATE");
+
+  drawCardStat(96, "FUE", pet.atkStat(), 260, UI_BAR_BAD);
+  drawCardStat(134, "DEF", pet.defStat(), 260, 0x4C98);
+  drawCardStat(172, "VEL", pet.speStat(), 260, UI_BAR_WARN);
+  drawCardStat(210, "PES", pet.weight, 100, 0xB3C8);
+
+  gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - 132, 400);
-  gfx->print("arriba: renombrar  toca: volver");
+  gfx->setCursor(CX - 8 * 6, 252);
+  gfx->print("MEDALLAS");
+  for (int i = 0; i < MED_COUNT; i++)
+    drawMedalBadge(24 + (i % 4) * 106, 280 + (i / 4) * 34, i);
+}
+
+void renderCard() {
+  gfx->fillScreen(RGB565_BLACK);
+  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  if (cardPage == 0) renderCardProfile();
+  else renderCardStats();
+
+  // indicador de pagina + ayuda
+  for (int i = 0; i < 2; i++) {
+    if (i == cardPage) gfx->fillCircle(220 + i * 26, 366, 5, UI_INK);
+    else gfx->drawCircle(220 + i * 26, 366, 4, UI_INK);
+  }
+  gfx->setTextColor(UI_TRACK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - 168, 392);
+  gfx->print(cardPage == 0 ? "desliza: combate   toca: volver"
+                           : "desliza: perfil    toca: volver");
   gfx->flush();
 }
 
