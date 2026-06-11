@@ -1352,7 +1352,9 @@ void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool 
   while (s > 2 && a.h * s > 250) s--;  // acciones con frame grande (ataque)
   uint8_t fi = pmdFrameAt(a, t, loop);
   const uint8_t *fr = a.data + (uint32_t)fi * a.w * a.h;
-  int x0 = cx - a.w * s / 2, y0 = groundY - a.h * s;
+  // anclar por los pies (a.base), no por el alto del lienzo: asi las acciones
+  // con padding distinto (Hurt, Eat...) quedan todas a la misma altura de suelo
+  int x0 = cx - a.w * s / 2, y0 = groundY - (a.base ? a.base : a.h) * s;
   for (int r = 0; r < a.h; r++) {
     const uint8_t *row = fr + r * a.w;
     for (int c = 0; c < a.w; c++) {

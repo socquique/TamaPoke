@@ -24,6 +24,7 @@ enum : uint8_t {
 
 struct PmdAct {
   uint8_t w = 0, h = 0, frames = 0;
+  uint8_t base = 0;  // fila+1 del pixel mas bajo (anclar por los pies, no el lienzo)
   uint16_t ms[24];
   const uint8_t *data = nullptr;  // frames * w * h en el blob
 };
