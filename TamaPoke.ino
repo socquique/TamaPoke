@@ -1527,14 +1527,23 @@ void drawBattery() {
   int pc = batPercent();
   if (pc < 0) return;  // sin bateria conectada
   int x = CX - 14, y = 12, w = 24, h = 11;
-  uint16_t col = batCharging() ? UI_BAR_OK
+  bool charging = batCharging();
+  uint16_t col = charging ? UI_BAR_OK
                  : (pc >= 40) ? inkColor()
                  : (pc >= 15) ? UI_BAR_WARN
                               : UI_BAR_BAD;
   gfx->drawRoundRect(x, y, w, h, 2, col);
   gfx->fillRect(x + w, y + 3, 3, 5, col);  // borne
-  int fw = (w - 4) * pc / 100;
-  if (fw > 0) gfx->fillRect(x + 2, y + 2, fw, h - 4, col);
+  if (charging) {
+    // rayo de carga (zigzag) en vez de la barra de nivel
+    uint16_t bolt = C565(0xff, 0xd9, 0x4a);
+    int bx = x + w / 2;
+    gfx->fillTriangle(bx + 3, y + 1, bx - 4, y + 6, bx + 1, y + 6, bolt);
+    gfx->fillTriangle(bx - 1, y + 5, bx + 4, y + 5, bx - 3, y + 10, bolt);
+  } else {
+    int fw = (w - 4) * pc / 100;
+    if (fw > 0) gfx->fillRect(x + 2, y + 2, fw, h - 4, col);
+  }
 }
 
 void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
