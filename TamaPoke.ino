@@ -402,8 +402,9 @@ void onSwipeV() {
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
   if (gameOpen || kbOpen) return;
-  if (cardOpen) {  // dentro de la ficha: cambiar de pagina
-    cardPage = (dir > 0) ? 0 : 1;
+  if (cardOpen) {  // dentro de la ficha: cambiar entre las 3 paginas
+    int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
+    cardPage = p < 0 ? 0 : (p > 2 ? 2 : p);
     return;
   }
   if (!galleryOpen) {
@@ -447,7 +448,7 @@ void onTap(int16_t x, int16_t y) {
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
     if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
-    else if (cardPage == 1 && y >= 344 && y <= 378 && x >= 96 && x <= 370) {
+    else if (cardPage == 1 && y >= 300 && y <= 340 && x >= 96 && x <= 370) {
       cardOpen = false;            // boton ENTRENAR FUERZA
       startSack();
     } else {
@@ -1153,49 +1154,76 @@ void renderCardProfile() {
   gfx->print("toca el nombre: renombrar");
 }
 
-// pagina 1: combate + medallas
+// pagina 1: combate (4 barras + boton de entrenar)
 void renderCardStats() {
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - 7 * 9, 40);
+  gfx->setCursor(CX - 7 * 9, 48);
   gfx->print("COMBATE");
 
-  drawCardStat(96, "FUE", pet.atkStat(), 260, UI_BAR_BAD);
-  drawCardStat(134, "DEF", pet.defStat(), 260, 0x4C98);
-  drawCardStat(172, "VEL", pet.speStat(), 260, UI_BAR_WARN);
-  drawCardStat(210, "PES", pet.weight, 100, 0xB3C8);
-
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - 8 * 6, 248);
-  gfx->print("MEDALLAS");
-  for (int i = 0; i < MED_COUNT; i++)
-    drawMedalBadge(24 + (i % 4) * 106, 272 + (i / 4) * 32, i);
+  drawCardStat(118, "FUE", pet.atkStat(), 260, UI_BAR_BAD);
+  drawCardStat(160, "DEF", pet.defStat(), 260, 0x4C98);
+  drawCardStat(202, "VEL", pet.speStat(), 260, UI_BAR_WARN);
+  drawCardStat(244, "PES", pet.weight, 100, 0xB3C8);
 
   // boton: saco de entrenamiento de fuerza
-  gfx->fillRoundRect(96, 344, 274, 34, 10, UI_BAR_BAD);
+  gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
   gfx->setTextColor(UI_BG_DAY);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - 13 * 6, 352);
+  gfx->setCursor(CX - 13 * 6, 311);
   gfx->print("ENTRENAR FUERZA");
+}
+
+// pagina 2: medallas con etiqueta descriptiva
+static const char *MED_DESC[MED_COUNT] = {
+  "NIVEL 10", "NIVEL 25", "NIVEL 50", "BAYA HALLADA",
+  "RACHA 7 DIAS", "VINCULO MAX", "FORMA FINAL", "EN FORMA",
+};
+void renderCardMedals() {
+  int got = 0;
+  for (int i = 0; i < MED_COUNT; i++)
+    if (pet.hasMedal(1 << i)) got++;
+  char head[20];
+  snprintf(head, sizeof(head), "MEDALLAS %d/%d", got, MED_COUNT);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(head) * 9, 48);
+  gfx->print(head);
+
+  for (int i = 0; i < MED_COUNT; i++) {
+    int x = 28 + (i % 2) * 206, y = 104 + (i / 2) * 54;
+    bool g = pet.hasMedal(1 << i);
+    gfx->fillRoundRect(x, y, 196, 44, 10, g ? UI_BAR_OK : UI_TRACK);
+    if (g) {  // marca de conseguida
+      gfx->fillCircle(x + 22, y + 22, 11, UI_BG_DAY);
+      gfx->setTextColor(UI_BAR_OK);
+      gfx->setTextSize(2);
+      gfx->setCursor(x + 16, y + 13);
+      gfx->print("v");
+    }
+    gfx->setTextColor(g ? UI_BG_DAY : 0x8410);
+    gfx->setTextSize(2);
+    gfx->setCursor(x + 44, y + 14);
+    gfx->print(MED_DESC[i]);
+  }
 }
 
 void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   if (cardPage == 0) renderCardProfile();
-  else renderCardStats();
+  else if (cardPage == 1) renderCardStats();
+  else renderCardMedals();
 
-  // indicador de pagina + ayuda
-  for (int i = 0; i < 2; i++) {
-    if (i == cardPage) gfx->fillCircle(220 + i * 26, 366, 5, UI_INK);
-    else gfx->drawCircle(220 + i * 26, 366, 4, UI_INK);
+  // indicador de 3 paginas + ayuda
+  for (int i = 0; i < 3; i++) {
+    if (i == cardPage) gfx->fillCircle(207 + i * 26, 374, 5, UI_INK);
+    else gfx->drawCircle(207 + i * 26, 374, 4, UI_INK);
   }
   gfx->setTextColor(UI_TRACK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - 168, 392);
-  gfx->print(cardPage == 0 ? "desliza: combate   toca: volver"
-                           : "desliza: perfil    toca: volver");
+  gfx->setCursor(CX - 90, 398);
+  gfx->print("toca: volver");
   gfx->flush();
 }
 
