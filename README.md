@@ -85,6 +85,8 @@ Empiezas con un **huevo** (un inicial clásico al azar la primera vez). Tócalo
 - Deslizar vertical = abrir la **ficha** (3 páginas: Perfil / Combate / Medallas;
   desliza entre ellas; toca el nombre en Perfil para renombrar; en Combate el
   botón "Entrenar fuerza" abre el saco).
+- Deslizar hacia abajo = **ajustar la hora** (pon tu hora local a ojo; el fondo
+  día/noche la usa tal cual, sin líos de zona horaria).
 - Pulsación larga (3 s) sobre el bicho = diálogo de **soltar**.
 
 **Botón físico PWR:** corto = pantalla on/off · largo (4 s) = apagado real
@@ -180,7 +182,8 @@ atardecer / noche con luna y estrellas) y el suelo según el **bioma del tipo**
 `STATS` (estado completo) · `SPEC <dex>` (cambiar especie) · `LVL <n>` ·
 `HATCH` · `SHINY` · `NICK <x>` · `BYE` (despedir) · `REG` (Pokédex) ·
 `EGGS` (simular 20 huevos) · `GAL` (galería) · `CAREDAY` (simular día de
-cuidado) · `TIME <epoch>` / `RTCSET <epoch>` (reloj) · `LS` / `PUT` (archivos SD).
+cuidado) · `TIME <epoch>` / `RTCSET <epoch>` (reloj) · `HEALTH` (uptime + heap
+para el soak test; también se emite solo cada 5 min) · `LS` / `PUT` (archivos SD).
 
 Para probar rápido: baja `PET_TICK_MS` y `MINUTES_PER_LEVEL` en `pet.h`.
 
@@ -190,8 +193,10 @@ Para probar rápido: baja `PET_TICK_MS` y `MINUTES_PER_LEVEL` en `pet.h`.
   resolución por FUE/DEF/VEL con animaciones Attack/Hurt PMD, rango de
   entrenador como endgame. Falta elegir estilo (auto / timing / por turnos).
 - **Sonido** por el ES8311 (bips estilo Game Boy).
-- **Doble framebuffer** para subir los fps del minijuego sin parpadeo.
-- **Soak test** 24-48 h.
+- **Minijuego más fluido**: el doble framebuffer se descartó (el flush QSPI es
+  bloqueante, no hay solape que resolver; el parpadeo a alto fps es del panel).
+  La vía real sería flush parcial de la región que cambia. 85 ms es el compromiso.
+- **Soak test** 24-48 h (instrumentación lista: comando/latido `HEALTH`).
 - **Publicación**: instalador web (ESP Web Tools + empaquetado en JS), `CREDITS.md`,
   carcasa 3D para MakerWorld.
 - Conectar la **batería** cuando llegue.
