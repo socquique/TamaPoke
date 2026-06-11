@@ -21,6 +21,7 @@ bool PmdMon::load(uint8_t dexNum, bool shiny) {
   if (!f) return false;
 
   uint32_t size = f.size();
+  if (size < 7 || size > 3UL * 1024 * 1024) { f.close(); return false; }
   blob = (uint8_t *)ps_malloc(size);
   if (!blob || f.read(blob, size) != size || memcmp(blob, "TPK2", 4) != 0) {
     if (blob) { free(blob); blob = nullptr; }
@@ -31,7 +32,7 @@ bool PmdMon::load(uint8_t dexNum, bool shiny) {
 
   uint8_t nActs = blob[4];
   memcpy(&palCount, blob + 5, 2);
-  if (palCount > 256) { unload(); return false; }
+  if (palCount > 256 || (uint32_t)7 + palCount * 2 > size) { unload(); return false; }
   memcpy(pal, blob + 7, palCount * 2);
 
   const uint8_t *p = blob + 7 + palCount * 2;
@@ -40,6 +41,9 @@ bool PmdMon::load(uint8_t dexNum, bool shiny) {
     uint8_t id = p[0], w = p[1], h = p[2], nf = p[3];
     p += 4;
     if (id >= PMD_NACTS || nf > 24) { unload(); return false; }
+    // valida que ms[] y los datos del frame caben en el blob (archivo truncado)
+    uint32_t bytes = (uint32_t)nf * 2 + (uint32_t)w * h * nf;
+    if (w == 0 || h == 0 || nf == 0 || p + bytes > end) { unload(); return false; }
     PmdAct &a = acts[id];
     a.w = w;
     a.h = h;
@@ -139,21 +143,25 @@ bool SdMon::load(uint8_t dexNum, bool shiny) {
 
   char magic[4];
   uint16_t header[4];
-  if (f.read((uint8_t *)magic, 4) != 4 || memcmp(magic, "TPK1", 4) != 0) {
+  if (f.read((uint8_t *)magic, 4) != 4 || memcmp(magic, "TPK1", 4) != 0 ||
+      f.read((uint8_t *)header, 8) != 8) {
     f.close();
     return false;
   }
-  f.read((uint8_t *)header, 8);
   w = header[0];
   h = header[1];
   frames = header[2];
   frameMs = header[3];
-  f.read((uint8_t *)&palCount, 2);
-  if (palCount > 256 || w == 0 || h == 0 || frames == 0) {
+  // acota dimensiones: evita size desbordado o absurdo con archivo corrupto
+  if (f.read((uint8_t *)&palCount, 2) != 2 || palCount > 256 ||
+      w == 0 || w > 256 || h == 0 || h > 256 || frames == 0 || frames > 64) {
     f.close();
     return false;
   }
-  f.read((uint8_t *)pal, palCount * 2);
+  if (f.read((uint8_t *)pal, palCount * 2) != palCount * 2) {
+    f.close();
+    return false;
+  }
 
   uint32_t size = (uint32_t)w * h * frames;
   data = (uint8_t *)ps_malloc(size);

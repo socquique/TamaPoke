@@ -353,7 +353,7 @@ void Pet::hatch() {
 }
 
 void Pet::checkEvolution() {
-  if (sleeping) return;
+  if (isEgg() || sleeping) return;  // guard: nunca indexar DEX_TBL[-1]
   const DexEntry &d = DEX_TBL[speciesId];
   if (d.evolvesTo == 0) return;
 
