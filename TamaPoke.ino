@@ -449,7 +449,119 @@ void onTap(int16_t x, int16_t y) {
 
 // ---------- render ----------
 
-uint16_t inkColor() { return pet.sleeping ? UI_INK_NIGHT : UI_INK; }
+bool gNight = false;  // noche real (por hora) o durmiendo: lo fija render()
+uint16_t inkColor() { return gNight ? UI_INK_NIGHT : UI_INK; }
+
+// ---------- escena de fondo: bioma del tipo + hora real del RTC ----------
+
+#define C565(r, g, b) ((uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3)))
+#define HORIZON 232  // linea donde el cielo se encuentra con el suelo
+
+uint16_t lerp565(uint16_t a, uint16_t b, int i, int n) {
+  if (n <= 0) return a;
+  int ar = (a >> 11) & 31, ag = (a >> 5) & 63, ab = a & 31;
+  int br = (b >> 11) & 31, bg = (b >> 5) & 63, bb = b & 31;
+  return (uint16_t)((((ar + (br - ar) * i / n) << 11)) |
+                    (((ag + (bg - ag) * i / n) << 5)) | (ab + (bb - ab) * i / n));
+}
+
+// hora del dia 0-23 (de la hora real cacheada cada 30s; 13 si no hay reloj)
+int sceneHour() {
+  uint32_t e = pet.lastSeenEpoch;
+  return e ? (int)((e / 3600) % 24) : 13;
+}
+
+// suelo de cada bioma de dia (de noche se mezcla hacia el azul nocturno)
+static const uint16_t BIOME_SOIL[6] = {
+  C565(0x7e, 0xc0, 0x7f),  // 0 pradera
+  C565(0xdc, 0xca, 0x94),  // 1 playa (arena)
+  C565(0x4f, 0x8a, 0x55),  // 2 bosque
+  C565(0x8a, 0x55, 0x44),  // 3 volcan
+  C565(0xa8, 0x90, 0x6a),  // 4 montana
+  C565(0xe6, 0xee, 0xf5),  // 5 nieve
+};
+
+void drawClouds(uint32_t now, uint16_t col) {
+  for (int k = 0; k < 2; k++) {
+    int cx = (int)((now / 50 + k * 250) % 560) - 40;
+    int cy = 70 + k * 34;
+    gfx->fillCircle(cx, cy, 16, col);
+    gfx->fillCircle(cx + 18, cy + 3, 13, col);
+    gfx->fillCircle(cx - 15, cy + 4, 12, col);
+  }
+}
+
+void drawScene(uint8_t biome, uint32_t now, bool night) {
+  int h = sceneHour();
+  uint16_t top, bot;
+  if (night)            { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
+  else if (h < 8)       { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
+  else if (h < 18)      { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
+  else                  { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer
+
+  // cielo en bandas
+  for (int y = 0; y < HORIZON; y += 8)
+    gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, HORIZON));
+
+  // sol o luna
+  if (night) {
+    gfx->fillCircle(360, 78, 24, C565(0xe8, 0xee, 0xf5));
+    gfx->fillCircle(370, 72, 22, lerp565(top, bot, 78, HORIZON));  // creciente
+    for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
+  } else if (h < 18) {
+    gfx->fillCircle(360, 84, 26, h < 8 ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
+    drawClouds(now, C565(0xff, 0xff, 0xff));
+  } else {
+    gfx->fillCircle(233, HORIZON - 6, 34, C565(0xff, 0xf1, 0xc8));  // sol poniente
+  }
+
+  // mar de la playa: una franja de agua sobre la arena
+  uint16_t soil = BIOME_SOIL[biome < 6 ? biome : 0];
+  if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
+  if (biome == 1) {
+    uint16_t sea = night ? C565(0x1c, 0x34, 0x52) : C565(0x4f, 0x96, 0xc4);
+    gfx->fillRect(0, HORIZON - 26, 466, 26, sea);
+    for (int i = 0; i < 3; i++) {
+      int wy = HORIZON - 22 + i * 7;
+      uint16_t fc = night ? C565(0x3a, 0x58, 0x78) : C565(0xbf, 0xe6, 0xf5);
+      gfx->fillRect(60 + ((now / 60 + i * 30) % 60), wy, 26, 2, fc);
+      gfx->fillRect(300 - ((now / 60 + i * 20) % 60), wy, 26, 2, fc);
+    }
+  }
+
+  // suelo
+  gfx->fillRect(0, HORIZON, 466, 466 - HORIZON, soil);
+  uint16_t hill = lerp565(soil, night ? C565(0x0c, 0x12, 0x24) : C565(0xff, 0xff, 0xff), 3, 16);
+  gfx->fillRoundRect(-60, HORIZON - 14, 586, 60, 30, hill);
+
+  // detalles del bioma
+  uint16_t dk = lerp565(soil, C565(0x10, 0x18, 0x20), night ? 11 : 7, 16);
+  if (biome == 2) {  // bosque: coniferas en silueta
+    for (int tx : { 60, 150, 360, 416 }) {
+      gfx->fillTriangle(tx, HORIZON - 46, tx - 16, HORIZON, tx + 16, HORIZON, dk);
+      gfx->fillTriangle(tx, HORIZON - 60, tx - 12, HORIZON - 28, tx + 12, HORIZON - 28, dk);
+    }
+  } else if (biome == 3) {  // volcan: rocas y brasas
+    gfx->fillTriangle(70, HORIZON, 40, HORIZON + 30, 100, HORIZON + 30, dk);
+    gfx->fillTriangle(400, HORIZON + 4, 372, HORIZON + 30, 430, HORIZON + 30, dk);
+    if (!night)
+      for (int e = 0; e < 4; e++)
+        gfx->fillRect(120 + e * 70, HORIZON + 8 + (e % 2) * 6, 4, 4, C565(0xff, 0x9b, 0x3a));
+  } else if (biome == 4) {  // montana: cumbres al fondo
+    gfx->fillTriangle(140, HORIZON - 50, 60, HORIZON, 220, HORIZON, dk);
+    gfx->fillTriangle(330, HORIZON - 38, 250, HORIZON, 410, HORIZON, dk);
+  } else if (biome == 5 && !night) {  // nieve: copos cayendo
+    for (int f = 0; f < 10; f++) {
+      int fx = (f * 53 + now / 40) % 466;
+      int fy = (f * 90 + now / 18) % HORIZON;
+      gfx->fillRect(fx, fy, 3, 3, UI_WHITE);
+    }
+  } else if (biome == 0) {  // pradera: matas de hierba
+    for (int gx : { 80, 175, 300, 395 })
+      for (int b = -1; b <= 1; b++)
+        gfx->fillRect(gx + b * 5, HORIZON + 6, 2, 8 + (b == 0 ? 4 : 0), dk);
+  }
+}
 
 void render() {
   if (galleryOpen) {
@@ -464,12 +576,10 @@ void render() {
     renderCard();
     return;
   }
+  int h = sceneHour();
+  gNight = pet.sleeping || h < 6 || h >= 20;
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, pet.sleeping ? UI_BG_NIGHT : UI_BG_DAY);
-
-  if (pet.sleeping) {
-    for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
-  }
+  drawScene(pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome, millis(), gNight);
 
   if (pet.ceremony) {
     const DexEntry &d = DEX_TBL[pet.speciesId];
@@ -483,7 +593,7 @@ void render() {
   }
 
   if (pet.isEgg()) {
-    drawHeader("HUEVO", UI_INK, eggMsg());
+    drawHeader("HUEVO", inkColor(), eggMsg());
     int s = 5, x = CX - 16 * s, y = PET_CY - 16 * s;
     drawMap(SPR_EGG, SPRITE_H, x, y, s, false);
     if (pet.eggCracks() >= 1)
@@ -499,7 +609,8 @@ void render() {
     }
     char reg[24];
     snprintf(reg, sizeof(reg), "POKEDEX %u/151", pet.registeredCount());
-    gfx->setTextColor(UI_INK);
+    gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
+    gfx->setTextColor(inkColor());
     gfx->setTextSize(2);
     gfx->setCursor(CX - strlen(reg) * 6, 348);
     gfx->print(reg);
@@ -507,10 +618,12 @@ void render() {
     const DexEntry &d = DEX_TBL[pet.speciesId];
     char name[28];
     snprintf(name, sizeof(name), "%s%s Nv.%u", pet.shiny ? "*" : "", d.name, pet.level());
-    drawHeader(name, pet.sleeping ? UI_INK_NIGHT : d.accent, statusMsg());
+    drawHeader(name, gNight ? UI_INK_NIGHT : d.accent, statusMsg());
     drawPet();
     drawBath();
     drawPoops();
+    // panel inferior: base limpia para barras y botones sobre el paisaje
+    gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     drawBars();
     drawButtons();
   }

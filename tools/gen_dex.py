@@ -16,6 +16,16 @@ def rgb565(hexcol):
     return (r >> 3) << 11 | (g >> 2) << 5 | (b >> 3)
 
 
+# bioma de fondo por tipo (la luz la pone la hora real del RTC)
+# 0 PRADERA, 1 PLAYA, 2 BOSQUE, 3 VOLCAN, 4 MONTANA, 5 NIEVE
+TYPE_BIOME = {
+    'agua': 1, 'planta': 2, 'bicho': 2, 'fuego': 3,
+    'roca': 4, 'tierra': 4, 'dragon': 4, 'hielo': 5,
+    'normal': 0, 'electrico': 0, 'lucha': 0, 'veneno': 0,
+    'psiquico': 0, 'fantasma': 0,
+}
+
+
 def main():
     out = []
     out.append("#pragma once\n#include <stdint.h>\n\n")
@@ -32,13 +42,14 @@ def main():
         "  uint8_t rarity;       // sale de huevo si > 0\n"
         "  uint16_t accent;      // color RGB565 del tipo para la UI\n"
         "  uint8_t bHp, bAtk, bDef, bSpe;  // base stats reales de gen 1\n"
+        "  uint8_t biome;        // 0 pradera 1 playa 2 bosque 3 volcan 4 montana 5 nieve\n"
         "};\n\n")
     # formas base = las que no son evolucion de nadie (las ramas de Eevee si lo son)
     evolved = {evo for *_, evo, _lvl in [(d[4], d[5]) for d in DEX] for evo in [_[0] for _ in [(d[4],) for d in DEX]]}
     evolved = {d[4] for d in DEX if d[4]} | {135, 136}
     rarities = []
     out.append("static const DexEntry DEX_TBL[DEX_COUNT + 1] = {\n")
-    out.append('  { "?", 0, 0, 0, 0x2946, 50, 50, 50, 50 },  // 0: sin usar\n')
+    out.append('  { "?", 0, 0, 0, 0x2946, 50, 50, 50, 50, 0 },  // 0: sin usar\n')
     for num, slug, display, typ, evo, lvl in DEX:
         acc = rgb565(TYPE_ACCENTS[typ])
         if num in evolved:
@@ -51,7 +62,8 @@ def main():
             rar = 'R_COMUN'
         rarities.append(rar)
         hp, atk, df, spe = BASE_STATS[num]
-        out.append(f'  {{ "{display}", {evo}, {lvl}, {rar}, 0x{acc:04X}, {hp}, {atk}, {df}, {spe} }},  // {num} {typ}\n')
+        bio = TYPE_BIOME[typ]
+        out.append(f'  {{ "{display}", {evo}, {lvl}, {rar}, 0x{acc:04X}, {hp}, {atk}, {df}, {spe}, {bio} }},  // {num} {typ}\n')
     out.append("};\n\n")
     out.append("// el primer huevo de la partida: iniciales clasicos\n")
     out.append("static const int16_t CLASSIC_DEX[] = { %s };\n" % ", ".join(map(str, CLASSIC)))
