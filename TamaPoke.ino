@@ -19,6 +19,7 @@
 #include "pet.h"
 #include "sdmon.h"
 #include "rtcbat.h"
+#include "i18n.h"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -137,6 +138,7 @@ void setup() {
   // monitor serie abierto en el host (el bufer TX del USB CDC se llena
   // y nadie lo vacia) -> con timeout 0 los mensajes se descartan
   Serial.setTxTimeoutMs(0);
+  loadLang();  // idioma guardado (ES por defecto)
   Wire.begin(IIC_SDA, IIC_SCL);
 
   if (!gfx->begin()) Serial.println("gfx->begin() fallo");
@@ -678,9 +680,9 @@ void render() {
 
   if (pet.ceremony) {
     const DexEntry &d = DEX_TBL[pet.speciesId];
-    const char *msg = (pet.ceremony == CER_FAREWELL) ? "GRACIAS! Hasta siempre"
-                      : (pet.ceremony == CER_RUNAWAY) ? "Se ha escapado..."
-                                                      : "Adios! Se despide...";
+    const char *msg = (pet.ceremony == CER_FAREWELL) ? T(S_FAREWELL)
+                      : (pet.ceremony == CER_RUNAWAY) ? T(S_RUNAWAY)
+                                                      : T(S_GOODBYE);
     drawHeader(d.name, d.accent, msg);
     drawPet();
     gfx->flush();
@@ -688,7 +690,7 @@ void render() {
   }
 
   if (pet.isEgg()) {
-    drawHeader("HUEVO", inkColor(), eggMsg());
+    drawHeader(T(S_EGG_HDR), inkColor(), eggMsg());
     int s = 5, x = CX - 16 * s, y = PET_CY - 16 * s;
     drawMap(SPR_EGG, SPRITE_H, x, y, s, false);
     if (pet.eggCracks() >= 1)
@@ -696,14 +698,14 @@ void render() {
     if (pet.eggCracks() >= 2)
       for (auto &c : CRACK2) gfx->fillRect(x + c[0] * s, y + c[1] * s, s, s, INK_K);
     if (pet.eggRarity() >= R_RARO) {
-      const char *rar = (pet.eggRarity() == R_LEGENDARIO) ? "Huevo legendario!?" : "Huevo raro!";
+      const char *rar = (pet.eggRarity() == R_LEGENDARIO) ? T(S_EGG_LEGEND) : T(S_EGG_RARE);
       gfx->setTextColor(pet.eggRarity() == R_LEGENDARIO ? UI_BAR_WARN : 0x4C98);
       gfx->setTextSize(2);
       gfx->setCursor(CX - strlen(rar) * 6, 316);
       gfx->print(rar);
     }
     char reg[24];
-    snprintf(reg, sizeof(reg), "POKEDEX %u/151", pet.registeredCount());
+    snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount());
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     gfx->setTextColor(inkColor());
     gfx->setTextSize(2);
@@ -713,7 +715,7 @@ void render() {
     const DexEntry &d = DEX_TBL[pet.speciesId];
     char name[28];
     const char *base = pet.nick[0] ? pet.nick : d.name;
-    snprintf(name, sizeof(name), "%s%s Nv.%u", pet.shiny ? "*" : "", base, pet.level());
+    snprintf(name, sizeof(name), T(S_NAME_FMT), pet.shiny ? "*" : "", base, pet.level());
     drawHeader(name, gNight ? UI_INK_NIGHT : d.accent, statusMsg());
     drawStreakBadge();
     drawPet();
@@ -755,18 +757,18 @@ void render() {
       gfx->fillRoundRect(94, 168, 278, 152, 16, UI_WHITE);
       gfx->drawRoundRect(94, 168, 278, 152, 16, UI_INK);
       char q[28];
-      snprintf(q, sizeof(q), "Soltar a %s?", DEX_TBL[pet.speciesId].name);
+      snprintf(q, sizeof(q), T(S_RELEASE_FMT), DEX_TBL[pet.speciesId].name);
       gfx->setTextColor(UI_INK);
       gfx->setTextSize(2);
       gfx->setCursor(CX - strlen(q) * 6, 196);
       gfx->print(q);
       gfx->fillRoundRect(118, 252, 100, 52, 12, UI_BAR_OK);
       gfx->setTextColor(UI_WHITE);
-      gfx->setCursor(118 + 38, 270);
-      gfx->print("SI");
+      gfx->setCursor(118 + (100 - (int)strlen(T(S_YES)) * 12) / 2, 270);
+      gfx->print(T(S_YES));
       gfx->fillRoundRect(248, 252, 100, 52, 12, UI_BAR_BAD);
-      gfx->setCursor(248 + 38, 270);
-      gfx->print("NO");
+      gfx->setCursor(248 + (100 - (int)strlen(T(S_NO)) * 12) / 2, 270);
+      gfx->print(T(S_NO));
     }
   }
 
@@ -881,14 +883,14 @@ void renderSack() {
   // pantalla de resultado
   if (sackOverUntil) {
     if (now > sackOverUntil) { sackOpen = false; return; }
-    char b[18];
-    snprintf(b, sizeof(b), "%u GOLPES", sackHits);
+    char b[20];
+    snprintf(b, sizeof(b), T(S_HITS_FMT), sackHits);
     gfx->setTextColor(ink);
     gfx->setTextSize(4);
     gfx->setCursor(CX - strlen(b) * 12, 150);
     gfx->print(b);
-    char g[16];
-    snprintf(g, sizeof(g), "FUERZA +%u", sackGain);
+    char g[18];
+    snprintf(g, sizeof(g), T(S_STR_GAIN_FMT), sackGain);
     gfx->setTextColor(UI_BAR_BAD);
     gfx->setTextSize(3);
     gfx->setCursor(CX - strlen(g) * 9, 210);
@@ -896,11 +898,11 @@ void renderSack() {
     gfx->setTextSize(2);
     if (sackNewHi && sackHits > 0) {
       gfx->setTextColor(UI_BAR_WARN);
-      gfx->setCursor(CX - 11 * 6, 256);
-      gfx->print("NUEVO RECORD!");
+      gfx->setCursor(CX - strlen(T(S_NEW_RECORD)) * 6, 256);
+      gfx->print(T(S_NEW_RECORD));
     } else {
       char r[18];
-      snprintf(r, sizeof(r), "RECORD: %u", pet.strHi);
+      snprintf(r, sizeof(r), T(S_RECORD_FMT), pet.strHi);
       gfx->setTextColor(ink);
       gfx->setCursor(CX - strlen(r) * 6, 256);
       gfx->print(r);
@@ -938,8 +940,8 @@ void renderSack() {
   gfx->print(buf);
 
   gfx->setTextSize(2);
-  gfx->setCursor(CX - 9 * 6, 322);
-  gfx->print("APORREA RAPIDO!");
+  gfx->setCursor(CX - strlen(T(S_HIT_FAST)) * 6, 322);
+  gfx->print(T(S_HIT_FAST));
 
   // barra de tiempo
   uint32_t left = sackUntil - now;
@@ -983,8 +985,8 @@ void renderGame() {
       gameOpen = false;
       return;
     }
-    char buf[20];
-    snprintf(buf, sizeof(buf), "PUNTOS: %u", gameScore);
+    char buf[22];
+    snprintf(buf, sizeof(buf), T(S_SCORE_FMT), gameScore);
     gfx->setTextColor(ink);
     gfx->setTextSize(4);
     gfx->setCursor(CX - strlen(buf) * 12, 160);
@@ -992,16 +994,16 @@ void renderGame() {
     gfx->setTextSize(2);
     if (gameNewHi && gameScore > 0) {
       gfx->setTextColor(UI_BAR_WARN);
-      gfx->setCursor(CX - 11 * 6, 214);
-      gfx->print("NUEVO RECORD!");
+      gfx->setCursor(CX - strlen(T(S_NEW_RECORD)) * 6, 214);
+      gfx->print(T(S_NEW_RECORD));
     } else {
       char rec[20];
-      snprintf(rec, sizeof(rec), "RECORD: %u", pet.gameHi);
+      snprintf(rec, sizeof(rec), T(S_RECORD_FMT), pet.gameHi);
       gfx->setTextColor(ink);
       gfx->setCursor(CX - strlen(rec) * 6, 214);
       gfx->print(rec);
     }
-    const char *msg = gameScore >= 10 ? "Que felicidad!" : "+felicidad";
+    const char *msg = gameScore >= 10 ? T(S_GREAT_JOY) : T(S_PLUS_JOY);
     gfx->setTextColor(ink);
     gfx->setCursor(CX - strlen(msg) * 6, 250);
     gfx->print(msg);
@@ -1108,53 +1110,78 @@ void drawClockBtn(int x, int y, const char *l) {
   gfx->print(l);
 }
 
+// pildoras de idioma centradas en y; rellena la activa
+#define LANG_PILL_Y 296
+#define LANG_PILL_W 64
+#define LANG_PILL_H 30
+static const int LANG_PILL_X[LANG_COUNT] = { 163, 239 };  // ES, EN
+static const char *const LANG_PILL_T[LANG_COUNT] = { "ES", "EN" };
+
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - 11 * 9, 50);
-  gfx->print("AJUSTAR HORA");
+  gfx->setCursor(CX - strlen(T(S_SET_TIME)) * 9, 44);
+  gfx->print(T(S_SET_TIME));
 
   char t[8];
   snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
   gfx->setTextSize(7);
-  gfx->setCursor(CX - 105, 116);
+  gfx->setCursor(CX - 105, 108);
   gfx->print(t);
 
-  drawClockBtn(104, 198, "-");  // hora -
-  drawClockBtn(170, 198, "+");  // hora +
-  drawClockBtn(252, 198, "-");  // min -
-  drawClockBtn(318, 198, "+");  // min +
+  drawClockBtn(104, 190, "-");  // hora -
+  drawClockBtn(170, 190, "+");  // hora +
+  drawClockBtn(252, 190, "-");  // min -
+  drawClockBtn(318, 190, "+");  // min +
   gfx->setTextSize(2);
   gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(120, 268);
-  gfx->print("HORA");
-  gfx->setCursor(276, 268);
-  gfx->print("MIN");
+  gfx->setCursor(120, 256);
+  gfx->print(T(S_HOUR));
+  gfx->setCursor(276, 256);
+  gfx->print(T(S_MIN));
 
-  gfx->fillRoundRect(133, 312, 200, 50, 14, UI_BAR_OK);
+  // selector de idioma: etiqueta + dos pildoras
+  gfx->setTextColor(UI_TRACK);
+  gfx->setCursor(LANG_PILL_X[0] - strlen(T(S_LANG_LABEL)) * 12 - 10, LANG_PILL_Y + 8);
+  gfx->print(T(S_LANG_LABEL));
+  for (int i = 0; i < LANG_COUNT; i++) {
+    bool on = (gLang == i);
+    gfx->fillRoundRect(LANG_PILL_X[i], LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8,
+                       on ? UI_BAR_OK : UI_WHITE);
+    gfx->drawRoundRect(LANG_PILL_X[i], LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_INK);
+    gfx->setTextColor(on ? UI_BG_DAY : UI_INK);
+    gfx->setCursor(LANG_PILL_X[i] + LANG_PILL_W / 2 - 12, LANG_PILL_Y + 8);
+    gfx->print(LANG_PILL_T[i]);
+  }
+
+  gfx->fillRoundRect(133, 340, 200, 48, 14, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - 18, 325);
+  gfx->setCursor(CX - 18, 352);
   gfx->print("OK");
 
   gfx->setTextColor(UI_TRACK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - 132, 400);
-  gfx->print("desliza arriba: cancelar");
+  gfx->setCursor(CX - strlen(T(S_CLOCK_CANCEL)) * 6, 410);
+  gfx->print(T(S_CLOCK_CANCEL));
   gfx->flush();
 }
 
 void clockTap(int16_t x, int16_t y) {
-  if (y >= 198 && y <= 256) {  // fila de botones +/-
+  if (y >= 190 && y <= 248) {  // fila de botones +/-
     if (x >= 104 && x < 162) clockH = (clockH + 23) % 24;
     else if (x >= 170 && x < 228) clockH = (clockH + 1) % 24;
     else if (x >= 252 && x < 310) clockM = (clockM + 59) % 60;
     else if (x >= 318 && x < 376) clockM = (clockM + 1) % 60;
     return;
   }
-  if (y >= 312 && y <= 362 && x >= 133 && x <= 333) { applyClock(); return; }
+  if (y >= LANG_PILL_Y && y <= LANG_PILL_Y + LANG_PILL_H) {  // pildoras de idioma
+    for (int i = 0; i < LANG_COUNT; i++)
+      if (x >= LANG_PILL_X[i] && x < LANG_PILL_X[i] + LANG_PILL_W) { setLang((Lang)i); return; }
+  }
+  if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
 }
 
 // llama + numero de racha arriba a la izquierda
@@ -1176,14 +1203,12 @@ void drawCelebration() {
   const char *l1 = nullptr, *l2 = nullptr;
   char buf[20];
   if (pet.showMedal()) {
-    static const char *MN[MED_COUNT] = { "Nv.10", "Nv.25", "Nv.50", "BAYA",
-                                         "RACHA 7", "VINCULO", "FORMA TOPE", "EN FORMA" };
     for (int i = 0; i < MED_COUNT; i++)
-      if (pet.newMedal & (1 << i)) { l2 = MN[i]; break; }
-    l1 = "MEDALLA!";
+      if (pet.newMedal & (1 << i)) { l2 = medalName(i); break; }
+    l1 = T(S_MEDAL_BANNER);
   } else if (pet.showMilestone()) {
-    snprintf(buf, sizeof(buf), "RACHA %u DIAS!", pet.streak);
-    l1 = "GENIAL!";
+    snprintf(buf, sizeof(buf), T(S_STREAK_DAYS_FMT), pet.streak);
+    l1 = T(S_GREAT);
     l2 = buf;
   }
   if (!l1) return;
@@ -1199,16 +1224,14 @@ void drawCelebration() {
 }
 
 // medallas en la ficha: badge con etiqueta, color si conseguida
-static const char *MED_LABEL[MED_COUNT] = { "Nv10", "Nv25", "Nv50", "BAYA",
-                                            "7DIAS", "VINC", "TOPE", "SANO" };
 void drawMedalBadge(int x, int y, int i) {
   bool got = pet.hasMedal(1 << i);
   gfx->fillRoundRect(x, y, 100, 24, 6, got ? UI_BAR_OK : UI_TRACK);
   if (!got) gfx->drawRoundRect(x, y, 100, 24, 6, UI_TRACK);
   gfx->setTextColor(got ? UI_BG_DAY : 0x9492);
   gfx->setTextSize(2);
-  gfx->setCursor(x + (100 - (int)strlen(MED_LABEL[i]) * 12) / 2, y + 5);
-  gfx->print(MED_LABEL[i]);
+  gfx->setCursor(x + (100 - (int)strlen(medalLabel(i)) * 12) / 2, y + 5);
+  gfx->print(medalLabel(i));
 }
 
 // pagina 0: perfil (retrato grande, identidad, racha, vinculo, baya)
@@ -1216,7 +1239,7 @@ void renderCardProfile() {
   const DexEntry &d = DEX_TBL[pet.speciesId];
   const char *nm = pet.nick[0] ? pet.nick : d.name;
   char head[26];
-  snprintf(head, sizeof(head), "%s%s Nv.%u", pet.shiny ? "*" : "", nm, pet.level());
+  snprintf(head, sizeof(head), T(S_NAME_FMT), pet.shiny ? "*" : "", nm, pet.level());
   gfx->setTextColor(d.accent);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(head) * 9, 34);
@@ -1235,21 +1258,21 @@ void renderCardProfile() {
   int sx = 138, sy = 224;
   gfx->fillTriangle(sx + 8, sy, sx + 1, sy + 18, sx + 15, sy + 18, UI_BAR_BAD);
   gfx->fillTriangle(sx + 8, sy + 7, sx + 4, sy + 18, sx + 12, sy + 18, UI_BAR_WARN);
-  char rl[26];
-  snprintf(rl, sizeof(rl), "RACHA %u  rec %u", pet.streak, pet.bestStreak);
+  char rl[30];
+  snprintf(rl, sizeof(rl), T(S_STREAK_FMT), pet.streak, pet.bestStreak);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
   gfx->setCursor(sx + 24, sy + 2);
   gfx->print(rl);
 
-  drawCardStat(258, "VIN", pet.bond, 100, C565(0xd4, 0x52, 0x7e));
+  drawCardStat(258, T(S_VIN), pet.bond, 100, C565(0xd4, 0x52, 0x7e));
 
-  const char *berry = !pet.berryKnown ? "BAYA ???"
-                      : pet.lovesBerry(0) ? "BAYA ROJA"
-                      : pet.lovesBerry(1) ? "BAYA AZUL"
-                                          : "BAYA VERDE";
-  char info[34];
-  snprintf(info, sizeof(info), "%s   EDAD %lud", berry,
+  const char *berry = !pet.berryKnown ? T(S_BERRY_UNK)
+                      : pet.lovesBerry(0) ? T(S_BERRY_RED)
+                      : pet.lovesBerry(1) ? T(S_BERRY_BLUE)
+                                          : T(S_BERRY_GREEN);
+  char info[40];
+  snprintf(info, sizeof(info), T(S_INFO_FMT), berry,
            (unsigned long)(pet.ageMinutes / 1440));
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
@@ -1257,41 +1280,37 @@ void renderCardProfile() {
   gfx->print(info);
 
   gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(CX - 144, 332);
-  gfx->print("toca el nombre: renombrar");
+  gfx->setCursor(CX - strlen(T(S_RENAME_HINT)) * 6, 332);
+  gfx->print(T(S_RENAME_HINT));
 }
 
 // pagina 1: combate (4 barras + boton de entrenar)
 void renderCardStats() {
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - 7 * 9, 48);
-  gfx->print("COMBATE");
+  gfx->setCursor(CX - strlen(T(S_BATTLE)) * 9, 48);
+  gfx->print(T(S_BATTLE));
 
-  drawCardStat(118, "FUE", pet.atkStat(), 260, UI_BAR_BAD);
-  drawCardStat(160, "DEF", pet.defStat(), 260, 0x4C98);
-  drawCardStat(202, "VEL", pet.speStat(), 260, UI_BAR_WARN);
-  drawCardStat(244, "PES", pet.weight, 100, 0xB3C8);
+  drawCardStat(118, T(S_STAT_ATK), pet.atkStat(), 260, UI_BAR_BAD);
+  drawCardStat(160, T(S_STAT_DEF), pet.defStat(), 260, 0x4C98);
+  drawCardStat(202, T(S_STAT_SPE), pet.speStat(), 260, UI_BAR_WARN);
+  drawCardStat(244, T(S_STAT_WGT), pet.weight, 100, 0xB3C8);
 
   // boton: saco de entrenamiento de fuerza
   gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
   gfx->setTextColor(UI_BG_DAY);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - 13 * 6, 311);
-  gfx->print("ENTRENAR FUERZA");
+  gfx->setCursor(CX - strlen(T(S_TRAIN_STR)) * 6, 311);
+  gfx->print(T(S_TRAIN_STR));
 }
 
 // pagina 2: medallas con etiqueta descriptiva
-static const char *MED_DESC[MED_COUNT] = {
-  "NIVEL 10", "NIVEL 25", "NIVEL 50", "BAYA HALLADA",
-  "RACHA 7 DIAS", "VINCULO MAX", "FORMA FINAL", "EN FORMA",
-};
 void renderCardMedals() {
   int got = 0;
   for (int i = 0; i < MED_COUNT; i++)
     if (pet.hasMedal(1 << i)) got++;
   char head[20];
-  snprintf(head, sizeof(head), "MEDALLAS %d/%d", got, MED_COUNT);
+  snprintf(head, sizeof(head), T(S_MEDALS_FMT), got, MED_COUNT);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(head) * 9, 48);
@@ -1311,7 +1330,7 @@ void renderCardMedals() {
     gfx->setTextColor(g ? UI_BG_DAY : 0x8410);
     gfx->setTextSize(2);
     gfx->setCursor(x + 44, y + 14);
-    gfx->print(MED_DESC[i]);
+    gfx->print(medalDesc(i));
   }
 }
 
@@ -1329,8 +1348,8 @@ void renderCard() {
   }
   gfx->setTextColor(UI_TRACK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - 90, 398);
-  gfx->print("toca: volver");
+  gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 398);
+  gfx->print(T(S_BACK));
   gfx->flush();
 }
 
@@ -1355,8 +1374,8 @@ void renderKeyboard() {
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - 60, 56);
-  gfx->print("NOMBRE:");
+  gfx->setCursor(CX - strlen(T(S_NAME)) * 6, 56);
+  gfx->print(T(S_NAME));
   // buffer actual
   gfx->fillRoundRect(83, 84, 300, 40, 8, UI_WHITE);
   gfx->drawRoundRect(83, 84, 300, 40, 8, UI_INK);
@@ -1453,8 +1472,8 @@ void renderGallery() {
     }
     gfx->setTextColor(UI_INK);
     gfx->setTextSize(2);
-    gfx->setCursor(CX - 96, 408);
-    gfx->print("toca para volver");
+    gfx->setCursor(CX - strlen(T(S_DETAIL_BACK)) * 6, 408);
+    gfx->print(T(S_DETAIL_BACK));
     gfx->flush();
     return;
   }
@@ -1465,7 +1484,7 @@ void renderGallery() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   char head[24];
-  snprintf(head, sizeof(head), "POKEDEX %u/151", pet.registeredCount());
+  snprintf(head, sizeof(head), T(S_POKEDEX_FMT), pet.registeredCount());
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(head) * 9, 36);
@@ -1839,10 +1858,10 @@ void drawPoops() {
 }
 
 void drawBars() {
-  drawBar(78, 318, "COM", pet.fullness);
-  drawBar(244, 318, "FEL", pet.joy);
-  drawBar(78, 346, "ENE", pet.energy);
-  drawBar(244, 346, "LIM", pet.hygiene);
+  drawBar(78, 318, T(S_BAR_FOOD), pet.fullness);
+  drawBar(244, 318, T(S_BAR_JOY), pet.joy);
+  drawBar(78, 346, T(S_BAR_ENE), pet.energy);
+  drawBar(244, 346, T(S_BAR_HYG), pet.hygiene);
 }
 
 void drawBar(int x, int y, const char *label, uint8_t val) {
@@ -1850,7 +1869,7 @@ void drawBar(int x, int y, const char *label, uint8_t val) {
   gfx->setTextSize(2);
   gfx->setCursor(x, y);
   gfx->print(label);
-  int bx = x + 42, bw = 104, bh = 15;
+  int bx = x + 48, bw = 100, bh = 15;  // +48: deja sitio a etiquetas de 4 letras (EN)
   uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= 25) ? UI_BAR_WARN : UI_BAR_BAD;
   gfx->fillRoundRect(bx, y, bw, bh, 4, UI_TRACK);
   int fw = (bw - 4) * val / 100;
@@ -1869,25 +1888,25 @@ void drawButtons() {
 
 const char *eggMsg() {
   switch (pet.eggCracks()) {
-    case 0: return "Toca el huevo...";
-    case 1: return "Se mueve!";
-    default: return "Esta a punto!";
+    case 0: return T(S_EGG_TOUCH);
+    case 1: return T(S_EGG_MOVES);
+    default: return T(S_EGG_ALMOST);
   }
 }
 
 const char *statusMsg() {
-  if (pet.evolving()) return "Esta evolucionando!";
-  if (bathUntil) return "Splish splash!";
+  if (pet.evolving()) return T(S_EVOLVING);
+  if (bathUntil) return "Splish splash!";  // onomatopeya universal
   if (pet.sleeping) return "Zzz...";
-  if (pet.eating()) return "Nam nam!";
-  if (pet.showHeart()) return "Le gusta!";
-  if (pet.fullness < 25) return "Tiene hambre!";
-  if (pet.hygiene < 25) return "Necesita un bano!";
-  if (pet.energy < 25) return "Esta agotado...";
-  if (pet.joy < 25) return "Esta triste...";
-  if (pet.weight > 60) return "Esta rellenito...";
-  if (pet.shiny && pet.ageMinutes < 15) return "Es SHINY!!";
-  return "Esta feliz";
+  if (pet.eating()) return T(S_EATING);
+  if (pet.showHeart()) return T(S_LIKES);
+  if (pet.fullness < 25) return T(S_HUNGRY);
+  if (pet.hygiene < 25) return T(S_NEEDS_BATH);
+  if (pet.energy < 25) return T(S_EXHAUSTED);
+  if (pet.joy < 25) return T(S_SAD);
+  if (pet.weight > 60) return T(S_CHUBBY);
+  if (pet.shiny && pet.ageMinutes < 15) return T(S_IS_SHINY);
+  return T(S_HAPPY);
 }
 
 // dibuja un mapa de n x n pixeles escalado; silhouette=true lo pinta en tinta
