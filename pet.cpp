@@ -420,6 +420,7 @@ void Pet::playResult(uint8_t score) {
   int burn = (int)weight - score * 2;  // el ejercicio quema peso
   weight = burn > 0 ? burn : 0;
   if (score >= 5) heartUntil = millis() + HEART_MS;
+  if (score > gameHi) gameHi = score;  // nuevo record
   addBond(2);
   registerCare();
   save();
@@ -509,6 +510,7 @@ void Pet::save() {
   prefs.putUShort("medal", medals);
   prefs.putUShort("tmedal", totalMedals);
   prefs.putUShort("mstone", lastMilestone);
+  prefs.putUShort("ghi", gameHi);
   prefs.putString("nick", nick);
 }
 
@@ -558,6 +560,7 @@ void Pet::load() {
   medals = prefs.getUShort("medal", 0);
   totalMedals = prefs.getUShort("tmedal", 0);
   lastMilestone = prefs.getUShort("mstone", 0);
+  gameHi = prefs.getUShort("ghi", 0);
   prefs.getString("nick", nick, sizeof(nick));
   // siembra: la mascota actual cuenta como criada (guardados antiguos)
   if (speciesId >= 1) registerSpecies(speciesId);

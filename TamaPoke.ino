@@ -71,6 +71,9 @@ bool gameOpen = false;
 uint32_t gameOverUntil = 0;
 float ballX, ballY, ballVX, ballVY, gamePetX;
 uint8_t gameScore, gameMisses;
+float hitX, hitY;             // ultimo golpe (anillo de impacto)
+uint32_t hitTime = 0;
+bool gameNewHi = false;
 
 // las 9 especies con sprite propio en flash (respaldo sin SD): dex -> indice
 int flashIdxForDex(int16_t dex) {
@@ -715,14 +718,18 @@ void startGame() {
   gameOverUntil = 0;
   gameScore = 0;
   gameMisses = 0;
+  gameNewHi = false;
+  hitTime = 0;
   gamePetX = 233;
   respawnBall();
 }
 
 void respawnBall() {
-  ballX = 140 + random(186);
-  ballY = 90;
-  ballVX = random(2) ? 2.2f : -2.2f;
+  ballX = 150 + random(166);
+  ballY = 96;
+  float sp = 1.6f + gameScore * 0.05f;  // mas viva segun avanzas
+  if (sp > 4.0f) sp = 4.0f;
+  ballVX = random(2) ? sp : -sp;
   ballVY = 0;
 }
 
@@ -733,17 +740,24 @@ void gameTap(int16_t x, int16_t y) {
     return;
   }
   float dx = ballX - x, dy = ballY - y;
-  if (dx * dx + dy * dy < 70 * 70) {  // toque a la bola!
+  if (dx * dx + dy * dy < 74 * 74) {  // toque a la bola!
     gameScore++;
-    ballVY = -(8.5f + (gameScore > 20 ? 4 : gameScore * 0.2f));
-    ballVX += dx * 0.16f;
-    if (ballVX > 8) ballVX = 8;
-    if (ballVX < -8) ballVX = -8;
+    // golpe mas suave: impulso moderado que crece poco a poco con la puntuacion
+    float lift = 6.6f + (gameScore > 16 ? 3.5f : gameScore * 0.22f);
+    ballVY = -lift;
+    ballVX += dx * 0.12f;
+    if (ballVX > 6.5f) ballVX = 6.5f;
+    if (ballVX < -6.5f) ballVX = -6.5f;
+    hitX = ballX;
+    hitY = ballY;
+    hitTime = millis();
   }
 }
 
 void stepGame() {
-  ballVY += 0.55f;
+  float grav = 0.40f + gameScore * 0.013f;  // cae un poco mas rapido cada vez
+  if (grav > 0.80f) grav = 0.80f;
+  ballVY += grav;
   ballX += ballVX;
   ballY += ballVY;
   // rebote en la pared circular
@@ -759,10 +773,11 @@ void stepGame() {
     ballX = CX + nx * 205;
     ballY = CY + ny * 205;
   }
-  if (ballY > 380) {  // al suelo
+  if (ballY > 384) {  // al suelo
     if (++gameMisses >= 3) {
-      pet.playResult(gameScore);
-      gameOverUntil = millis() + 3500;
+      gameNewHi = (gameScore > pet.gameHi);
+      pet.playResult(gameScore);  // actualiza el record y da felicidad
+      gameOverUntil = millis() + 4000;
     } else {
       respawnBall();
     }
@@ -774,45 +789,83 @@ void stepGame() {
   gamePetX += chase;
 }
 
+// fondo del minijuego: hatibat del bicho (cielo por hora + suelo del bioma)
+void drawGameScene() {
+  int hh = sceneHour();
+  bool night = hh < 6 || hh >= 20;
+  uint16_t top, bot;
+  if (night)       { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
+  else if (hh < 8) { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }
+  else if (hh < 18){ top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }
+  else             { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }
+  int hor = 376;
+  for (int y = 0; y < hor; y += 8)
+    gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, hor));
+  if (night)
+    for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
+  uint8_t bio = pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome;
+  uint16_t soil = BIOME_SOIL[bio < 6 ? bio : 0];
+  if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
+  gfx->fillRect(0, hor, 466, 466 - hor, soil);
+}
+
 void renderGame() {
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  bool night = sceneHour() < 6 || sceneHour() >= 20;
+  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
 
   if (gameOverUntil) {
+    drawGameScene();
     if (millis() > gameOverUntil) {
       gameOpen = false;
       return;
     }
     char buf[20];
     snprintf(buf, sizeof(buf), "PUNTOS: %u", gameScore);
-    gfx->setTextColor(UI_INK);
+    gfx->setTextColor(ink);
     gfx->setTextSize(4);
-    gfx->setCursor(CX - strlen(buf) * 12, 190);
+    gfx->setCursor(CX - strlen(buf) * 12, 160);
     gfx->print(buf);
     gfx->setTextSize(2);
+    if (gameNewHi && gameScore > 0) {
+      gfx->setTextColor(UI_BAR_WARN);
+      gfx->setCursor(CX - 11 * 6, 214);
+      gfx->print("NUEVO RECORD!");
+    } else {
+      char rec[20];
+      snprintf(rec, sizeof(rec), "RECORD: %u", pet.gameHi);
+      gfx->setTextColor(ink);
+      gfx->setCursor(CX - strlen(rec) * 6, 214);
+      gfx->print(rec);
+    }
     const char *msg = gameScore >= 10 ? "Que felicidad!" : "+felicidad";
+    gfx->setTextColor(ink);
     gfx->setCursor(CX - strlen(msg) * 6, 250);
     gfx->print(msg);
     gfx->flush();
     return;
   }
 
+  drawGameScene();
   stepGame();
 
-  // marcador y vidas
+  // marcador, record y vidas
   char buf[8];
   snprintf(buf, sizeof(buf), "%u", gameScore);
-  gfx->setTextColor(UI_INK);
+  gfx->setTextColor(ink);
   gfx->setTextSize(4);
-  gfx->setCursor(CX - strlen(buf) * 12, 36);
+  gfx->setCursor(CX - strlen(buf) * 12, 30);
   gfx->print(buf);
+  char rec[12];
+  snprintf(rec, sizeof(rec), "REC %u", pet.gameHi);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(rec) * 6, 76);
+  gfx->print(rec);
   for (int i = 0; i < 3; i++) {
-    if (i < 3 - gameMisses) gfx->fillCircle(203 + i * 30, 84, 6, UI_BAR_BAD);
-    else gfx->drawCircle(203 + i * 30, 84, 6, UI_TRACK);
+    if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
+    else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
   }
 
-  // suelo y bicho persiguiendo
-  gfx->fillRect(110, 396, 246, 3, UI_TRACK);
   if (pmd.loaded) {
     uint8_t act = (ballX > gamePetX + 4) ? PMD_WALKR : (ballX < gamePetX - 4) ? PMD_WALKL : PMD_IDLE;
     if (!pmd.has(act)) act = PMD_IDLE;
@@ -830,6 +883,14 @@ void renderGame() {
         if (idx == 0xFF) continue;
         gfx->fillRect(px + c * s, py + r * s, s, s, mon.pal[idx]);
       }
+  }
+
+  // anillo de impacto que se expande y desvanece (feedback suave del golpe)
+  uint32_t ht = millis() - hitTime;
+  if (hitTime && ht < 260) {
+    int rad = 22 + (int)(ht / 6);
+    gfx->drawCircle((int)hitX, (int)hitY, rad, C565(0xff, 0xe7, 0x9f));
+    gfx->drawCircle((int)hitX, (int)hitY, rad - 2, C565(0xff, 0xd9, 0x8a));
   }
 
   // la pokeball
