@@ -53,6 +53,7 @@ enum StrId : uint8_t {
   // dialogos de decision (evolucionar/mantener, despedirse/quedaros)
   S_EVO_Q, S_EVO_KEEP, S_FAR_Q, S_FAR_GO, S_FAR_STAY,
   S_CHOOSE_STARTER,  // titulo de la eleccion del inicial (primera vez)
+  S_NO_SPRITES, S_LOAD_SPRITES,  // aviso cuando falta el sprite en la SD
   STR_COUNT
 };
 

@@ -1993,11 +1993,18 @@ void drawPet() {
   }
   int fi = flashIdxForDex(pet.speciesId);
   if (fi < 0) {
-    // sin SD y sin sprite de flash: silueta generica
+    // sin SD y sin sprite de flash: aviso claro de que faltan sprites
     gfx->setTextColor(inkColor());
-    gfx->setTextSize(8);
-    gfx->setCursor(CX - 24, PET_CY - 32);
+    gfx->setTextSize(6);
+    gfx->setCursor(CX - 18, PET_CY - 80);
     gfx->print("?");
+    gfx->setTextSize(2);
+    const char *l1 = T(S_NO_SPRITES);
+    gfx->setCursor(CX - (int)strlen(l1) * 6, PET_CY - 4);
+    gfx->print(l1);
+    const char *l2 = T(S_LOAD_SPRITES);
+    gfx->setCursor(CX - (int)strlen(l2) * 6, PET_CY + 20);
+    gfx->print(l2);
     return;
   }
   const Species &sp = SPECIES[fi];

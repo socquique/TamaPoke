@@ -34,6 +34,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "EVOLUCIONAR", "%s quiere decirte algo...", "%s se siente abandonado...",
     "Evolucionar?", "Mantener forma", "Despedirse?", "Despedirse", "Quedaros juntos",
     "Elige tu inicial",
+    "Sin sprites", "Cargalos en la SD",
   },
   // ---------------- EN ----------------
   {
@@ -62,6 +63,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "EVOLVE!", "%s wants to tell you...", "%s feels abandoned...",
     "Evolve?", "Keep form", "Say goodbye?", "Goodbye", "Stay together",
     "Choose your starter",
+    "No sprites", "Load them onto the SD",
   },
   // ---------------- FR ----------------
   {
@@ -90,6 +92,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "EVOLUER", "%s veut te parler...", "%s se sent abandonne...",
     "Evoluer?", "Garder forme", "Dire adieu?", "Adieu", "Rester ensemble",
     "Choisis ton starter",
+    "Pas de sprites", "Charge-les sur la SD",
   },
   // ---------------- DE ----------------
   {
@@ -118,6 +121,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "ENTWICKELN", "%s will dir etwas sagen...", "%s fuehlt sich verlassen...",
     "Entwickeln?", "Form behalten", "Abschied?", "Lebwohl", "Zusammen bleiben",
     "Waehle dein Starter",
+    "Keine Sprites", "Auf die SD laden",
   },
   // ---------------- IT ----------------
   {
@@ -146,6 +150,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "EVOLVI", "%s vuole dirti qualcosa...", "%s si sente abbandonato...",
     "Evolvere?", "Mantieni forma", "Salutare?", "Addio", "Restare insieme",
     "Scegli l'iniziale",
+    "Senza sprite", "Caricali sulla SD",
   },
   // ---------------- PT ----------------
   {
@@ -174,6 +179,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "EVOLUIR", "%s quer dizer-te algo...", "%s sente-se abandonado...",
     "Evoluir?", "Manter forma", "Despedir?", "Adeus", "Ficar juntos",
     "Escolhe o inicial",
+    "Sem sprites", "Carrega-os no SD",
   },
 };
 
