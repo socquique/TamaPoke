@@ -1200,10 +1200,10 @@ void drawClockBtn(int x, int y, const char *l) {
 
 // pildoras de idioma centradas en y; rellena la activa
 #define LANG_PILL_Y 296
-#define LANG_PILL_W 64
 #define LANG_PILL_H 30
-static const int LANG_PILL_X[LANG_COUNT] = { 163, 239 };  // ES, EN
-static const char *const LANG_PILL_T[LANG_COUNT] = { "ES", "EN" };
+#define LANG_PILL_X 336          // pildora de idioma (cicla los 6 al tocar)
+#define LANG_PILL_W 96
+static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT" };
 
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
@@ -1240,16 +1240,15 @@ void renderClock() {
   gfx->setCursor(34 + (96 - (int)strlen(sl) * 12) / 2, LANG_PILL_Y + 8);
   gfx->print(sl);
 
-  // selector de idioma: dos pildoras
-  for (int i = 0; i < LANG_COUNT; i++) {
-    bool on = (gLang == i);
-    gfx->fillRoundRect(LANG_PILL_X[i], LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8,
-                       on ? UI_BAR_OK : UI_WHITE);
-    gfx->drawRoundRect(LANG_PILL_X[i], LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_INK);
-    gfx->setTextColor(on ? UI_BG_DAY : UI_INK);
-    gfx->setCursor(LANG_PILL_X[i] + LANG_PILL_W / 2 - 12, LANG_PILL_Y + 8);
-    gfx->print(LANG_PILL_T[i]);
-  }
+  // selector de idioma: una pildora que cicla los 6 idiomas al tocar
+  gfx->fillRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_WHITE);
+  gfx->drawRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_INK);
+  char lp[10];
+  snprintf(lp, sizeof(lp), "%s >", LANG_CODES[gLang]);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(LANG_PILL_X + (LANG_PILL_W - (int)strlen(lp) * 12) / 2, LANG_PILL_Y + 8);
+  gfx->print(lp);
 
   gfx->fillRoundRect(133, 340, 200, 48, 14, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
@@ -1278,8 +1277,11 @@ void clockTap(int16_t x, int16_t y) {
       if (audioEnabled()) sfxPlay(SFX_TAP);    // confirma al encender
       return;
     }
-    for (int i = 0; i < LANG_COUNT; i++)       // pildoras de idioma
-      if (x >= LANG_PILL_X[i] && x < LANG_PILL_X[i] + LANG_PILL_W) { setLang((Lang)i); return; }
+    if (x >= LANG_PILL_X && x < LANG_PILL_X + LANG_PILL_W) {  // cicla idioma
+      setLang((Lang)((gLang + 1) % LANG_COUNT));
+      sfxPlay(SFX_TAP);
+      return;
+    }
   }
   if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
 }
