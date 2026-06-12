@@ -22,8 +22,10 @@
 #define TP_INT 11
 #define TP_RESET 40
 
-// Audio ES8311 (no usado todavía, reservado para efectos de sonido)
-#define I2S_MCK_IO 16
+// Audio ES8311. NOTA: el MCLK real es GPIO42 (verificado en placa con el
+// proyecto PlaneRadar2.0); el 16 que figuraba era erroneo. Aun asi el codec se
+// configura con reloj derivado del BCLK, asi que el MCLK apenas importa.
+#define I2S_MCK_IO 42
 #define I2S_BCK_IO 9
 #define I2S_DI_IO 10
 #define I2S_WS_IO 45

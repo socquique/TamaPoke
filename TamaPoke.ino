@@ -20,6 +20,7 @@
 #include "sdmon.h"
 #include "rtcbat.h"
 #include "i18n.h"
+#include "audio.h"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -187,6 +188,8 @@ void setup() {
   }
   pet.syncClock(e);
 
+  audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
+
   lastInteract = millis();
 }
 
@@ -347,6 +350,9 @@ void handleSerial() {
     Serial.println("DONE");
   } else if (line == "RUN") {
     pet.startRunaway();
+    Serial.println("DONE");
+  } else if (line == "BEEP") {
+    sfxPlay(SFX_HATCH);  // prueba de audio
     Serial.println("DONE");
   } else if (line == "REG") {
     Serial.printf("pokedex %u/151:", pet.registeredCount());
