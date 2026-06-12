@@ -120,6 +120,10 @@ static const uint8_t CRACK2[][2] = { {11,13},{12,14},{11,15},{20,12},{19,13},{20
 static const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{280,90},{160,95} };
 
 bool wasPressed = false;
+// el CST9217 avisa por el pin INT cuando hay datos tactiles; lo usamos para no
+// leer el bus I2C mientras el chip esta dormido (esa lectura se colgaba ~1s)
+volatile bool gTouchIrq = false;
+void IRAM_ATTR touchIsr() { gTouchIrq = true; }
 uint32_t lastRender = 0;
 // proteccion del AMOLED: atenuado por inactividad
 uint32_t lastInteract = 0;
@@ -140,6 +144,11 @@ void setup() {
   Serial.setTxTimeoutMs(0);
   loadLang();  // idioma guardado (ES por defecto)
   Wire.begin(IIC_SDA, IIC_SCL);
+  // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
+  // Red de seguridad para PMU/RTC (SensorLib NO respeta este timeout en el
+  // tactil; el cuelgue del tactil dormido se resuelve gateando por INT, ver
+  // handleTouch).
+  Wire.setTimeOut(50);
 
   if (!gfx->begin()) Serial.println("gfx->begin() fallo");
   panel->setBrightness(180);
@@ -156,6 +165,9 @@ void setup() {
   touch.reset();
   touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
   touch.setMirrorXY(true, true);  // el panel esta montado girado 180 grados
+  // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
+  pinMode(TP_INT, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
 
   pet.begin();
   sdBegin();
@@ -369,6 +381,11 @@ void handleTouch() {
   static uint32_t lastPoll = 0;
   if (millis() - lastPoll < 20) return;  // 50 Hz le sobra a un dedo
   lastPoll = millis();
+  // solo tocamos el bus si el chip aviso por INT o si el dedo sigue abajo (hay
+  // que detectar el levantamiento). Leer el CST9217 dormido se colgaba ~1s y
+  // congelaba el loop entero; SensorLib no respeta el timeout de Wire.
+  if (!gTouchIrq && !wasPressed) return;
+  gTouchIrq = false;
   int16_t x, y;
   bool pressed = touch.getPoint(&x, &y, 1) > 0;
 
