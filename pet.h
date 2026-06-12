@@ -108,6 +108,15 @@ public:
   void evolve();              // dispara la transformacion (la llama un toque del usuario)
   bool canFarewellNow() const;  // forma final + 7 dias: lista para despedirse (boton)
   bool canRunawayNow() const;   // abandono total 1h: lista para escaparse (boton triste)
+  // el usuario decide en un dialogo; "mantener/quedaros" pospone y re-ofrece luego
+  bool wantEvolveButton() const { return canEvolveNow() && level() > evoDeclinedLv; }
+  bool wantFarewellButton() const { return canFarewellNow() && ageMinutes >= farDeclinedAge; }
+  void declineEvolve() { evoDeclinedLv = level(); }              // re-ofrece al subir de nivel
+  void declineFarewell() { farDeclinedAge = ageMinutes + 1440; } // re-ofrece dentro de 1 dia
+  // primera partida: el jugador elige inicial (Bulbasaur/Charmander/Squirtle)
+  bool awaitingStarter() const { return starterPick; }
+  void chooseStarter(int16_t dex) { eggTarget = dex; starterPick = false; save(); }
+  void factoryReset() { prefs.clear(); }  // borra la NVS (test: comando serie WIPE)
   void dbgRunawayReady() { fullness = joy = energy = hygiene = 0; neglectTicks = RUNAWAY_TICKS; }  // test
   uint8_t level() const { return 1 + ageMinutes / MINUTES_PER_LEVEL; }
   bool isRegistered(int16_t dex) const {
@@ -155,6 +164,9 @@ private:
   uint8_t mistakeCooldown = 0;
   uint8_t ticksSinceSave = 0;
   bool pendingSave = false;     // guardado periodico pendiente de volcar
+  uint8_t evoDeclinedLv = 0;    // "mantener forma": no ofrecer evolucion hasta subir de nivel
+  uint32_t farDeclinedAge = 0;  // "quedaros juntos": no ofrecer despedida hasta esta edad
+  bool starterPick = false;     // primera partida: esperando que el jugador elija inicial
   uint8_t neglectTicks = 0;
   uint16_t goodTicks = 0;  // racha bien cuidado: forja la DEF
   uint32_t ceremonyUntil = 0;

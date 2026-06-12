@@ -122,6 +122,11 @@ static const uint8_t CRACK2[][2] = { {11,13},{12,14},{11,15},{20,12},{19,13},{20
 static const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{280,90},{160,95} };
 
 bool wasPressed = false;
+// eleccion de inicial (primera partida): Bulbasaur / Charmander / Squirtle, 3 filas
+static const int16_t STARTER_DEX[3] = { 1, 4, 7 };
+#define STARTER_ROW_Y 110
+#define STARTER_ROW_H 70
+#define STARTER_ROW_GAP 8
 // boton-CTA de evolucion (centrado, mitad de pantalla)
 #define EVO_BTN_W 256
 #define EVO_BTN_H 64
@@ -143,6 +148,8 @@ uint8_t dimStage = 0;        // 0 despierto, 1 atenuado (90s), 2 casi apagado (5
 bool swallowGesture = false; // el toque que despierta no acciona nada
 uint32_t holdStart = 0;     // pulsacion larga sobre el bicho
 uint32_t confirmUntil = 0;  // dialogo "soltar?" activo hasta este millis
+uint8_t choiceKind = 0;     // dialogo de decision: 0 ninguno, 1 evolucion, 2 despedida
+uint32_t choiceUntil = 0;   // se cierra solo a este millis
 int16_t tX0, tY0, tXl, tYl; // gesto en curso (inicio y ultima posicion)
 uint32_t tStart = 0;
 bool holdFired = false;
@@ -228,7 +235,7 @@ void loop() {
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
   // (incluye el caso de cumplir al despertar). canEvolveNow es false durmiendo.
   static bool wasEvoReady = false;
-  bool evoReady = pet.canEvolveNow();
+  bool evoReady = pet.wantEvolveButton();
   if (evoReady && !wasEvoReady) sfxPlay(SFX_MEDAL);
   wasEvoReady = evoReady;
   // aviso sombrio cuando el bicho esta a punto de escaparse por abandono
@@ -381,6 +388,11 @@ void handleSerial() {
   } else if (line == "ABANDON") {
     pet.dbgRunawayReady();  // fuerza el estado "lista para escaparse" (test del boton)
     Serial.println("DONE");
+  } else if (line == "WIPE") {
+    pet.factoryReset();     // borra NVS y reinicia -> partida nueva (eleccion de inicial)
+    Serial.println("DONE");
+    delay(100);
+    ESP.restart();
   } else if (line == "REG") {
     Serial.printf("pokedex %u/151:", pet.registeredCount());
     for (int i = 1; i <= 151; i++)
@@ -473,6 +485,7 @@ void handleTouch() {
 void openClock();  // prototipo
 
 void onSwipeV(int dir) {
+  if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (gameOpen || galleryOpen || kbOpen || sackOpen || pet.ceremony) return;
   if (clockOpen) { clockOpen = false; return; }
   if (cardOpen) {
@@ -489,6 +502,7 @@ void onSwipeV(int dir) {
 
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
+  if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (gameOpen || kbOpen || clockOpen) return;
   if (cardOpen) {  // dentro de la ficha: cambiar entre las 4 paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
@@ -525,6 +539,17 @@ void onSwipe(int dir) {
 
 void onTap(int16_t x, int16_t y) {
   // Serial.printf("TOUCH %d %d\n", x, y);  // diagnostico (silenciado: satura el log)
+  if (pet.awaitingStarter()) {  // primera partida: elegir inicial
+    for (int i = 0; i < 3; i++) {
+      int ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP);
+      if (x >= 70 && x <= 396 && y >= ry && y <= ry + STARTER_ROW_H) {
+        pet.chooseStarter(STARTER_DEX[i]);
+        sfxPlay(SFX_TAP);
+        break;
+      }
+    }
+    return;
+  }
   if (galleryOpen) {
     galleryTap(x, y);
     return;
@@ -552,6 +577,19 @@ void onTap(int16_t x, int16_t y) {
     gameTap(x, y);
     return;
   }
+  if (choiceKind) {          // dialogo de decision: boton accion (arriba) / mantener (abajo)
+    bool b1 = (x >= 93 && x <= 373 && y >= 206 && y <= 258);  // accion
+    bool b2 = (x >= 93 && x <= 373 && y >= 268 && y <= 320);  // mantener / quedaros
+    if (choiceKind == 1) {                 // evolucion
+      if (b1) { int16_t old = pet.speciesId; pet.evolve(); evoPmd.load(old, pet.shiny); }
+      else if (b2) pet.declineEvolve();
+    } else if (choiceKind == 2) {          // despedida
+      if (b1) pet.startFarewell();
+      else if (b2) pet.declineFarewell();
+    }
+    choiceKind = 0;
+    return;
+  }
   if (confirmUntil) {        // dialogo "soltar?": SI / NO
     if (millis() < confirmUntil && x >= 118 && x <= 218 && y >= 252 && y <= 304) {
       pet.release();
@@ -574,19 +612,17 @@ void onTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
-  // boton de evolucion (solo visible cuando esta listo)
-  if (pet.canEvolveNow() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
+  // boton de evolucion: abre el dialogo evolucionar/mantener
+  if (pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
       y >= EVO_BTN_Y && y <= EVO_BTN_Y + EVO_BTN_H) {
-    int16_t oldSpec = pet.speciesId;
-    pet.evolve();
-    evoPmd.load(oldSpec, pet.shiny);  // forma anterior para el parpadeo
+    choiceKind = 1; choiceUntil = millis() + 12000;
     return;
   }
-  // botones de final (despedida graceful o escapada por abandono), mismo recuadro
+  // botones de final (mismo recuadro): escapada directa; despedida abre dialogo
   if (x >= FAR_BTN_X && x <= FAR_BTN_X + FAR_BTN_W &&
       y >= FAR_BTN_Y && y <= FAR_BTN_Y + FAR_BTN_H) {
     if (pet.canRunawayNow()) { pet.startRunaway(); return; }
-    if (pet.canFarewellNow()) { pet.startFarewell(); return; }
+    if (pet.wantFarewellButton()) { choiceKind = 2; choiceUntil = millis() + 12000; return; }
   }
   for (int i = 0; i < 4; i++) {
     int dx = x - buttons[i].cx, dy = y - buttons[i].cy;
@@ -729,7 +765,36 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
   }
 }
 
+// primera partida: elige inicial entre Bulbasaur / Charmander / Squirtle
+void renderStarterSelect() {
+  gfx->fillScreen(RGB565_BLACK);
+  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  const char *t = T(S_CHOOSE_STARTER);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(t) * 6, 68);
+  gfx->print(t);
+  for (int i = 0; i < 3; i++) {
+    int16_t d = STARTER_DEX[i];
+    const DexEntry &de = DEX_TBL[d];
+    int ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP);
+    gfx->fillRoundRect(70, ry, 326, STARTER_ROW_H, 14, lerp565(de.accent, UI_WHITE, 6, 8));
+    gfx->drawRoundRect(70, ry, 326, STARTER_ROW_H, 14, de.accent);
+    const uint8_t *th = thumbs.get(d);     // miniatura del inicial (si la SD esta lista)
+    if (th) drawThumb(th, 76, ry - 5, 3, false);
+    gfx->setTextColor(UI_INK);
+    gfx->setTextSize(3);
+    gfx->setCursor(178, ry + 24);
+    gfx->print(de.name);
+  }
+  gfx->flush();
+}
+
 void render() {
+  if (pet.awaitingStarter()) {  // primera partida: elegir inicial (prioridad total)
+    renderStarterSelect();
+    return;
+  }
   if (galleryOpen) {
     renderGallery();
     return;
@@ -808,9 +873,9 @@ void render() {
     drawBars();
     drawButtons();
     drawCelebration();
-    if (pet.canEvolveNow()) drawEvolveButton();           // CTA rojo: evolucionar
-    else if (pet.canRunawayNow()) drawRunawayButton();    // CTA sombrio: escapada (abandono)
-    else if (pet.canFarewellNow()) drawFarewellButton();  // CTA dorado: despedida
+    if (pet.wantEvolveButton()) drawEvolveButton();        // CTA rojo: evolucionar
+    else if (pet.canRunawayNow()) drawRunawayButton();     // CTA sombrio: escapada (abandono)
+    else if (pet.wantFarewellButton()) drawFarewellButton();  // CTA dorado: despedida
   }
 
   if (pet.sleeping) {
@@ -855,6 +920,12 @@ void render() {
       gfx->setCursor(248 + (100 - (int)strlen(T(S_NO)) * 12) / 2, 270);
       gfx->print(T(S_NO));
     }
+  }
+
+  // dialogo de decision (evolucionar/mantener, despedirse/quedaros)
+  if (choiceKind) {
+    if (millis() > choiceUntil) choiceKind = 0;
+    else drawChoiceDialog();
   }
 
   gfx->flush();
@@ -1798,6 +1869,33 @@ void drawCeremony() {
   drawPmdAct(act, x, y, now, true, false, 5);
   if (pet.showHeart())                     // corazon grande siguiendo al bicho
     drawMap(SPR_HEART, 32, x + 50, y - 190, 2, false);
+}
+
+// dialogo de decision (2 botones apilados): evolucionar/mantener o despedirse/quedaros
+void drawChoiceDialog() {
+  const char *q, *o1, *o2;
+  uint16_t c1, c2, t1, t2;
+  if (choiceKind == 1) {  // evolucion
+    q = T(S_EVO_Q); o1 = T(S_EVO_TAP); o2 = T(S_EVO_KEEP);
+    c1 = UI_BAR_BAD; t1 = UI_WHITE; c2 = UI_TRACK; t2 = UI_INK;
+  } else {                // despedida
+    q = T(S_FAR_Q); o1 = T(S_FAR_GO); o2 = T(S_FAR_STAY);
+    c1 = UI_BAR_WARN; t1 = UI_INK; c2 = UI_BAR_OK; t2 = UI_WHITE;
+  }
+  gfx->fillRoundRect(73, 156, 320, 188, 16, UI_WHITE);
+  gfx->drawRoundRect(73, 156, 320, 188, 16, UI_INK);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - (int)strlen(q) * 6, 176);
+  gfx->print(q);
+  gfx->fillRoundRect(93, 206, 280, 52, 12, c1);     // boton accion
+  gfx->setTextColor(t1);
+  gfx->setCursor(CX - (int)strlen(o1) * 6, 224);
+  gfx->print(o1);
+  gfx->fillRoundRect(93, 268, 280, 52, 12, c2);     // boton mantener/quedaros
+  gfx->setTextColor(t2);
+  gfx->setCursor(CX - (int)strlen(o2) * 6, 286);
+  gfx->print(o2);
 }
 
 // boton-CTA rojo y grande para evolucionar (pulsa para llamar la atencion)

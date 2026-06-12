@@ -50,6 +50,9 @@ enum StrId : uint8_t {
   S_EVO_TAP,        // texto del boton de evolucion
   S_FAREWELL_BTN,   // texto del boton de despedida (lleva el nombre: "%s ...")
   S_RUNAWAY_BTN,    // texto del boton de escapada por abandono (final triste)
+  // dialogos de decision (evolucionar/mantener, despedirse/quedaros)
+  S_EVO_Q, S_EVO_KEEP, S_FAR_Q, S_FAR_GO, S_FAR_STAY,
+  S_CHOOSE_STARTER,  // titulo de la eleccion del inicial (primera vez)
   STR_COUNT
 };
 

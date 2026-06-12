@@ -32,6 +32,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Evoluciona en %u niv.", "Descuidos: %u",
     "SON ON", "SON OFF",
     "EVOLUCIONAR", "%s quiere decirte algo...", "%s se siente abandonado...",
+    "Evolucionar?", "Mantener forma", "Despedirse?", "Despedirse", "Quedaros juntos",
+    "Elige tu inicial",
   },
   // ---------------- EN ----------------
   {
@@ -58,6 +60,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Evolves in %u lv.", "Slip-ups: %u",
     "SND ON", "SND OFF",
     "EVOLVE!", "%s wants to tell you...", "%s feels abandoned...",
+    "Evolve?", "Keep form", "Say goodbye?", "Goodbye", "Stay together",
+    "Choose your starter",
   },
   // ---------------- FR ----------------
   {
@@ -84,6 +88,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Evolue dans %u niv.", "Negligences: %u",
     "SON ON", "SON OFF",
     "EVOLUER", "%s veut te parler...", "%s se sent abandonne...",
+    "Evoluer?", "Garder forme", "Dire adieu?", "Adieu", "Rester ensemble",
+    "Choisis ton starter",
   },
   // ---------------- DE ----------------
   {
@@ -110,6 +116,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Entwickelt in %u Lv.", "Patzer: %u",
     "TON AN", "TON AUS",
     "ENTWICKELN", "%s will dir etwas sagen...", "%s fuehlt sich verlassen...",
+    "Entwickeln?", "Form behalten", "Abschied?", "Lebwohl", "Zusammen bleiben",
+    "Waehle dein Starter",
   },
   // ---------------- IT ----------------
   {
@@ -136,6 +144,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Evolve tra %u liv.", "Disattenzioni: %u",
     "AUD ON", "AUD OFF",
     "EVOLVI", "%s vuole dirti qualcosa...", "%s si sente abbandonato...",
+    "Evolvere?", "Mantieni forma", "Salutare?", "Addio", "Restare insieme",
+    "Scegli l'iniziale",
   },
   // ---------------- PT ----------------
   {
@@ -162,6 +172,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Evolui em %u niv.", "Descuidos: %u",
     "SOM ON", "SOM OFF",
     "EVOLUIR", "%s quer dizer-te algo...", "%s sente-se abandonado...",
+    "Evoluir?", "Manter forma", "Despedir?", "Adeus", "Ficar juntos",
+    "Escolhe o inicial",
   },
 };
 
