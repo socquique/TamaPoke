@@ -68,17 +68,18 @@ void Pet::syncClock(uint32_t nowEpoch) {
     }
     if (sleeping) {
       energy = clamp100(energy + 6);
-      fullness = dropTo(fullness, 1, 15);
-    } else {
-      fullness = dropTo(fullness, 2, 15);
-      energy = dropTo(energy, 1, 15);
+      continue;  // descanso: comida/higiene/alegria CONGELADAS (igual que en vivo)
     }
+    fullness = dropTo(fullness, 2, 15);
+    energy = dropTo(energy, 1, 15);
     hygiene = dropTo(hygiene, 1, 15);
     joy = dropTo(joy, 1, 15);
   }
   if (!isEgg()) {
-    uint8_t p = poops + mins / 240;
-    poops = p > 3 ? 3 : p;
+    if (!sleeping) {  // durmiendo no ensucia
+      uint8_t p = poops + mins / 240;
+      poops = p > 3 ? 3 : p;
+    }
     checkEvolution();  // pudo subir de nivel mientras dormias
   }
   Serial.printf("offline: %u min aplicados (nv.%u)\n", mins, level());
@@ -106,18 +107,24 @@ void Pet::tick() {
     return;
   }
 
+  // el sueño es descanso: la energia se recupera y las necesidades se CONGELAN
+  // (amanece como lo dejaste, sin descuidos ni escapadas). El peso aun se quema
+  // un poco; la racha de buen cuidado (goodTicks) queda en pausa.
   if (sleeping) {
     energy = clamp100(energy + 6);
-    fullness = clamp100(fullness - 1);
-  } else {
-    fullness = clamp100(fullness - 2);
-    energy = clamp100(energy - 1);
-    if (fullness > 40 && poops < 3 && random(100) < 15) poops++;
+    if (weight > 0 && ageMinutes % 3 == 0) weight--;
+    checkMedals();  // aun puede cruzar un nivel por edad mientras duerme
+    if (++ticksSinceSave >= 5) pendingSave = true;
+    return;
   }
+
+  fullness = clamp100(fullness - 2);
+  energy = clamp100(energy - 1);
+  if (fullness > 40 && poops < 3 && random(100) < 15) poops++;
 
   hygiene = clamp100(hygiene - 1 - 4 * poops);
   // el sobrepeso da pereza: la energia cae el doble
-  if (weight > 50 && !sleeping) energy = clamp100(energy - 1);
+  if (weight > 50) energy = clamp100(energy - 1);
   if (weight > 0 && ageMinutes % 3 == 0) weight--;
 
   // la disciplina forja la defensa: 12 h seguidas bien cuidado = +1 DEF
