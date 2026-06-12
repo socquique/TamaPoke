@@ -66,9 +66,14 @@ void Pet::syncClock(uint32_t nowEpoch) {
       if (ageMinutes >= 3) hatch();  // eclosiona en tu ausencia
       continue;
     }
-    if (sleeping) {
+    if (sleeping) {  // descanso: baja lento y con suelo, igual que en vivo
       energy = clamp100(energy + 6);
-      continue;  // descanso: comida/higiene/alegria CONGELADAS (igual que en vivo)
+      if (ageMinutes % 2 == 0) {
+        fullness = dropTo(fullness, 1, 30);
+        joy = dropTo(joy, 1, 35);
+      }
+      if (ageMinutes % 3 == 0) hygiene = dropTo(hygiene, 1, 45);
+      continue;
     }
     fullness = dropTo(fullness, 2, 15);
     energy = dropTo(energy, 1, 15);
@@ -107,12 +112,18 @@ void Pet::tick() {
     return;
   }
 
-  // el sueño es descanso: la energia se recupera y las necesidades se CONGELAN
-  // (amanece como lo dejaste, sin descuidos ni escapadas). El peso aun se quema
-  // un poco; la racha de buen cuidado (goodTicks) queda en pausa.
+  // el sueño es descanso: la energia se recupera y las necesidades bajan MUCHO
+  // mas lento que despierto y con suelo (amanece pidiendo algo de mimo, no a
+  // cero, sin descuidos ni escapadas). despierto: comida -2/min, hig/joy -1/min.
+  // El peso aun se quema; la racha de buen cuidado (goodTicks) queda en pausa.
   if (sleeping) {
     energy = clamp100(energy + 6);
     if (weight > 0 && ageMinutes % 3 == 0) weight--;
+    if (ageMinutes % 2 == 0) {                 // ~4x mas lento que despierto
+      fullness = dropTo(fullness, 1, 30);
+      joy = dropTo(joy, 1, 35);
+    }
+    if (ageMinutes % 3 == 0) hygiene = dropTo(hygiene, 1, 45);
     checkMedals();  // aun puede cruzar un nivel por edad mientras duerme
     if (++ticksSinceSave >= 5) pendingSave = true;
     return;

@@ -150,7 +150,9 @@ void setup() {
   // handleTouch).
   Wire.setTimeOut(50);
 
-  if (!gfx->begin()) Serial.println("gfx->begin() fallo");
+  // QSPI a 80MHz (por defecto 40): el flush del framebuffer es el cuello de
+  // botella del fps (~56ms a 40MHz). Si el panel mostrara basura, bajar a 40M.
+  if (!gfx->begin(80000000)) Serial.println("gfx->begin() fallo");
   panel->setBrightness(180);
 
   touch.setPins(TP_RESET, TP_INT);
