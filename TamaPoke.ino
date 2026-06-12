@@ -345,6 +345,9 @@ void handleSerial() {
   } else if (line == "BYE") {
     pet.startFarewell();
     Serial.println("DONE");
+  } else if (line == "RUN") {
+    pet.startRunaway();
+    Serial.println("DONE");
   } else if (line == "REG") {
     Serial.printf("pokedex %u/151:", pet.registeredCount());
     for (int i = 1; i <= 151; i++)
@@ -712,7 +715,7 @@ void render() {
                       : (pet.ceremony == CER_RUNAWAY) ? T(S_RUNAWAY)
                                                       : T(S_GOODBYE);
     drawHeader(d.name, d.accent, msg);
-    drawPet();
+    drawCeremony();
     gfx->flush();
     return;
   }
@@ -1664,6 +1667,38 @@ void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
   gfx->setTextSize(2);
   gfx->setCursor(CX - strlen(msg) * 6, 90);
   gfx->print(msg);
+}
+
+// animacion de la ceremonia (10s): despedida = reverencia con corazones y se
+// aleja caminando; escapada = se asusta y sale corriendo. Sustituye al idle.
+void drawCeremony() {
+  if (!pmd.loaded) { drawPet(); return; }  // respaldo si no hay sprite PMD
+  uint32_t now = millis();
+  float t = pet.ceremonyT();               // 0..1 a lo largo de los 10s
+  bool panic = (pet.ceremony == CER_RUNAWAY);
+  int x = CX, y = PET_GROUND;
+  uint8_t act = PMD_IDLE;
+
+  if (panic) {
+    if (t < 0.25f) {                       // susto en el sitio (tembleque)
+      act = pmd.has(PMD_HURT) ? PMD_HURT : PMD_IDLE;
+      x = CX + (int)(6 * sinf(now * 0.05f));
+    } else {                               // huye rapido por la izquierda
+      act = pmd.has(PMD_WALKL) ? PMD_WALKL : PMD_IDLE;
+      x = CX - (int)(((t - 0.25f) / 0.40f) * (CX + 140));
+    }
+  } else {
+    if (t < 0.45f) {                       // reverencia / pose de despedida
+      act = pmd.has(PMD_POSE) ? PMD_POSE : (pmd.has(PMD_NOD) ? PMD_NOD : PMD_IDLE);
+    } else {                               // se aleja por la derecha
+      act = pmd.has(PMD_WALKR) ? PMD_WALKR : PMD_IDLE;
+      x = CX + (int)(((t - 0.45f) / 0.55f) * (CX + 140));
+    }
+  }
+
+  drawPmdAct(act, x, y, now, true, false, 5);
+  if (!panic && pet.showHeart())           // corazones siguiendo al bicho
+    drawMap(SPR_HEART, 32, x + 50, y - 190, 2, false);
 }
 
 void drawPet() {

@@ -92,6 +92,7 @@ public:
   void syncClock(uint32_t nowEpoch);  // aplica el tiempo transcurrido apagado
   void setClock(uint32_t nowEpoch);   // fija la hora sin aplicar progresion
   void startFarewell();  // tambien usable desde la consola serie (BYE)
+  void startRunaway();   // tambien usable desde la consola serie (RUN)
 
   bool isEgg() const { return speciesId < 0; }
   uint8_t eggCracks() const { return eggTaps; }
@@ -111,6 +112,13 @@ public:
   int16_t pickEggSpecies();        // publica para poder simular tiradas (EGGS)
   uint8_t lowestStat() const { return min(min(fullness, joy), min(energy, hygiene)); }
   PetMood mood() const;
+  // progreso de la ceremonia de despedida/escapada, 0..1 (para animarla)
+  float ceremonyT() const {
+    if (ceremony == CER_NONE) return 0.0f;
+    uint32_t n = millis();
+    uint32_t left = ceremonyUntil > n ? ceremonyUntil - n : 0;
+    return 1.0f - (float)left / (float)CEREMONY_MS;
+  }
 
   // racha / vinculo / medallas / nombre
   void rename(const char *name);
@@ -152,7 +160,6 @@ private:
   void hatch();
   void checkEvolution();
   void registerSpecies(int16_t dex);
-  void startRunaway();
   void save();
   void load();
   static uint8_t clamp100(int v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
