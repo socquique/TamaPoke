@@ -212,6 +212,15 @@ void loop() {
 
   updateBrightness(now);
 
+  // vuelca el autoguardado periodico SOLO con la pantalla atenuada/apagada o
+  // durmiendo: la escritura a NVS congela ~1s ambos cores (caché de flash off),
+  // y aqui no hay animacion que se corte ni dedo esperando respuesta. Con 90s
+  // de inactividad la pantalla ya atenua, asi que se vuelca enseguida; el uso
+  // activo persiste igual por los guardados de cada accion (comer/jugar/...).
+  if (pet.savePending() && (screenOff || dimStage >= 1 || pet.sleeping)) {
+    pet.flushSave();
+  }
+
   // anota la hora real cada 30 s (se persiste en cada save del juego)
   static uint32_t lastClock = 0;
   if (now - lastClock > 30000) {

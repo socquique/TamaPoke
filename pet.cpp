@@ -160,7 +160,15 @@ void Pet::tick() {
     startFarewell();
   }
 
-  if (++ticksSinceSave >= 5) save();
+  // autoguardado periodico: NO escribir a flash aqui (corre dentro del loop,
+  // mientras se anima); solo marcar y dejar que el loop lo vuelque al atenuar
+  if (++ticksSinceSave >= 5) pendingSave = true;
+}
+
+// vuelca el guardado periodico pendiente (lo llama el loop en un momento sin
+// animacion para que el paron de la escritura a flash no se vea)
+void Pet::flushSave() {
+  if (pendingSave) save();
 }
 
 // quedan miembros sin registrar en la linea evolutiva de esta base?
@@ -498,6 +506,7 @@ PetMood Pet::mood() const {
 
 void Pet::save() {
   ticksSinceSave = 0;
+  pendingSave = false;
   prefs.putUChar("full", fullness);
   prefs.putUChar("joy", joy);
   prefs.putUChar("ene", energy);

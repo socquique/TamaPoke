@@ -119,6 +119,12 @@ public:
   bool showMilestone() const { return millis() < milestoneUntil; }
   int careBonus() const;  // mejora del huevo por racha + vinculo
 
+  // guardado periodico diferido: tick() marca pendiente y el loop lo vuelca
+  // cuando la pantalla esta atenuada/apagada (la escritura a flash congela
+  // ~1s ambos cores: asi no se ve ni corta el tactil)
+  bool savePending() const { return pendingSave; }
+  void flushSave();
+
 private:
   Preferences prefs;
   uint32_t lastTick = 0;
@@ -130,6 +136,7 @@ private:
   uint8_t eggTaps = 0;
   uint8_t mistakeCooldown = 0;
   uint8_t ticksSinceSave = 0;
+  bool pendingSave = false;     // guardado periodico pendiente de volcar
   uint8_t neglectTicks = 0;
   uint16_t goodTicks = 0;  // racha bien cuidado: forja la DEF
   uint32_t ceremonyUntil = 0;
