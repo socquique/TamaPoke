@@ -99,6 +99,8 @@ public:
   bool eating() const { return millis() < eatUntil; }
   bool showHeart() const { return millis() < heartUntil; }
   bool evolving() const { return millis() < evolveUntil; }
+  bool canEvolveNow() const;  // condiciones de evolucion cumplidas (lista)
+  void evolve();              // dispara la transformacion (la llama un toque del usuario)
   uint8_t level() const { return 1 + ageMinutes / MINUTES_PER_LEVEL; }
   bool isRegistered(int16_t dex) const {
     return dex >= 1 && dex <= 151 && (dexReg[(dex - 1) >> 3] & (1 << ((dex - 1) & 7)));
@@ -158,7 +160,6 @@ private:
   void checkMedals();
   void tick();
   void hatch();
-  void checkEvolution();
   void registerSpecies(int16_t dex);
   void save();
   void load();

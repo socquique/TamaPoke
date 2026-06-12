@@ -30,6 +30,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PROGRESO", "Nv.%u", "%u min para Nv.%u", "EVOLUCION", "Forma final",
     "Listo para evolucionar!", "Sube todo a 40 para evolucionar",
     "Evoluciona en %u niv.", "Descuidos: %u",
+    "SON ON", "SON OFF",
+    "Listo! Tocame",
   },
   // ---------------- EN ----------------
   {
@@ -54,6 +56,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PROGRESS", "Lv.%u", "%u min to Lv.%u", "EVOLUTION", "Final form",
     "Ready to evolve!", "All needs >=40 to evolve",
     "Evolves in %u lv.", "Slip-ups: %u",
+    "SND ON", "SND OFF",
+    "Ready! Tap me",
   },
 };
 

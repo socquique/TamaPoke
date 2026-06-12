@@ -537,18 +537,21 @@ void onTap(int16_t x, int16_t y) {
       int item = (x - 101) / 66;
       if (item == 3) pet.feedCandy();
       else pet.feedBerry(item);
+      sfxPlay(SFX_EAT);
     }
     feedMenuUntil = 0;
     return;
   }
   if (pet.isEgg()) {
     pet.eggTap();
+    sfxPlay(SFX_TAP);
     return;
   }
   for (int i = 0; i < 4; i++) {
     int dx = x - buttons[i].cx, dy = y - buttons[i].cy;
     if (dx * dx + dy * dy <= BTN_HIT * BTN_HIT) {
       Serial.printf("BTN %d\n", i);
+      sfxPlay(SFX_TAP);
       if (i == 0) {
         if (!pet.sleeping) feedMenuUntil = millis() + 6000;
       } else if (i == 1) {
@@ -561,10 +564,16 @@ void onTap(int16_t x, int16_t y) {
       return;
     }
   }
-  // tocar al bicho = caricia
+  // tocar al bicho: si esta listo para evolucionar, lo hace AHORA (delante de
+  // ti); si no, es una caricia
   if (inPetZone(x, y)) {
     Serial.println("PET");
-    pet.caress();
+    if (pet.canEvolveNow()) {
+      pet.evolve();
+    } else {
+      pet.caress();
+      if (!pet.sleeping) sfxPlay(SFX_HEART);
+    }
   }
 }
 
@@ -844,6 +853,7 @@ void gameTap(int16_t x, int16_t y) {
   float dx = ballX - x, dy = ballY - y;
   if (dx * dx + dy * dy < 74 * 74) {  // toque a la bola!
     gameScore++;
+    sfxPlay(SFX_PLAY);
     // golpe mas suave: impulso moderado que crece poco a poco con la puntuacion
     float lift = 6.6f + (gameScore > 16 ? 3.5f : gameScore * 0.22f);
     ballVY = -lift;
@@ -879,6 +889,7 @@ void stepGame() {
     if (++gameMisses >= 3) {
       gameNewHi = (gameScore > pet.gameHi);
       pet.playResult(gameScore);  // actualiza el record y da felicidad
+      sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
       gameOverUntil = millis() + 4000;
     } else {
       respawnBall();
@@ -952,6 +963,7 @@ void renderSack() {
   if (now >= sackUntil) {
     sackNewHi = (sackHits > pet.strHi);
     sackGain = pet.trainStrength(sackHits);
+    sfxPlay(sackNewHi ? SFX_MEDAL : SFX_PLAY);
     sackOverUntil = now + 3500;
     gfx->flush();
     return;
@@ -1179,10 +1191,17 @@ void renderClock() {
   gfx->setCursor(276, 256);
   gfx->print(T(S_MIN));
 
-  // selector de idioma: etiqueta + dos pildoras
-  gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(LANG_PILL_X[0] - strlen(T(S_LANG_LABEL)) * 12 - 10, LANG_PILL_Y + 8);
-  gfx->print(T(S_LANG_LABEL));
+  // interruptor de sonido (izquierda de la fila de idioma)
+  bool snd = audioEnabled();
+  const char *sl = snd ? T(S_SND_ON) : T(S_SND_OFF);
+  gfx->fillRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, snd ? UI_BAR_OK : UI_WHITE);
+  gfx->drawRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, UI_INK);
+  gfx->setTextColor(snd ? UI_BG_DAY : UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(34 + (96 - (int)strlen(sl) * 12) / 2, LANG_PILL_Y + 8);
+  gfx->print(sl);
+
+  // selector de idioma: dos pildoras
   for (int i = 0; i < LANG_COUNT; i++) {
     bool on = (gLang == i);
     gfx->fillRoundRect(LANG_PILL_X[i], LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8,
@@ -1214,8 +1233,13 @@ void clockTap(int16_t x, int16_t y) {
     else if (x >= 318 && x < 376) clockM = (clockM + 1) % 60;
     return;
   }
-  if (y >= LANG_PILL_Y && y <= LANG_PILL_Y + LANG_PILL_H) {  // pildoras de idioma
-    for (int i = 0; i < LANG_COUNT; i++)
+  if (y >= LANG_PILL_Y && y <= LANG_PILL_Y + LANG_PILL_H) {
+    if (x >= 34 && x < 130) {                  // interruptor de sonido
+      audioSetEnabled(!audioEnabled());
+      if (audioEnabled()) sfxPlay(SFX_TAP);    // confirma al encender
+      return;
+    }
+    for (int i = 0; i < LANG_COUNT; i++)       // pildoras de idioma
       if (x >= LANG_PILL_X[i] && x < LANG_PILL_X[i] + LANG_PILL_W) { setLang((Lang)i); return; }
   }
   if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
@@ -2026,6 +2050,7 @@ const char *eggMsg() {
 
 const char *statusMsg() {
   if (pet.evolving()) return T(S_EVOLVING);
+  if (pet.canEvolveNow()) return T(S_EVO_TAP);  // listo: avisa para que lo toques
   if (bathUntil) return "Splish splash!";  // onomatopeya universal
   if (pet.sleeping) return "Zzz...";
   if (pet.eating()) return T(S_EATING);

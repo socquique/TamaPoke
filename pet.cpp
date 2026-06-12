@@ -1,5 +1,6 @@
 #include "pet.h"
 #include "dex.h"
+#include "audio.h"
 
 void Pet::begin() {
   prefs.begin("tamapoke", false);
@@ -85,7 +86,8 @@ void Pet::syncClock(uint32_t nowEpoch) {
       uint8_t p = poops + mins / 240;
       poops = p > 3 ? 3 : p;
     }
-    checkEvolution();  // pudo subir de nivel mientras dormias
+    // la evolucion NO se aplica offline: queda lista y la dispara el usuario
+    // tocando al bicho cuando vuelve (para que vea la transformacion)
   }
   Serial.printf("offline: %u min aplicados (nv.%u)\n", mins, level());
   save();
@@ -129,6 +131,8 @@ void Pet::tick() {
     return;
   }
 
+  if (ageMinutes % MINUTES_PER_LEVEL == 0) sfxPlay(SFX_LEVEL);  // subio de nivel (despierto)
+
   fullness = clamp100(fullness - 2);
   energy = clamp100(energy - 1);
   if (fullness > 40 && poops < 3 && random(100) < 15) poops++;
@@ -162,8 +166,7 @@ void Pet::tick() {
     if (bond > 3) bond -= 3;  // el descuido enfria el vinculo
   }
 
-  checkEvolution();
-  checkMedals();
+  checkMedals();  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick
 
   // abandono total: con TODO a cero durante una hora, se escapa
   if (fullness == 0 && joy == 0 && energy == 0 && hygiene == 0) {
@@ -302,6 +305,7 @@ void Pet::checkMedals() {
     for (uint16_t m = gained; m; m &= (m - 1)) totalMedals++;
     newMedal = gained;
     medalUntil = millis() + 4000;
+    if (!sleeping) sfxPlay(SFX_MEDAL);
     save();
   }
 }
@@ -339,6 +343,7 @@ void Pet::startFarewell() {
   ceremony = CER_FAREWELL;
   ceremonyUntil = millis() + CEREMONY_MS;
   heartUntil = ceremonyUntil;  // corazones durante toda la despedida
+  sfxPlay(SFX_BYE);
   save();
 }
 
@@ -347,6 +352,7 @@ void Pet::startRunaway() {
   lastEnd = CER_RUNAWAY;
   ceremony = CER_RUNAWAY;
   ceremonyUntil = millis() + CEREMONY_MS;
+  sfxPlay(SFX_BYE);
   save();
 }
 
@@ -356,6 +362,7 @@ void Pet::release() {
   ceremony = CER_RELEASE;
   ceremonyUntil = millis() + CEREMONY_MS;
   heartUntil = ceremonyUntil;
+  sfxPlay(SFX_BYE);
   save();
 }
 
@@ -375,33 +382,39 @@ void Pet::hatch() {
   nick[0] = 0;
   registerSpecies(speciesId);  // criado = registrado en la pokedex
   checkMedals();     // por si nace ya en forma final (legendario)
+  sfxPlay(SFX_HATCH);
   save();
 }
 
-void Pet::checkEvolution() {
-  if (isEgg() || sleeping) return;  // guard: nunca indexar DEX_TBL[-1]
+// ¿se dan ya las condiciones para evolucionar? Cada descuido retrasa la
+// evolucion 1 nivel, y ademas tiene que estar bien cuidado en ese momento
+// (ninguna estadistica por debajo de 40). NO evoluciona sola: la dispara el
+// usuario tocando al bicho (evolve()), para que vea la transformacion.
+bool Pet::canEvolveNow() const {
+  if (isEgg() || sleeping || ceremony != CER_NONE) return false;
   const DexEntry &d = DEX_TBL[speciesId];
-  if (d.evolvesTo == 0) return;
+  if (d.evolvesTo == 0) return false;
+  return level() >= (uint8_t)(d.evolveLevel + careMistakes) && lowestStat() >= 40;
+}
 
-  // Cada descuido retrasa la evolucion 1 nivel, y ademas tiene que estar
-  // bien cuidado en ese momento (ninguna estadistica por debajo de 40)
-  uint8_t needed = d.evolveLevel + careMistakes;
-  if (level() >= needed && lowestStat() >= 40) {
-    prevSpeciesId = speciesId;
-    int16_t next = d.evolvesTo;
-    if (speciesId == DEX_EEVEE) {
-      // rama de Eevee: prefiere la evolucion que falte en la pokedex
-      int16_t opts[3];
-      int n = 0;
-      for (int16_t b = 134; b <= 136; b++)
-        if (!isRegistered(b)) opts[n++] = b;
-      next = n > 0 ? opts[random(n)] : (int16_t)(134 + random(3));
-    }
-    speciesId = next;
-    registerSpecies(speciesId);
-    evolveUntil = millis() + EVOLVE_ANIM_MS;
-    save();
+void Pet::evolve() {
+  if (!canEvolveNow()) return;
+  const DexEntry &d = DEX_TBL[speciesId];
+  prevSpeciesId = speciesId;
+  int16_t next = d.evolvesTo;
+  if (speciesId == DEX_EEVEE) {
+    // rama de Eevee: prefiere la evolucion que falte en la pokedex
+    int16_t opts[3];
+    int n = 0;
+    for (int16_t b = 134; b <= 136; b++)
+      if (!isRegistered(b)) opts[n++] = b;
+    next = n > 0 ? opts[random(n)] : (int16_t)(134 + random(3));
   }
+  speciesId = next;
+  registerSpecies(speciesId);
+  sfxPlay(SFX_EVOLVE);
+  evolveUntil = millis() + EVOLVE_ANIM_MS;
+  save();
 }
 
 void Pet::feed() {

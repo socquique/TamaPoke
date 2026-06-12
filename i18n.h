@@ -44,6 +44,9 @@ enum StrId : uint8_t {
   // ficha: pagina de progreso
   S_PROGRESS, S_LVL_FMT, S_NEXT_LVL_FMT, S_EVO_LABEL, S_FINAL_FORM,
   S_EVO_READY, S_EVO_BLOCKED, S_EVO_IN_FMT, S_MISTAKES_FMT,
+  // interruptor de sonido (ajustes)
+  S_SND_ON, S_SND_OFF,
+  S_EVO_TAP,  // aviso en pantalla: listo para evolucionar, tocame
   STR_COUNT
 };
 
