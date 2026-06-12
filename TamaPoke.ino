@@ -454,9 +454,9 @@ void onSwipeV(int dir) {
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
   if (gameOpen || kbOpen || clockOpen) return;
-  if (cardOpen) {  // dentro de la ficha: cambiar entre las 3 paginas
+  if (cardOpen) {  // dentro de la ficha: cambiar entre las 4 paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
-    cardPage = p < 0 ? 0 : (p > 2 ? 2 : p);
+    cardPage = p < 0 ? 0 : (p > 3 ? 3 : p);
     return;
   }
   if (!galleryOpen) {
@@ -1362,17 +1362,78 @@ void renderCardMedals() {
   }
 }
 
+// pagina 3: progreso (nivel, evolucion, descuidos) — saca a la luz mecanicas
+// que antes eran invisibles (cuanto falta para subir/evolucionar y por que)
+void renderCardProgress() {
+  const DexEntry &d = DEX_TBL[pet.speciesId];
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_PROGRESS)) * 9, 44);
+  gfx->print(T(S_PROGRESS));
+
+  // nivel grande
+  char lv[10];
+  snprintf(lv, sizeof(lv), T(S_LVL_FMT), pet.level());
+  gfx->setTextSize(5);
+  gfx->setCursor(CX - strlen(lv) * 15, 86);
+  gfx->print(lv);
+
+  // barra de progreso al siguiente nivel (1 nivel = 60 min de juego)
+  uint8_t into = pet.ageMinutes % MINUTES_PER_LEVEL;
+  int bx = 93, bw = 280, by = 158, bh = 22;
+  gfx->fillRoundRect(bx, by, bw, bh, 6, UI_TRACK);
+  int fw = (bw - 4) * into / MINUTES_PER_LEVEL;
+  if (fw > 0) gfx->fillRoundRect(bx + 2, by + 2, fw, bh - 4, 5, UI_BAR_OK);
+  char nx[26];
+  snprintf(nx, sizeof(nx), T(S_NEXT_LVL_FMT), MINUTES_PER_LEVEL - into, pet.level() + 1);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(nx) * 6, by + 32);
+  gfx->print(nx);
+
+  // estado de evolucion
+  gfx->setTextColor(UI_TRACK);
+  gfx->setCursor(CX - strlen(T(S_EVO_LABEL)) * 6, 230);
+  gfx->print(T(S_EVO_LABEL));
+  char evoBuf[28];
+  const char *evo;
+  uint16_t evoCol = UI_INK;
+  if (d.evolvesTo == 0) {
+    evo = T(S_FINAL_FORM);
+  } else {
+    int needed = d.evolveLevel + pet.careMistakes;
+    if (pet.level() >= needed) {
+      if (pet.lowestStat() >= 40) { evo = T(S_EVO_READY); evoCol = UI_BAR_OK; }
+      else { evo = T(S_EVO_BLOCKED); evoCol = UI_BAR_BAD; }
+    } else {
+      snprintf(evoBuf, sizeof(evoBuf), T(S_EVO_IN_FMT), needed - pet.level());
+      evo = evoBuf;
+    }
+  }
+  gfx->setTextColor(evoCol);
+  gfx->setCursor(CX - strlen(evo) * 6, 256);
+  gfx->print(evo);
+
+  // descuidos (retrasan la evolucion)
+  char ms[24];
+  snprintf(ms, sizeof(ms), T(S_MISTAKES_FMT), pet.careMistakes);
+  gfx->setTextColor(pet.careMistakes > 0 ? UI_BAR_BAD : UI_INK);
+  gfx->setCursor(CX - strlen(ms) * 6, 312);
+  gfx->print(ms);
+}
+
 void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   if (cardPage == 0) renderCardProfile();
   else if (cardPage == 1) renderCardStats();
-  else renderCardMedals();
+  else if (cardPage == 2) renderCardMedals();
+  else renderCardProgress();
 
-  // indicador de 3 paginas + ayuda
-  for (int i = 0; i < 3; i++) {
-    if (i == cardPage) gfx->fillCircle(207 + i * 26, 374, 5, UI_INK);
-    else gfx->drawCircle(207 + i * 26, 374, 4, UI_INK);
+  // indicador de 4 paginas + ayuda
+  for (int i = 0; i < 4; i++) {
+    if (i == cardPage) gfx->fillCircle(194 + i * 26, 374, 5, UI_INK);
+    else gfx->drawCircle(194 + i * 26, 374, 4, UI_INK);
   }
   gfx->setTextColor(UI_TRACK);
   gfx->setTextSize(2);

@@ -41,6 +41,9 @@ enum StrId : uint8_t {
   S_BAR_FOOD, S_BAR_JOY, S_BAR_ENE, S_BAR_HYG,
   // marcador en vivo del minijuego
   S_REC_FMT,
+  // ficha: pagina de progreso
+  S_PROGRESS, S_LVL_FMT, S_NEXT_LVL_FMT, S_EVO_LABEL, S_FINAL_FORM,
+  S_EVO_READY, S_EVO_BLOCKED, S_EVO_IN_FMT, S_MISTAKES_FMT,
   STR_COUNT
 };
 
