@@ -17,3 +17,6 @@ esptool.py --chip esp32s3 merge-bin -o web/firmware/tamapoke.bin \
   0x10000 "$B/TamaPoke.ino.bin"
 
 echo "OK -> web/firmware/tamapoke.bin ($(du -h web/firmware/tamapoke.bin | cut -f1))"
+
+echo "Empaquetando sprites..."
+python3 tools/pack_bundle.py

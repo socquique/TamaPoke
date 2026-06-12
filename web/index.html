@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TamaPoke · Instalador</title>
+<title>TamaPoke · Installer</title>
 <style>
   :root { --bg:#f2efe1; --ink:#2a2a36; --accent:#4f93c4; --ok:#58b868; --bad:#e8503a; --track:#d8d2bd; }
   * { box-sizing: border-box; }
@@ -36,49 +36,49 @@
 <body>
 <div class="wrap">
   <h1>🐢 TamaPoke</h1>
-  <p class="sub">Tamagotchi de los 151 para la Waveshare ESP32-S3-Touch-AMOLED-1.75.
-     Instálalo desde el navegador, sin Arduino ni drivers.</p>
+  <p class="sub">A 151-Pokémon tamagotchi for the Waveshare ESP32-S3-Touch-AMOLED-1.75.
+     Install it from your browser — no Arduino, no drivers.</p>
 
   <p class="unsupported" id="unsupported">
-    ⚠️ Tu navegador no soporta Web Serial. Usa <b>Chrome</b> o <b>Edge</b> en ordenador.
+    ⚠️ Your browser doesn't support Web Serial. Use <b>Chrome</b> or <b>Edge</b> on a computer.
   </p>
 
-  <h2><span class="num">1</span>Flashea el firmware</h2>
+  <h2><span class="num">1</span>Flash the firmware</h2>
   <div class="step">
-    <p>Conecta la placa por USB y pulsa instalar. Elige el puerto y espera.</p>
+    <p>Plug the board in via USB and press install. Pick the port and wait.</p>
     <esp-web-install-button manifest="manifest.json">
-      <button slot="activate">⚡ Instalar TamaPoke</button>
-      <span slot="unsupported">Navegador no compatible (usa Chrome/Edge).</span>
-      <span slot="not-allowed">Necesita HTTPS.</span>
+      <button slot="activate">⚡ Install TamaPoke</button>
+      <span slot="unsupported">Browser not supported (use Chrome/Edge).</span>
+      <span slot="not-allowed">Needs HTTPS.</span>
     </esp-web-install-button>
   </div>
 
-  <h2><span class="num">2</span>Carga los sprites en la microSD</h2>
+  <h2><span class="num">2</span>Load the sprites onto the microSD</h2>
   <div class="step">
-    <p>Mete una microSD en la placa (se formatea sola). Selecciona los archivos
-       <code>.bin</code> de los sprites (carpeta <code>tools/sdcard/mons/</code>
-       del repo, o genéralos con <code>tools/pack_*.py</code>) y se copian por USB
-       sin sacar la tarjeta.</p>
-    <p class="note">Cierra la pestaña de instalación del paso 1 antes (solo un
-       programa puede usar el puerto a la vez).</p>
+    <p>Put a microSD into the board (it formats itself). Press <b>Connect board</b>
+       and then <b>Load sprites</b>: they download and copy over USB automatically
+       (~58 MB, a few minutes). Don't remove the card.</p>
+    <p class="note">Close the step-1 install tab first (only one program can use
+       the port at a time).</p>
     <div class="row">
-      <button id="connect">🔌 Conectar placa</button>
-      <input id="files" type="file" accept=".bin" multiple disabled>
+      <button id="connect">🔌 Connect board</button>
+      <button id="auto" disabled>⬇️ Load sprites</button>
     </div>
+    <p class="note">Have your own <code>.bin</code> files? <label style="cursor:pointer;text-decoration:underline">pick them manually<input id="files" type="file" accept=".bin" multiple disabled hidden></label></p>
     <div class="bar" id="bar"><div></div></div>
     <pre id="log"></pre>
   </div>
 
-  <h2>Cómo se juega</h2>
-  <p>Cuida tu huevo hasta que eclosione, dale de comer, juega, entrénalo y
-     complétalos todos. Toca el bicho para mimarlo; desliza para abrir la
-     Pokédex (horizontal), la ficha (arriba) o ajustar la hora (abajo); el botón
-     físico PWR apaga la pantalla (corto) o todo (largo).
-     Más en el <a href="https://github.com/socquique/TamaPoke" target="_blank">repositorio</a>.</p>
+  <h2>How to play</h2>
+  <p>Care for your egg until it hatches, feed it, play, train it and complete them
+     all. Tap the creature to pet it; swipe to open the Pokédex (sideways), the
+     stat card (up) or set the clock (down); the physical PWR button turns the
+     screen off (short press) or everything off (long press).
+     More in the <a href="https://github.com/socquique/TamaPoke" target="_blank">repository</a>.</p>
 
-  <p class="note">Sprites de <a href="https://github.com/PMDCollab/SpriteCollab" target="_blank">PMD SpriteCollab</a>
-     y <a href="https://play.pokemonshowdown.com" target="_blank">Pokémon Showdown</a>.
-     Pokémon es ™ de Nintendo / Game Freak. Proyecto sin ánimo de lucro.</p>
+  <p class="note">Sprites from <a href="https://github.com/PMDCollab/SpriteCollab" target="_blank">PMD SpriteCollab</a>
+     and <a href="https://play.pokemonshowdown.com" target="_blank">Pokémon Showdown</a>.
+     Pokémon is a ™ of Nintendo / Game Freak. Non-commercial project.</p>
 </div>
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
@@ -114,6 +114,48 @@ async function waitFor(token, timeoutMs = 6000) {
   return false;
 }
 
+const enc = new TextEncoder();
+
+// sends one file to the board with the PUT protocol (name includes the mons/ prefix)
+async function sendOne(name, data) {
+  await writer.write(enc.encode(`PUT ${name} ${data.length}\n`));
+  if (!await waitFor('OK')) return false;
+  for (let i = 0; i < data.length; i += 2048) {
+    await writer.write(data.slice(i, i + 2048));
+    if (!await waitFor('#')) return false;
+  }
+  return await waitFor('DONE', 30000);
+}
+
+// splits the sprites.pak bundle (TPAK) into its individual files
+function parsePak(buf) {
+  const dv = new DataView(buf), td = new TextDecoder();
+  if (td.decode(new Uint8Array(buf, 0, 4)) !== 'TPAK') throw new Error('invalid bundle');
+  const count = dv.getUint16(4, true);
+  let off = 6; const items = [];
+  for (let i = 0; i < count; i++) {
+    const nl = dv.getUint8(off); off += 1;
+    const name = td.decode(new Uint8Array(buf, off, nl)); off += nl;
+    const size = dv.getUint32(off, true); off += 4;
+    items.push({ name, size });
+  }
+  let pos = off;
+  for (const it of items) { it.data = new Uint8Array(buf, pos, it.size); pos += it.size; }
+  return items;
+}
+
+async function sendAll(items) {
+  const bar = document.getElementById('bar'); bar.style.display = 'block';
+  const fill = bar.firstElementChild;
+  let done = 0, fail = 0;
+  for (const it of items) {
+    if (!await sendOne(it.name, it.data)) { log('   failed ' + it.name); fail++; }
+    done++;
+    fill.style.width = (done / items.length * 100) + '%';
+  }
+  log(`Done (${done - fail}/${items.length}). Restart the board (PWR button).`);
+}
+
 document.getElementById('connect').onclick = async () => {
   try {
     port = await navigator.serial.requestPort();
@@ -121,34 +163,33 @@ document.getElementById('connect').onclick = async () => {
     reader = port.readable.getReader();
     writer = port.writable.getWriter();
     lineBuf = '';
-    log('Conectado. Ya puedes elegir los .bin.');
+    log('Connected. Press "Load sprites".');
+    document.getElementById('auto').disabled = false;
     document.getElementById('files').disabled = false;
     document.getElementById('connect').disabled = true;
-  } catch (e) { log('No se pudo conectar: ' + e.message); }
+  } catch (e) { log('Could not connect: ' + e.message); }
+};
+
+document.getElementById('auto').onclick = async () => {
+  if (!writer) { log('Connect the board first.'); return; }
+  document.getElementById('auto').disabled = true;
+  log('Downloading sprite bundle (~58 MB)...');
+  let items;
+  try {
+    const resp = await fetch('sprites.pak');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    items = parsePak(await resp.arrayBuffer());
+  } catch (e) { log('Could not download sprites.pak: ' + e.message); return; }
+  log(`${items.length} sprites. Sending over USB...`);
+  await sendAll(items);
 };
 
 document.getElementById('files').onchange = async (ev) => {
   const files = [...ev.target.files];
-  const bar = document.getElementById('bar'); bar.style.display = 'block';
-  const fill = bar.firstElementChild;
-  const enc = new TextEncoder();
-  let done = 0;
-  for (const file of files) {
-    const data = new Uint8Array(await file.arrayBuffer());
-    log(`-> mons/${file.name} (${Math.round(data.length/1024)} KB)`);
-    await writer.write(enc.encode(`PUT mons/${file.name} ${data.length}\n`));
-    if (!await waitFor('OK')) { log('   rechazado'); continue; }
-    let ok = true;
-    for (let i = 0; i < data.length; i += 2048) {
-      await writer.write(data.slice(i, i + 2048));
-      if (!await waitFor('#')) { ok = false; break; }
-    }
-    if (ok && await waitFor('DONE', 30000)) log('   ok');
-    else log('   fallo en la transferencia');
-    done++;
-    fill.style.width = (done / files.length * 100) + '%';
-  }
-  log('Listo. Reinicia la placa (boton PWR) para ver los sprites.');
+  const items = [];
+  for (const f of files) items.push({ name: 'mons/' + f.name, data: new Uint8Array(await f.arrayBuffer()) });
+  log(`${items.length} files. Sending...`);
+  await sendAll(items);
 };
 </script>
 </body>

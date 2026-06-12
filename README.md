@@ -1,47 +1,51 @@
 # TamaPoke
 
-Tamagotchi inspirado en la primera generación de Pokémon para la
-**Waveshare ESP32-S3-Touch-AMOLED-1.75** (AMOLED redonda 466×466, driver CO5300
-por QSPI, táctil CST9217 por I2C). Cría a cualquiera de los 151, evoluciónalo,
-entrénalo y complétalos todos (shiny incluidos).
+A gen-1-Pokémon-inspired tamagotchi for the
+**Waveshare ESP32-S3-Touch-AMOLED-1.75** (round 466×466 AMOLED, CO5300 driver
+over QSPI, CST9217 touch over I2C). Raise any of the 151, evolve it, train it
+and complete them all (shinies included).
 
-> Repo privado. Los sprites son de Nintendo/Game Freak y de los artistas de
-> PMD SpriteCollab y Pokémon Showdown — uso personal. Ver **Créditos**.
+> Private repo. The sprites belong to Nintendo/Game Freak and to the artists of
+> PMD SpriteCollab and Pokémon Showdown — personal use. See **Credits**.
 
-## Estado
+## Status
 
-Funcionando en placa. Implementado: los 151 + shiny animados desde microSD,
-ciclo de vida completo (huevo por rareza → evolución → despedida/liberación/
-escapada), Pokédex de criados con galería, stats de combate (genes +
-entrenamiento), ganchos de retención (racha / vínculo / medallas / nombre),
-fondos por bioma y hora real, minijuego, saco de entrenamiento, baño animado,
-RTC con progresión offline, batería (AXP2101) y botón PWR, atenuado anti-burn-in.
+Running on hardware. Implemented: the 151 + shinies animated from microSD, full
+life cycle (egg by rarity → evolution → farewell/release/runaway, each gated
+behind a decision dialog), bred-Pokédex with gallery, battle stats (genes +
+training), retention hooks (streak / bond / medals / name), biome + real-time
+backgrounds, ball minigame, training bag, animated bath, RTC with offline
+progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
+**sound (ES8311)**, **6 UI languages (English default)**, **starter choice on
+first run**, and a one-click **web installer**.
 
-Pendiente: encuentros salvajes / combate (diseñado, sin implementar), sonido,
-instalador web, carcasa 3D. Ver **Roadmap**.
+Pending: wild encounters / battle (designed, not implemented), 3D case, soak
+test. See **Roadmap**.
 
 ## Hardware
 
-- Placa: [ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75)
-- Pantalla AMOLED redonda 466×466, driver **CO5300** (QSPI)
-- Táctil capacitivo **CST9217** (I2C, dirección 0x5A)
-- **AXP2101** (gestión de energía + batería + botón PWR), **PCF85063** (RTC),
-  ranura microSD, audio ES8311/ES7210 (sin usar aún)
-- Pines tomados del [repo oficial de Waveshare](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75) (ver `pin_config.h`)
+- Board: [ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75)
+- Round 466×466 AMOLED, **CO5300** driver (QSPI, 80 MHz)
+- Capacitive touch **CST9217** (I2C, address 0x5A)
+- **AXP2101** (power management + battery + PWR button), **PCF85063** (RTC),
+  microSD slot, **ES8311** audio codec (→ amplifier → external speaker on the
+  MX1.25 connector)
+- Pins taken from the [official Waveshare repo](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75) (see `pin_config.h`)
 
-## Librerías (Arduino IDE / arduino-cli)
+## Libraries (Arduino IDE / arduino-cli)
 
-| Librería | Autor | Uso |
+| Library | Author | Use |
 |---|---|---|
-| GFX Library for Arduino (`Arduino_GFX`) | moononournation | Pantalla CO5300 por QSPI + framebuffer en PSRAM |
-| SensorLib | Lewis He | Táctil CST9217 + RTC PCF85063 |
-| XPowersLib | Lewis He | PMU AXP2101 (batería, brillo, botón PWR) |
+| GFX Library for Arduino (`Arduino_GFX`) | moononournation | CO5300 over QSPI + framebuffer in PSRAM |
+| SensorLib | Lewis He | CST9217 touch + PCF85063 RTC |
+| XPowersLib | Lewis He | AXP2101 PMU (battery, brightness, PWR button) |
+| ESP_I2S (bundled in the ESP32 core) | Espressif | I2S to the ES8311 codec |
 
-## Configuración del IDE / compilar
+## IDE setup / build
 
-- Placa: **ESP32S3 Dev Module** · Flash **16MB** · PSRAM **OPI PSRAM**
-  (imprescindible: el framebuffer de 466×466×16bit ≈ 434 KB vive en PSRAM) ·
-  Partition Scheme con FAT (p.ej. `16M Flash (3MB APP/9MB FATFS)`) ·
+- Board: **ESP32S3 Dev Module** · Flash **16MB** · PSRAM **OPI PSRAM**
+  (required: the 466×466×16-bit framebuffer ≈ 434 KB lives in PSRAM) ·
+  Partition Scheme with FAT (e.g. `16M Flash (3MB APP/9MB FATFS)`) ·
   USB CDC On Boot **Enabled**
 
 ```bash
@@ -50,163 +54,186 @@ arduino-cli compile --fqbn "$FQBN" .
 arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn "$FQBN" .
 ```
 
-### Cargar los sprites a la SD
+### Easiest install: the web installer
 
-El firmware acepta archivos por USB (protocolo PUT con ACK por bloque), así que
-no hace falta sacar la tarjeta. La placa formatea la SD a FAT si no monta.
+`web/index.html` flashes the firmware (ESP Web Tools) and pushes the sprites to
+the SD over Web Serial, no Arduino needed. Serve it over HTTPS or `localhost`
+(secure context) and open it in **Chrome/Edge**. See [`web/README.md`](web/README.md).
+
+### Loading the sprites onto the SD (dev path)
+
+The firmware accepts files over USB (PUT protocol with per-block ACK), so you
+don't have to remove the card. The board formats the SD to FAT if it won't mount.
 
 ```bash
-python3 tools/pack_sd.py        # B/N (galeria): los 151 + shiny -> tools/sdcard/mons/[s]NNN.bin
-python3 tools/pack_pmd.py       # PMD (pantalla principal): los 151 + shiny -> p[s]NNN.bin
-python3 tools/make_thumbs.py    # miniaturas de la galeria -> thumbs.bin
-python3 tools/send_sd.py        # envia tools/sdcard/mons/* a la SD por USB
+python3 tools/pack_sd.py        # animated (gallery): the 151 + shiny -> tools/sdcard/mons/[s]NNN.bin
+python3 tools/pack_pmd.py       # PMD (main screen): the 151 + shiny -> p[s]NNN.bin
+python3 tools/make_thumbs.py    # gallery thumbnails -> thumbs.bin
+python3 tools/pack_bundle.py    # bundle everything into web/sprites.pak (for the web installer)
+python3 tools/send_sd.py        # send tools/sdcard/mons/* to the SD over USB
 ```
 
-(~58 MB en total; ~40 MB son los PMD. Están versionados en `tools/sdcard/`.)
+(~58 MB total; ~40 MB are the PMD sprites. Versioned under `tools/sdcard/`.)
 
-## Cómo se juega
+## How to play
 
-Empiezas con un **huevo** (un inicial clásico al azar la primera vez). Tócalo
-3 veces o espera y eclosiona. A partir de ahí, cuida a tu compañero:
+On first run you **choose a starter** (Bulbasaur / Charmander / Squirtle). After
+that you start with an **egg**. Tap it 3 times or wait and it hatches. From then
+on, care for your companion:
 
-**Cuatro estadísticas** que decaen: **COM** comida, **FEL** felicidad,
-**ENE** energía, **LIM** limpieza. Si alguna toca fondo, cuenta como *descuido*.
+**Four stats** that decay: **FOOD**, **JOY**, **ENE** (energy), **HYG** (hygiene).
+If one bottoms out it counts as a *slip-up*.
 
-**Botones (arco inferior, iconos):**
-- 🍎 **Comer** → menú de comida: 3 bayas (cada especie tiene una favorita oculta
-  que da bonus) y una chuche (+felicidad pero engorda; el peso da pereza).
-- ⚽ **Jugar** → minijuego de la pokeball (entrena VELOCIDAD).
-- 🌙 **Luz** → dormir/despertar (recupera energía, baja el brillo).
-- 🫧 **Baño** → escena de espuma que limpia las cacas.
+**Buttons (bottom arc, icons):**
+- 🍎 **Feed** → food menu: 3 berries (each species has a hidden favourite that
+  gives a bonus) and a candy (+happiness but it fattens; weight makes it sluggish).
+- ⚽ **Play** → the pokeball minigame (trains SPEED).
+- 🌙 **Light** → sleep/wake (recovers energy, dims the screen). While asleep,
+  needs decay much slower (rest).
+- 🫧 **Bath** → a foam scene that cleans up the poops.
 
-**Gestos táctiles:**
-- Toque en el bicho = caricia (+felicidad, vínculo).
-- Deslizar horizontal = abrir la **Pokédex / galería**.
-- Deslizar vertical = abrir la **ficha** (3 páginas: Perfil / Combate / Medallas;
-  desliza entre ellas; toca el nombre en Perfil para renombrar; en Combate el
-  botón "Entrenar fuerza" abre el saco).
-- Deslizar hacia abajo = **ajustar la hora** (pon tu hora local a ojo; el fondo
-  día/noche la usa tal cual, sin líos de zona horaria).
-- Pulsación larga (3 s) sobre el bicho = diálogo de **soltar**.
+**Touch gestures:**
+- Tap the creature = pet it (+happiness, bond).
+- Horizontal swipe = open the **Pokédex / gallery**.
+- Vertical swipe up = open the **stat card** (4 pages: Profile / Battle / Medals /
+  Progress; swipe between them; tap the name on Profile to rename; on Battle the
+  "Train strength" button opens the bag).
+- Swipe down = **set the clock** and pick the **language** + sound on/off.
+- Long press (3 s) on the creature = **release** dialog.
 
-**Botón físico PWR:** corto = pantalla on/off · largo (4 s) = apagado real
-(el RTC sigue vivo, así que el tiempo pasa aunque esté apagado).
+**Physical PWR button:** short = screen on/off · long (4 s) = full power-off
+(the RTC stays alive, so time passes even while it's off).
 
-## Sprites: dos fuentes
+## Decisions: you choose, and you watch
 
-- **PMD SpriteCollab** (pantalla principal, ficha, minijuego): sprites con
-  comportamiento — `tools/pack_pmd.py` empaqueta acciones (Idle, Walk L/R,
-  Sleep, Eat, Hurt, Attack, Pose, Nod, DeepBreath) a formato **TPK2** multi-
-  acción (`/mons/pNNN.bin`). El motor en `TamaPoke.ino` hace que el bicho
-  pasee, gesticule, duerma acurrucado, masque y se duela. Se ancla por los pies
-  (fila más baja con contenido), no por el lienzo.
-- **B/N animados de Showdown** (Pokédex / galería): `tools/pack_sd.py` → formato
-  **TPK1** (`/mons/NNN.bin`). También sirven de respaldo si falta el PMD.
-- **Taller propio** (`tools/sprites.py`): 9 sprites a primitivas como respaldo
-  sin SD + los iconos de la UI. Genera `species.h`. Revisa en `tools/sheet.png`,
-  emite con `python3 tools/sprites.py emit`.
+The three life-cycle endings and evolution **don't happen on their own** — when
+the conditions are met a button appears and you tap it (so you're present to
+witness it), each opening a two-option dialog:
 
-`sdmon.h/.cpp` carga ambos formatos a PSRAM (`SdMon` para TPK1, `PmdMon` para
-TPK2) y las miniaturas (`SdThumbs`).
+- **Evolution** (red button): *Evolve* (epic animation: halo, rays, sparkles and
+  a **flicker between the old and new form**) or *Keep form* (re-offered next level).
+- **Farewell** (gold button, final form + 3 days): *Say goodbye* (warm farewell,
+  rising hearts → new egg) or *Stay together* (keep your companion; re-offered in
+  a day). Tension: a maxed-out friend vs. completing the Pokédex.
+- **Runaway** (dark button, total neglect for 1 h): a somber "feels abandoned"
+  ending in the rain — caring for the creature cancels it.
 
-## Pokédex y datos de especie
+## Sprites: two sources
 
-`tools/dex_data.py` es la **fuente única**: nombre, slug, tipo (color de acento +
-bioma de fondo), cadena evolutiva con niveles de gen 1, rarezas e iniciales.
-`tools/dex_stats.py` tiene los base stats reales (de PokeAPI). `gen_dex.py` emite
-`dex.h` (tabla `DEX_TBL[152]` con todo). La identidad de la mascota es su número
-de Pokédex (persistido en NVS).
+- **PMD SpriteCollab** (main screen, stat card, minigame): behaviour sprites —
+  `tools/pack_pmd.py` packs actions (Idle, Walk L/R, Sleep, Eat, Hurt, Attack,
+  Pose, Nod, DeepBreath) into the multi-action **TPK2** format (`/mons/pNNN.bin`).
+  The engine in `TamaPoke.ino` makes the creature wander, gesture, curl up to
+  sleep, chew and wince. Anchored by the feet (lowest content row), not the canvas.
+- **Animated sprites from Showdown** (Pokédex / gallery): `tools/pack_sd.py` →
+  **TPK1** format (`/mons/NNN.bin`). Also a fallback if the PMD sprite is missing.
+- **In-house workshop** (`tools/sprites.py`): 9 primitive-drawn sprites as a
+  no-SD fallback + the UI icons. Generates `species.h`. Preview in
+  `tools/sheet.png`, emit with `python3 tools/sprites.py emit`.
 
-- **Evolución** estilo gen 1 (niveles 16/36/…; piedras ≈30, intercambio ≈40;
-  Eevee se ramifica a la evolución que te falte). Cada descuido la retrasa 1
-  nivel; no evoluciona con stats <40 ni durmiendo.
+`sdmon.h/.cpp` loads both formats into PSRAM (`SdMon` for TPK1, `PmdMon` for
+TPK2) and the thumbnails (`SdThumbs`).
 
-## Stats de combate y entrenamiento
+## Pokédex and species data
 
-Cada bicho tiene FUE/DEF/VEL = base real de gen 1 × **genes** (90-110 %, tirados
-al eclosionar) + nivel + **entrenamiento**:
-- VELOCIDAD ← el minijuego
-- DEFENSA ← buen cuidado sostenido (12 h sin descuidos)
-- FUERZA ← el saco de entrenamiento (aporrear)
+`tools/dex_data.py` is the **single source**: name, slug, type (accent colour +
+background biome), evolution line with gen-1 levels, rarities and starters.
+`tools/dex_stats.py` has the real base stats (from PokéAPI). `gen_dex.py` emits
+`dex.h` (the `DEX_TBL[152]` table). The pet's identity is its Pokédex number
+(persisted in NVS).
 
-Se ven en la página Combate de la ficha. El peso (oculto) sube con chuches y se
-quema entrenando.
+- **Evolution** gen-1 style (levels 16/36/…; stones ≈30, trade ≈40; Eevee
+  branches to whichever evolution you're missing). Each slip-up delays it 1
+  level; it won't evolve with any stat < 40 or while asleep.
 
-## Retención: racha, vínculo, medallas, nombre
+## Battle stats and training
 
-- **Racha** (del jugador, persiste entre crianzas): el primer cuidado de cada
-  día real avanza la racha; hitos 3/7/30/100 se celebran; saltarse un día la
-  rompe. Insignia de llama en la pantalla principal.
-- **Vínculo** (del bicho): sube despacio con cuidado y mimos, baja con descuidos.
-- **Medallas** del individuo (nivel, baya, racha, vínculo, forma final, en
-  forma) + contador global. Página Medallas de la ficha.
-- **Nombre**: teclado táctil; el apodo manda en la cabecera y la ficha.
+Each creature has ATK/DEF/SPD = real gen-1 base × **genes** (90–110 %, rolled at
+hatch) + level + **training**:
+- SPEED ← the minigame
+- DEFENSE ← sustained good care (12 h with no slip-ups)
+- STRENGTH ← the training bag (whacking)
 
-La racha y el vínculo altos **mejoran el sorteo del huevo** (rareza y shiny):
-cuidar bien siempre paga.
+Shown on the Battle page of the stat card. The (hidden) weight goes up with candy
+and burns off with training.
 
-## Ciclo de vida y huevos por rareza
+## Retention: streak, bond, medals, name
 
-Tres finales (los tres dejan un huevo nuevo): **despedida** (forma final + 7
-días), **liberar** (pulsación larga), **escapada** (4 barras a cero 1 h). Cada
-especie criada se registra en la **Pokédex de criados** (normal y shiny aparte).
+- **Streak** (the player's, persists across creatures): the first care of each
+  real day advances the streak; 3/7/30/100 milestones are celebrated; skipping a
+  day breaks it. Flame badge on the main screen.
+- **Bond** (the creature's): rises slowly with care and petting, drops with slip-ups.
+- **Medals** for the individual (level, berry, streak, bond, final form, fit) +
+  a global counter. Medals page of the stat card.
+- **Name**: touch keyboard; the nickname rules the header and the card.
 
-El huevo tira rareza sobre las ~79 formas base (47 comunes / 27 raras / 5
-legendarias), con **sesgo a las líneas que te faltan** (los 151 son
-completables), bendecido por una despedida y castigado por una escapada.
-Legendarios solo con 25+ registradas. **Shiny** 1/48 (mejor con racha/vínculo/
-despedida). El primer huevo de la partida es un inicial clásico.
+High streak and bond **improve the egg roll** (rarity and shiny): caring well
+always pays off.
 
-## Fondos: bioma + hora real
+## Life cycle, eggs by rarity, languages
 
-La pantalla idle pinta el cielo según la **hora real del RTC** (amanecer / día /
-atardecer / noche con luna y estrellas) y el suelo según el **bioma del tipo**
-(pradera, playa, bosque, volcán, montaña, nieve). Dormir fuerza la noche.
+The life cycle lasts **3 days** of play. Three endings (all leave a new egg):
+**farewell** (final form + 3 days), **release** (long press), **runaway** (all 4
+bars at zero for 1 h). Each bred species is recorded in the **bred Pokédex**
+(normal and shiny separately).
 
-## Estructura
+The egg rolls rarity over the ~79 base forms (47 common / 27 rare / 5 legendary),
+**biased towards the lines you're missing** (all 151 are completable), blessed by
+a farewell and punished by a runaway. Legendaries only with 25+ registered.
+**Shiny** 1/48 (better with streak/bond/farewell).
 
-- `TamaPoke.ino` — init, bucle de juego, render de todas las pantallas, gestos, consola serie
-- `pet.h` / `pet.cpp` — estado y lógica de la mascota (stats, evolución, ciclo de vida, racha/vínculo/medallas, NVS)
-- `sdmon.h` / `sdmon.cpp` — sprites TPK1 (B/N) y TPK2 (PMD) + miniaturas, y recepción de archivos por USB (PUT/LS)
-- `rtcbat.h` / `rtcbat.cpp` — RTC PCF85063 + PMU AXP2101 (batería, brillo, botón PWR)
-- `dex.h` — GENERADO (`gen_dex.py`): tabla de los 151
-- `species.h` — GENERADO (`sprites.py`): sprites de respaldo, iconos de UI, colores
-- `pin_config.h` — pines oficiales de la placa
-- `tools/` — pipeline: `dex_data.py` (datos), `dex_stats.py`, `gen_dex.py`,
-  `sprites.py` (taller), `pack_sd.py` / `pack_pmd.py` / `make_thumbs.py`
-  (empaquetadores), `send_sd.py` (envío a SD), `import_gif.py`, `touch_log.py`
-- `tools/sdcard/mons/` — los .bin generados (B/N, shiny, PMD, miniaturas)
+**Languages:** the UI ships in 6 languages — English (default), Spanish, French,
+German, Italian, Portuguese — switchable from the settings screen (swipe down).
 
-## Consola serie (115200, depuración)
+## Backgrounds: biome + real time
 
-`STATS` (estado completo) · `SPEC <dex>` (cambiar especie) · `LVL <n>` ·
-`HATCH` · `SHINY` · `NICK <x>` · `BYE` (despedir) · `REG` (Pokédex) ·
-`EGGS` (simular 20 huevos) · `GAL` (galería) · `CAREDAY` (simular día de
-cuidado) · `TIME <epoch>` / `RTCSET <epoch>` (reloj) · `HEALTH` (uptime + heap
-para el soak test; también se emite solo cada 5 min) · `LS` / `PUT` (archivos SD).
+The idle screen paints the sky from the **RTC's real time** (dawn / day / dusk /
+night with moon and stars) and the ground from the **type's biome** (meadow,
+beach, forest, volcano, mountain, snow). Sleeping forces night.
 
-Para probar rápido: baja `PET_TICK_MS` y `MINUTES_PER_LEVEL` en `pet.h`.
+## Layout
+
+- `TamaPoke.ino` — init, game loop, render of every screen, gestures, serial console, audio
+- `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
+- `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
+- `rtcbat.h` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
+- `audio.h` / `audio.cpp` — ES8311 + I2S + Game-Boy-style tone synth (non-blocking task)
+- `i18n.h` / `i18n.cpp` — the 6-language string tables
+- `dex.h` — GENERATED (`gen_dex.py`): the 151 table
+- `species.h` — GENERATED (`sprites.py`): fallback sprites, UI icons, colours
+- `pin_config.h` — the board's official pins
+- `tools/` — pipeline: `dex_data.py` (data), `dex_stats.py`, `gen_dex.py`,
+  `sprites.py` (workshop), `pack_sd.py` / `pack_pmd.py` / `make_thumbs.py`
+  (packers), `pack_bundle.py` (web bundle), `send_sd.py` (SD upload), `touch_log.py`
+- `tools/sdcard/mons/` — the generated .bin files (animated, shiny, PMD, thumbnails)
+- `web/` — the browser installer (ESP Web Tools + Web Serial sprite loader)
+
+## Serial console (115200, debug)
+
+`STATS` (full state) · `SPEC <dex>` (change species) · `LVL <n>` · `HATCH` ·
+`SHINY` · `NICK <x>` · `BYE` / `RUN` (farewell / runaway) · `ABANDON` (force the
+runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio test) ·
+`REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
+`TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
+`LS` / `PUT` (SD files).
+
+To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
 
 ## Roadmap
 
-- **Encuentros salvajes / combate** — diseñado (ver memoria del proyecto):
-  resolución por FUE/DEF/VEL con animaciones Attack/Hurt PMD, rango de
-  entrenador como endgame. Falta elegir estilo (auto / timing / por turnos).
-- **Sonido** por el ES8311 (bips estilo Game Boy).
-- **Minijuego más fluido**: el doble framebuffer se descartó (el flush QSPI es
-  bloqueante, no hay solape que resolver; el parpadeo a alto fps es del panel).
-  La vía real sería flush parcial de la región que cambia. 85 ms es el compromiso.
-- **Soak test** 24-48 h (instrumentación lista: comando/latido `HEALTH`).
-- **Publicación**: ✅ instalador web (`web/`, ESP Web Tools + cargador de sprites
-  por Web Serial) y ✅ [`CREDITS.md`](CREDITS.md). Falta: carcasa 3D para
-  MakerWorld y, para usar GitHub Pages gratis, hacer el repo público sacando
-  antes los sprites (de terceros) del historial. Mejora: empaquetar sprites en
-  el navegador para no pedírselos al usuario.
-- **Combate / encuentros salvajes** (diseñado, sin implementar) y **sonido**.
+- **Wild encounters / battle** — designed (see project memory): resolution by
+  ATK/DEF/SPD with PMD Attack/Hurt animations, trainer rank as endgame. Style
+  still to pick (auto / timing / turn-based).
+- **3D case** for MakerWorld.
+- **Soak test** 24–48 h (instrumentation ready: `HEALTH` command/heartbeat).
+- **Going public**: to use free GitHub Pages the repo must be public — strip the
+  third-party sprites from history first, or host the sprite bundle as a release
+  asset. The web installer already serves the firmware + a one-click sprite bundle.
 
-## Créditos
+## Credits
 
-Animaciones de la pantalla principal: [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)
-(comunidad). Sprites de la Pokédex: [Pokémon Showdown](https://play.pokemonshowdown.com).
-Base stats: [PokeAPI](https://pokeapi.co). Pokémon es ™ de Nintendo / Game Freak /
-The Pokémon Company. Proyecto sin ánimo de lucro, para uso personal.
+Main-screen animations: [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)
+(community). Pokédex sprites: [Pokémon Showdown](https://play.pokemonshowdown.com).
+Base stats: [PokéAPI](https://pokeapi.co). Pokémon is a ™ of Nintendo / Game Freak /
+The Pokémon Company. Non-commercial, personal-use project. Full list in
+[`CREDITS.md`](CREDITS.md).
