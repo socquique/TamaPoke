@@ -10,7 +10,7 @@
 #define MINUTES_PER_LEVEL 60
 #define EAT_ANIM_MS 2500UL
 #define HEART_MS 1500UL
-#define EVOLVE_ANIM_MS 4000UL
+#define EVOLVE_ANIM_MS 5200UL              // animacion de evolucion (mas larga = mas epica)
 #define CEREMONY_MS 10000UL                // duracion de la despedida en pantalla
 #define FAREWELL_AGE_MIN (7UL * 24 * 60)   // se despide a los 7 dias de juego (en forma final)
 #define RUNAWAY_TICKS 60                   // se escapa tras 1 h con TODO a cero
@@ -99,8 +99,16 @@ public:
   bool eating() const { return millis() < eatUntil; }
   bool showHeart() const { return millis() < heartUntil; }
   bool evolving() const { return millis() < evolveUntil; }
+  float evolveT() const {     // progreso de la animacion de evolucion 0..1
+    uint32_t n = millis();
+    uint32_t left = evolveUntil > n ? evolveUntil - n : 0;
+    return 1.0f - (float)left / (float)EVOLVE_ANIM_MS;
+  }
   bool canEvolveNow() const;  // condiciones de evolucion cumplidas (lista)
   void evolve();              // dispara la transformacion (la llama un toque del usuario)
+  bool canFarewellNow() const;  // forma final + 7 dias: lista para despedirse (boton)
+  bool canRunawayNow() const;   // abandono total 1h: lista para escaparse (boton triste)
+  void dbgRunawayReady() { fullness = joy = energy = hygiene = 0; neglectTicks = RUNAWAY_TICKS; }  // test
   uint8_t level() const { return 1 + ageMinutes / MINUTES_PER_LEVEL; }
   bool isRegistered(int16_t dex) const {
     return dex >= 1 && dex <= 151 && (dexReg[(dex - 1) >> 3] & (1 << ((dex - 1) & 7)));

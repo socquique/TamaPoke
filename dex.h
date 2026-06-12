@@ -158,18 +158,18 @@ static const DexEntry DEX_TBL[DEX_COUNT + 1] = {
   { "JOLTEON", 0, 0, R_EVO, 0xBCA1, 65, 65, 60, 130, 0 },  // 135 electrico
   { "FLAREON", 0, 0, R_EVO, 0xEA87, 65, 130, 60, 65, 3 },  // 136 fuego
   { "PORYGON", 0, 0, R_RARO, 0x8C4D, 65, 60, 70, 40, 0 },  // 137 normal
-  { "OMANYTE", 139, 40, R_RARO, 0x9407, 35, 40, 100, 35, 4 },  // 138 roca
-  { "OMASTAR", 0, 0, R_EVO, 0x9407, 70, 60, 125, 55, 4 },  // 139 roca
-  { "KABUTO", 141, 40, R_RARO, 0x9407, 30, 80, 90, 55, 4 },  // 140 roca
-  { "KABUTOPS", 0, 0, R_EVO, 0x9407, 60, 115, 105, 80, 4 },  // 141 roca
+  { "OMANYTE", 139, 40, R_RARO, 0x9407, 35, 40, 100, 35, 1 },  // 138 roca
+  { "OMASTAR", 0, 0, R_EVO, 0x9407, 70, 60, 125, 55, 1 },  // 139 roca
+  { "KABUTO", 141, 40, R_RARO, 0x9407, 30, 80, 90, 55, 1 },  // 140 roca
+  { "KABUTOPS", 0, 0, R_EVO, 0x9407, 60, 115, 105, 80, 1 },  // 141 roca
   { "AERODACTYL", 0, 0, R_RARO, 0x9407, 80, 105, 65, 130, 4 },  // 142 roca
   { "SNORLAX", 0, 0, R_RARO, 0x8C4D, 160, 110, 65, 30, 0 },  // 143 normal
   { "ARTICUNO", 0, 0, R_LEGENDARIO, 0x4DB8, 90, 85, 100, 85, 5 },  // 144 hielo
   { "ZAPDOS", 0, 0, R_LEGENDARIO, 0xBCA1, 90, 90, 85, 100, 0 },  // 145 electrico
   { "MOLTRES", 0, 0, R_LEGENDARIO, 0xEA87, 90, 100, 90, 90, 3 },  // 146 fuego
-  { "DRATINI", 148, 30, R_RARO, 0x5A98, 41, 64, 45, 50, 4 },  // 147 dragon
-  { "DRAGONAIR", 149, 55, R_EVO, 0x5A98, 61, 84, 65, 70, 4 },  // 148 dragon
-  { "DRAGONITE", 0, 0, R_EVO, 0x5A98, 91, 134, 95, 80, 4 },  // 149 dragon
+  { "DRATINI", 148, 30, R_RARO, 0x5A98, 41, 64, 45, 50, 1 },  // 147 dragon
+  { "DRAGONAIR", 149, 55, R_EVO, 0x5A98, 61, 84, 65, 70, 1 },  // 148 dragon
+  { "DRAGONITE", 0, 0, R_EVO, 0x5A98, 91, 134, 95, 80, 1 },  // 149 dragon
   { "MEWTWO", 0, 0, R_LEGENDARIO, 0xD28F, 106, 110, 90, 130, 0 },  // 150 psiquico
   { "MEW", 0, 0, R_LEGENDARIO, 0xD28F, 100, 100, 100, 100, 0 },  // 151 psiquico
 };

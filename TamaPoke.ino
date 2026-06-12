@@ -35,6 +35,7 @@ Pet pet;
 // sprite animado de la SD para la especie actual (si existe el archivo)
 SdMon mon;          // sprite B/N (respaldo y minijuego si no hay PMD)
 PmdMon pmd;         // sprite PMD multi-accion (pantalla principal)
+PmdMon evoPmd;      // forma anterior, solo durante el parpadeo de evolucion
 int16_t monFor = -2;
 bool monShinyFor = false;
 
@@ -121,6 +122,16 @@ static const uint8_t CRACK2[][2] = { {11,13},{12,14},{11,15},{20,12},{19,13},{20
 static const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{280,90},{160,95} };
 
 bool wasPressed = false;
+// boton-CTA de evolucion (centrado, mitad de pantalla)
+#define EVO_BTN_W 256
+#define EVO_BTN_H 64
+#define EVO_BTN_X (CX - EVO_BTN_W / 2)
+#define EVO_BTN_Y 172
+// boton-CTA de despedida (mas ancho: lleva el nombre + frase)
+#define FAR_BTN_W 408
+#define FAR_BTN_H 58
+#define FAR_BTN_X (CX - FAR_BTN_W / 2)
+#define FAR_BTN_Y 176
 // el CST9217 avisa por el pin INT cuando hay datos tactiles; lo usamos para no
 // leer el bus I2C mientras el chip esta dormido (esa lectura se colgaba ~1s)
 volatile bool gTouchIrq = false;
@@ -213,6 +224,19 @@ void ensureMon() {
 void loop() {
   uint32_t now = millis();
   pet.update(now);
+
+  // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
+  // (incluye el caso de cumplir al despertar). canEvolveNow es false durmiendo.
+  static bool wasEvoReady = false;
+  bool evoReady = pet.canEvolveNow();
+  if (evoReady && !wasEvoReady) sfxPlay(SFX_MEDAL);
+  wasEvoReady = evoReady;
+  // aviso sombrio cuando el bicho esta a punto de escaparse por abandono
+  static bool wasRunReady = false;
+  bool runReady = pet.canRunawayNow();
+  if (runReady && !wasRunReady) sfxPlay(SFX_DENY);
+  wasRunReady = runReady;
+
   handleTouch();
   handleSerial();
   ensureMon();
@@ -353,6 +377,9 @@ void handleSerial() {
     Serial.println("DONE");
   } else if (line == "BEEP") {
     sfxPlay(SFX_HATCH);  // prueba de audio
+    Serial.println("DONE");
+  } else if (line == "ABANDON") {
+    pet.dbgRunawayReady();  // fuerza el estado "lista para escaparse" (test del boton)
     Serial.println("DONE");
   } else if (line == "REG") {
     Serial.printf("pokedex %u/151:", pet.registeredCount());
@@ -547,6 +574,20 @@ void onTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
+  // boton de evolucion (solo visible cuando esta listo)
+  if (pet.canEvolveNow() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
+      y >= EVO_BTN_Y && y <= EVO_BTN_Y + EVO_BTN_H) {
+    int16_t oldSpec = pet.speciesId;
+    pet.evolve();
+    evoPmd.load(oldSpec, pet.shiny);  // forma anterior para el parpadeo
+    return;
+  }
+  // botones de final (despedida graceful o escapada por abandono), mismo recuadro
+  if (x >= FAR_BTN_X && x <= FAR_BTN_X + FAR_BTN_W &&
+      y >= FAR_BTN_Y && y <= FAR_BTN_Y + FAR_BTN_H) {
+    if (pet.canRunawayNow()) { pet.startRunaway(); return; }
+    if (pet.canFarewellNow()) { pet.startFarewell(); return; }
+  }
   for (int i = 0; i < 4; i++) {
     int dx = x - buttons[i].cx, dy = y - buttons[i].cy;
     if (dx * dx + dy * dy <= BTN_HIT * BTN_HIT) {
@@ -564,16 +605,11 @@ void onTap(int16_t x, int16_t y) {
       return;
     }
   }
-  // tocar al bicho: si esta listo para evolucionar, lo hace AHORA (delante de
-  // ti); si no, es una caricia
+  // tocar al bicho = caricia
   if (inPetZone(x, y)) {
     Serial.println("PET");
-    if (pet.canEvolveNow()) {
-      pet.evolve();
-    } else {
-      pet.caress();
-      if (!pet.sleeping) sfxPlay(SFX_HEART);
-    }
+    pet.caress();
+    if (!pet.sleeping) sfxPlay(SFX_HEART);
   }
 }
 
@@ -772,6 +808,9 @@ void render() {
     drawBars();
     drawButtons();
     drawCelebration();
+    if (pet.canEvolveNow()) drawEvolveButton();           // CTA rojo: evolucionar
+    else if (pet.canRunawayNow()) drawRunawayButton();    // CTA sombrio: escapada (abandono)
+    else if (pet.canFarewellNow()) drawFarewellButton();  // CTA dorado: despedida
   }
 
   if (pet.sleeping) {
@@ -1710,25 +1749,137 @@ void drawCeremony() {
   uint8_t act = PMD_IDLE;
 
   if (panic) {
-    if (t < 0.25f) {                       // susto en el sitio (tembleque)
+    // final triste: penumbra azulada + lluvia
+    for (int i = 0; i < 46; i++) {
+      int rx = (i * 47 + now / 3) % 466;
+      int ry = (i * 91 + now / 2) % 470;
+      gfx->drawLine(rx, ry, rx - 3, ry + 12, C565(0x6a, 0x84, 0xb0));
+    }
+    bool fade = false;
+    if (t < 0.30f) {                       // cabizbajo, temblando
       act = pmd.has(PMD_HURT) ? PMD_HURT : PMD_IDLE;
-      x = CX + (int)(6 * sinf(now * 0.05f));
-    } else {                               // huye rapido por la izquierda
+      x = CX + (int)(4 * sinf(now * 0.04f));
+    } else {                               // se aleja despacio y se desvanece
       act = pmd.has(PMD_WALKL) ? PMD_WALKL : PMD_IDLE;
-      x = CX - (int)(((t - 0.25f) / 0.40f) * (CX + 140));
+      x = CX - (int)(((t - 0.30f) / 0.70f) * (CX + 120));
+      fade = (t > 0.6f) && ((now / 160) % 2 == 0);  // parpadea hacia la silueta
     }
-  } else {
-    if (t < 0.45f) {                       // reverencia / pose de despedida
-      act = pmd.has(PMD_POSE) ? PMD_POSE : (pmd.has(PMD_NOD) ? PMD_NOD : PMD_IDLE);
-    } else {                               // se aleja por la derecha
-      act = pmd.has(PMD_WALKR) ? PMD_WALKR : PMD_IDLE;
-      x = CX + (int)(((t - 0.45f) / 0.55f) * (CX + 140));
+    drawPmdAct(act, x, y, now, true, fade, 5);  // fade=silueta: se difumina al irse
+    // lagrima cayendo del bicho
+    if (t < 0.55f) {
+      int ty = y - 150 + (int)((now / 6) % 40);
+      gfx->fillRect(x + 6, ty, 3, 6, C565(0x9a, 0xc4, 0xe8));
     }
+    return;
   }
 
+  // despedida epica: halo dorado pulsante + chispas y corazones que ascienden
+  int gcy = PET_GROUND - 96;
+  for (int k = 0; k < 4; k++) {
+    int r = 60 + k * 34 + (int)(10 * sinf(now * 0.02f));
+    gfx->drawCircle(CX, gcy, r, C565(0xff, 0xdf, 0x8a));
+  }
+  for (int i = 0; i < 16; i++) {
+    int px = (i * 71 + 28) % 466;
+    int py = 410 - (int)((now / 8 + i * 70) % 360);   // suben y reaparecen abajo
+    if (py < 30) continue;
+    if (i % 4 == 0) drawMap(SPR_HEART, 32, px - 8, py - 8, 1, false);  // corazoncito
+    else gfx->fillRect(px, py, 4, 4, (i % 2) ? C565(0xff, 0xe7, 0x9f) : C565(0xff, 0x9a, 0xc0));
+  }
+
+  if (t < 0.45f) {                         // reverencia / pose de despedida
+    act = pmd.has(PMD_POSE) ? PMD_POSE : (pmd.has(PMD_NOD) ? PMD_NOD : PMD_IDLE);
+  } else {                                 // se aleja por la derecha
+    act = pmd.has(PMD_WALKR) ? PMD_WALKR : PMD_IDLE;
+    x = CX + (int)(((t - 0.45f) / 0.55f) * (CX + 140));
+  }
   drawPmdAct(act, x, y, now, true, false, 5);
-  if (!panic && pet.showHeart())           // corazones siguiendo al bicho
+  if (pet.showHeart())                     // corazon grande siguiendo al bicho
     drawMap(SPR_HEART, 32, x + 50, y - 190, 2, false);
+}
+
+// boton-CTA rojo y grande para evolucionar (pulsa para llamar la atencion)
+void drawEvolveButton() {
+  uint32_t now = millis();
+  int p = (int)(5 * sinf(now * 0.006f));  // late: -5..5
+  int x = EVO_BTN_X - p, y = EVO_BTN_Y - p, w = EVO_BTN_W + 2 * p, h = EVO_BTN_H + 2 * p;
+  gfx->fillRoundRect(x, y, w, h, 18, UI_BAR_BAD);
+  gfx->drawRoundRect(x, y, w, h, 18, UI_WHITE);
+  gfx->drawRoundRect(x + 2, y + 2, w - 4, h - 4, 16, UI_WHITE);
+  gfx->setTextColor(UI_WHITE);
+  gfx->setTextSize(3);
+  const char *t = T(S_EVO_TAP);
+  gfx->setCursor(CX - (int)strlen(t) * 9, y + h / 2 - 11);
+  gfx->print(t);
+}
+
+// boton-CTA dorado de despedida: "<nombre> quiere decirte algo..."
+void drawFarewellButton() {
+  uint32_t now = millis();
+  int p = (int)(4 * sinf(now * 0.005f));
+  int x = FAR_BTN_X - p, y = FAR_BTN_Y - p, w = FAR_BTN_W + 2 * p, h = FAR_BTN_H + 2 * p;
+  gfx->fillRoundRect(x, y, w, h, 16, UI_BAR_WARN);
+  gfx->drawRoundRect(x, y, w, h, 16, UI_INK);
+  char buf[52];
+  const char *nm = pet.nick[0] ? pet.nick : DEX_TBL[pet.speciesId].name;
+  snprintf(buf, sizeof(buf), T(S_FAREWELL_BTN), nm);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - (int)strlen(buf) * 6, y + h / 2 - 8);
+  gfx->print(buf);
+}
+
+// boton-CTA sombrio de escapada por abandono: "<nombre> se siente abandonado..."
+// (final triste: azul-gris oscuro, latido lento y apagado)
+void drawRunawayButton() {
+  uint32_t now = millis();
+  int p = (int)(3 * sinf(now * 0.003f));
+  int x = FAR_BTN_X - p, y = FAR_BTN_Y - p, w = FAR_BTN_W + 2 * p, h = FAR_BTN_H + 2 * p;
+  gfx->fillRoundRect(x, y, w, h, 16, C565(0x3a, 0x44, 0x5a));
+  gfx->drawRoundRect(x, y, w, h, 16, C565(0x70, 0x80, 0x98));
+  char buf[52];
+  const char *nm = pet.nick[0] ? pet.nick : DEX_TBL[pet.speciesId].name;
+  snprintf(buf, sizeof(buf), T(S_RUNAWAY_BTN), nm);
+  gfx->setTextColor(C565(0xc8, 0xd2, 0xe0));
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - (int)strlen(buf) * 6, y + h / 2 - 8);
+  gfx->print(buf);
+}
+
+// animacion epica de evolucion: halo radial + rayos giratorios + parpadeo del
+// sprite acelerando + chispas que salen disparadas + fogonazo final
+void drawEvolveFX(uint32_t now) {
+  float t = pet.evolveT();          // 0..1
+  int cx = CX, cy = PET_GROUND - 96;
+
+  // halo radial que crece y pulsa
+  int halo = 36 + (int)(t * 150) + (int)(8 * sinf(now * 0.02f));
+  for (int k = 0; k < 4; k++) {
+    int r = halo - k * 7;
+    if (r > 0) gfx->drawCircle(cx, cy, r, UI_WHITE);
+  }
+  // rayos giratorios desde el centro del bicho
+  float base = now * 0.004f;
+  for (int i = 0; i < 12; i++) {
+    float a = base + i * (float)(PI / 6);
+    int len = 90 + (int)(70 * (0.5f + 0.5f * sinf(now * 0.012f + i)));
+    gfx->drawLine(cx, cy, cx + (int)(cosf(a) * len), cy + (int)(sinf(a) * len), UI_WHITE);
+  }
+  // parpadeo entre la forma ANTERIOR y la NUEVA (siluetas), acelerando; al
+  // final (t>0.9) se queda fija en la nueva para el fogonazo de revelado
+  int period = 60 + (int)(220 * (1.0f - t));
+  bool showOld = t < 0.9f && evoPmd.loaded && ((now / period) % 2) == 0;
+  if (showOld) drawPmdActM(evoPmd, PMD_IDLE, cx, PET_GROUND, 0, true, true, 5);
+  else drawPmdAct(PMD_IDLE, cx, PET_GROUND, 0, true, true, 5);
+  // chispas que salen disparadas
+  for (int i = 0; i < 10; i++) {
+    float a = i * (float)(PI / 5) + t * 4.0f;
+    int d = (int)((now / 14 + i * 33) % 200);
+    int sx = cx + (int)(cosf(a) * d), sy = cy + (int)(sinf(a) * d);
+    gfx->fillRect(sx - 2, sy - 2, 5, 5, (i & 1) ? C565(0xff, 0xe0, 0x70) : UI_WHITE);
+  }
+  // fogonazo final antes de revelar la forma nueva
+  if (t > 0.9f) gfx->fillCircle(cx, cy, (int)(300 * (t - 0.9f) / 0.1f), UI_WHITE);
 }
 
 void drawPet() {
@@ -1859,10 +2010,11 @@ uint8_t pmdFrameAt(const PmdAct &a, uint32_t t, bool loop) {
 }
 
 // dibuja una accion anclada por la base (centro-x, suelo) y devuelve su escala
-void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
-  const PmdAct &a = pmd.acts[actId];
+// dibuja una accion de un PmdMon concreto (m); drawPmdAct usa el global pmd
+void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
+  const PmdAct &a = m.acts[actId];
   if (!a.frames) return;
-  uint8_t sBase = pmd.acts[PMD_IDLE].h ? 170 / pmd.acts[PMD_IDLE].h : 5;
+  uint8_t sBase = m.acts[PMD_IDLE].h ? 170 / m.acts[PMD_IDLE].h : 5;
   if (sBase < 2) sBase = 2;
   if (sBase > maxS) sBase = maxS;
   uint8_t s = sBase;
@@ -1877,9 +2029,12 @@ void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool 
     for (int c = 0; c < a.w; c++) {
       uint8_t idx = row[c];
       if (idx == 0xFF) continue;
-      gfx->fillRect(x0 + c * s, y0 + r * s, s, s, sil ? INK_K : pmd.pal[idx]);
+      gfx->fillRect(x0 + c * s, y0 + r * s, s, s, sil ? INK_K : m.pal[idx]);
     }
   }
+}
+void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
+  drawPmdActM(pmd, actId, cx, groundY, t, loop, sil, maxS);
 }
 
 // elige el siguiente capricho del bicho cuando esta contento
@@ -1916,10 +2071,10 @@ void drawPetPMD() {
   uint32_t now = millis();
 
   if (pet.evolving()) {
-    bool flash = (now / 300) % 2;
-    drawPmdAct(PMD_IDLE, CX, PET_GROUND, 0, true, flash, 5);
+    drawEvolveFX(now);
     return;
   }
+  if (evoPmd.loaded) evoPmd.unload();  // termino la evolucion: libera la forma anterior
 
   PetMood m = pet.mood();
   uint8_t act;
@@ -2050,7 +2205,6 @@ const char *eggMsg() {
 
 const char *statusMsg() {
   if (pet.evolving()) return T(S_EVOLVING);
-  if (pet.canEvolveNow()) return T(S_EVO_TAP);  // listo: avisa para que lo toques
   if (bathUntil) return "Splish splash!";  // onomatopeya universal
   if (pet.sleeping) return "Zzz...";
   if (pet.eating()) return T(S_EATING);

@@ -168,18 +168,16 @@ void Pet::tick() {
 
   checkMedals();  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick
 
-  // abandono total: con TODO a cero durante una hora, se escapa
+  // abandono total: con TODO a cero durante una hora queda lista para escaparse;
+  // NO se va sola, la dispara el usuario con el boton (final triste, lo presencia)
   if (fullness == 0 && joy == 0 && energy == 0 && hygiene == 0) {
-    if (++neglectTicks >= RUNAWAY_TICKS) startRunaway();
+    if (neglectTicks < RUNAWAY_TICKS) neglectTicks++;
   } else {
-    neglectTicks = 0;
+    neglectTicks = 0;  // un solo cuidado la salva
   }
 
-  // ciclo completo: en forma final y con una semana de juego, se despide
-  if (ceremony == CER_NONE && DEX_TBL[speciesId].evolvesTo == 0 &&
-      ageMinutes >= FAREWELL_AGE_MIN) {
-    startFarewell();
-  }
+  // ciclo completo (forma final + 7 dias): la despedida NO salta sola; queda
+  // lista (canFarewellNow) y la dispara el usuario con el boton, para que la vea
 
   // autoguardado periodico: NO escribir a flash aqui (corre dentro del loop,
   // mientras se anima); solo marcar y dejar que el loop lo vuelque al atenuar
@@ -335,6 +333,19 @@ uint16_t Pet::registeredCount() const {
   for (int i = 1; i <= 151; i++)
     if (isRegistered(i)) n++;
   return n;
+}
+
+// forma final que ya cumplio su ciclo (7 dias): lista para despedirse. La
+// despedida la dispara el usuario con el boton (no salta sola, para que la vea)
+bool Pet::canFarewellNow() const {
+  return !isEgg() && !sleeping && ceremony == CER_NONE &&
+         DEX_TBL[speciesId].evolvesTo == 0 && ageMinutes >= FAREWELL_AGE_MIN;
+}
+
+// abandono total durante 1h: lista para escaparse. La dispara el usuario con el
+// boton (final triste); cuidarla un solo tick la salva (neglectTicks se resetea)
+bool Pet::canRunawayNow() const {
+  return !isEgg() && !sleeping && ceremony == CER_NONE && neglectTicks >= RUNAWAY_TICKS;
 }
 
 void Pet::startFarewell() {

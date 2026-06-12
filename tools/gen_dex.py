@@ -20,10 +20,13 @@ def rgb565(hexcol):
 # 0 PRADERA, 1 PLAYA, 2 BOSQUE, 3 VOLCAN, 4 MONTANA, 5 NIEVE
 TYPE_BIOME = {
     'agua': 1, 'planta': 2, 'bicho': 2, 'fuego': 3,
-    'roca': 4, 'tierra': 4, 'dragon': 4, 'hielo': 5,
+    'roca': 4, 'tierra': 4, 'dragon': 1, 'hielo': 5,  # los dragones gen1 (Dratini) viven en el agua
     'normal': 0, 'electrico': 0, 'lucha': 0, 'veneno': 0,
     'psiquico': 0, 'fantasma': 0,
 }
+
+# excepciones por dex# (el tipo no basta): fosiles marinos roca/agua -> playa
+BIOME_OVERRIDE = {138: 1, 139: 1, 140: 1, 141: 1}  # Omanyte, Omastar, Kabuto, Kabutops
 
 
 def main():
@@ -62,7 +65,7 @@ def main():
             rar = 'R_COMUN'
         rarities.append(rar)
         hp, atk, df, spe = BASE_STATS[num]
-        bio = TYPE_BIOME[typ]
+        bio = BIOME_OVERRIDE.get(num, TYPE_BIOME[typ])
         out.append(f'  {{ "{display}", {evo}, {lvl}, {rar}, 0x{acc:04X}, {hp}, {atk}, {df}, {spe}, {bio} }},  // {num} {typ}\n')
     out.append("};\n\n")
     out.append("// el primer huevo de la partida: iniciales clasicos\n")
