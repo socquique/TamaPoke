@@ -190,7 +190,4 @@ RARE = {58, 77, 83, 88, 95, 106, 107, 108, 111, 113, 114, 115, 122, 123,
         124, 125, 126, 127, 128, 131, 132, 137, 138, 140, 142, 143, 147}
 LEGENDARY = {144, 145, 146, 150, 151}
 
-# slugs alternativos para la fuente de respaldo (projectpokemon)
-FALLBACK_SLUGS = {29: 'nidoran-f', 32: 'nidoran-m', 122: 'mr-mime'}
-
 SLUGS = {n: s for n, s, *_ in DEX}

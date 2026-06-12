@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Importador de sprites animados (GIF) para TamaPoke.
 
-Convierte GIFs (como los 3D de Project Pokemon) a frames 48x48 listos para el
-juego: recorte estable entre frames, reduccion de frames a keyframes, escalado,
-alpha binario y cuantizacion de colores por especie.
+Convierte GIFs animados a frames 48x48 listos para el juego: recorte estable
+entre frames, reduccion de frames a keyframes, escalado, alpha binario y
+cuantizacion de colores por especie. (Script de apoyo, no del pipeline actual.)
 
   python3 tools/import_gif.py            # convierte downloads/*.gif y
                                          # renderiza tools/import_sheet.png
