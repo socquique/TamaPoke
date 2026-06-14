@@ -176,8 +176,8 @@ document.getElementById('auto').onclick = async () => {
   log('Downloading sprite bundle (~58 MB)...');
   let items;
   try {
-    // sprites.pak se sirve como release asset (57 MB, fuera del repo)
-    const resp = await fetch('https://github.com/socquique/TamaPoke/releases/download/v1.0/sprites.pak');
+    // sprites.pak servido desde el mismo origen (GitHub Pages) -> sin lios de CORS
+    const resp = await fetch('sprites.pak');
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     items = parsePak(await resp.arrayBuffer());
   } catch (e) { log('Could not download sprites.pak: ' + e.message); return; }
