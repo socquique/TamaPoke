@@ -5,8 +5,9 @@ A gen-1-Pokémon-inspired tamagotchi for the
 over QSPI, CST9217 touch over I2C). Raise any of the 151, evolve it, train it
 and complete them all (shinies included).
 
-> Private repo. The sprites belong to Nintendo/Game Freak and to the artists of
-> PMD SpriteCollab and Pokémon Showdown — personal use. See **Credits**.
+> **Personal, non-commercial fan project.** Code is MIT; the sprites belong to
+> Nintendo/Game Freak and the artists of PMD SpriteCollab and Pokémon Showdown,
+> and the 3D case is CC BY-NC-SA. See **[License](#license)** and **Credits**.
 
 ## Status
 
@@ -237,3 +238,15 @@ Main-screen animations: [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCo
 Base stats: [PokéAPI](https://pokeapi.co). Pokémon is a ™ of Nintendo / Game Freak /
 The Pokémon Company. Non-commercial, personal-use project. Full list in
 [`CREDITS.md`](CREDITS.md).
+
+## License
+
+- **Source code** (firmware + tooling): **[MIT](LICENSE)**.
+- **Sprites & names**: © Nintendo / Game Freak / The Pokémon Company; pixel art
+  from [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (CC BY-NC 4.0)
+  and [Pokémon Showdown](https://play.pokemonshowdown.com). **Non-commercial use only.**
+- **3D-printed case**: remix of *"Pokeball"* by **yoyothechicken**
+  ([MakerWorld #839922](https://makerworld.com/es/models/839922-pokeball)),
+  licensed **CC BY-NC-SA**, and shared here under the same terms.
+
+This is an unofficial fan project, not affiliated with or endorsed by Nintendo.

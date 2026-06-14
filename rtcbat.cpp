@@ -46,6 +46,19 @@ bool batBegin() {
   return pmuOk;
 }
 
+// Enciende la alimentacion de la AMOLED. En la Waveshare 1.75 el panel (OLED VDD)
+// cuelga del rail BLDO1 a 3.3V del AXP2101. El firmware daba por hecho que estaba
+// encendido; si el PMU se resetea (drenaje total), BLDO1 queda OFF y la pantalla
+// se ve negra aunque el resto funcione. Hay que llamarla ANTES de gfx->begin().
+void pmuEnablePanel() {
+  if (!pmu.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL)) {
+    Serial.println("AXP2101 no detectado (pmuEnablePanel)");
+    return;
+  }
+  pmu.setBLDO1Voltage(3300);   // OLED VDD
+  pmu.enableBLDO1();
+}
+
 // el estado de energia (I2C) se cachea ~2 s: leerlo en cada frame del loop
 // metia trafico I2C inutil y podia oscilar (parpadeo de brillo)
 static uint32_t powerCacheT = 0;

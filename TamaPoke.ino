@@ -169,6 +169,11 @@ void setup() {
   // handleTouch).
   Wire.setTimeOut(50);
 
+  // CRITICO: encender la alimentacion del panel (BLDO1=OLED VDD 3.3V) ANTES de
+  // inicializar el display. Si el PMU se reseteo (drenaje total), este rail
+  // queda OFF y la pantalla se ve negra aunque el resto de la placa funcione.
+  pmuEnablePanel();
+
   // QSPI a 80MHz (por defecto 40): el flush del framebuffer es el cuello de
   // botella del fps (~56ms a 40MHz). Si el panel mostrara basura, bajar a 40M.
   if (!gfx->begin(80000000)) Serial.println("gfx->begin() fallo");
