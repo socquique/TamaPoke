@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Genera /mons/thumbs.bin: miniaturas 40x40 de los 151 para la galeria.
 
-Se derivan del frame 0 de los .bin ya empaquetados (tools/sdcard/mons/NNN.bin),
-asi que no requiere descargas. Formato TPTH (little-endian):
+Se derivan del frame frontal (Idle, frame 0) de los sprites PMD ya empaquetados
+(tools/sdcard/mons/pNNN.bin, formato TPK2) -> miniaturas legales (CC BY-NC), mismo
+estilo que la pantalla principal. Formato TPTH (little-endian):
 
   char[4] "TPTH"
   uint16  count
@@ -18,15 +19,23 @@ DIR = os.path.join(os.path.dirname(__file__), 'sdcard', 'mons')
 CELL = 40
 
 
-def read_tpk_frame0(path):
+def read_pmd_idle_frame0(path):
+    """Frame 0 de la accion Idle (id 0 = vista frontal) de un sprite PMD TPK2."""
     with open(path, 'rb') as f:
-        if f.read(4) != b'TPK1':
-            raise ValueError('magic')
-        w, h, frames, _ms = struct.unpack('<4H', f.read(8))
-        (palcount,) = struct.unpack('<H', f.read(2))
-        pal = list(struct.unpack(f'<{palcount}H', f.read(palcount * 2)))
-        data = f.read(w * h)  # solo frame 0
-    return w, h, pal, data
+        buf = f.read()
+    if buf[:4] != b'TPK2':
+        raise ValueError('magic TPK2')
+    nacts = buf[4]
+    (palcount,) = struct.unpack_from('<H', buf, 5)
+    pal = list(struct.unpack_from(f'<{palcount}H', buf, 7))
+    p = 7 + palcount * 2
+    for _ in range(nacts):
+        aid, w, h, nf = buf[p], buf[p + 1], buf[p + 2], buf[p + 3]
+        p += 4 + nf * 2  # cabecera + ms[]
+        if aid == 0:     # PMD_IDLE
+            return w, h, pal, buf[p:p + w * h]  # frame 0
+        p += w * h * nf
+    raise ValueError('sin accion Idle (id 0)')
 
 
 def shrink(w, h, pal, data):
@@ -55,8 +64,8 @@ def shrink(w, h, pal, data):
 def main():
     blobs = []
     for dex in range(1, 152):
-        path = os.path.join(DIR, f'{dex:03d}.bin')
-        w, h, pal, data = read_tpk_frame0(path)
+        path = os.path.join(DIR, f'p{dex:03d}.bin')
+        w, h, pal, data = read_pmd_idle_frame0(path)
         nw, nh, npal, ndata = shrink(w, h, pal, data)
         if len(npal) > 255:
             raise ValueError(f'{dex}: paleta {len(npal)}')

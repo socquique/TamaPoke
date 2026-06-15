@@ -1,7 +1,8 @@
 #pragma once
 #include <Arduino.h>
 
-// Sprite animado cargado desde la SD (formato TPK1, ver tools/pack_sd.py).
+// Sprite animado TPK1 (formato heredado, camino de respaldo). El proyecto usa
+// PMD/TPK2 (PmdMon) para todo; esta ruta queda inactiva si no hay NNN.bin en la SD.
 // Los datos indexados viven en PSRAM; la paleta es RGB565.
 struct SdMon {
   bool loaded = false;

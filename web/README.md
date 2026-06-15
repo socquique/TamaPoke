@@ -55,9 +55,8 @@ the one-click sprite loader work on a real deployment, pick one:
   `fetch('sprites.pak')` URL in `index.html` to the release URL (keeps the repo
   small; watch out for CORS on the asset host).
 
-The PMD SpriteCollab sprites are CC BY-NC (non-commercial sharing with attribution
-is allowed). The Showdown thumbnails are ripped game sprites — Nintendo IP — so
-hosting them is a gray area; see [`../CREDITS.md`](../CREDITS.md).
+All sprites are from PMD SpriteCollab, CC BY-NC (non-commercial sharing with
+attribution is allowed); see [`../CREDITS.md`](../CREDITS.md).
 
 ## Deploy (GitHub Pages)
 

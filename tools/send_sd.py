@@ -50,7 +50,7 @@ def main():
 
     files = sorted(glob.glob(os.path.join(os.path.dirname(__file__), 'sdcard', 'mons', '*.bin')))
     if not files:
-        sys.exit("no hay .bin; ejecuta antes tools/pack_sd.py")
+        sys.exit("no hay .bin; ejecuta antes tools/pack_pmd.py")
 
     for path in files:
         size = os.path.getsize(path)

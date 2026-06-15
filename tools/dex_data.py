@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Fuente unica de datos de la Pokedex gen 1 para TamaPoke.
 
-Cada entrada: (num, slug_showdown, nombre_pantalla, tipo, evoluciona_a, nivel)
-- slug: nombre en play.pokemonshowdown.com/sprites/gen5ani/<slug>.gif
+Cada entrada: (num, slug, nombre_pantalla, tipo, evoluciona_a, nivel)
+- slug: nombre en minusculas de la especie (identificador interno)
 - nombre_pantalla: ASCII en mayusculas (la fuente GFX no tiene acentos)
 - tipo: clave de TYPE_ACCENTS (color del nombre en la UI)
 - evoluciona_a: numero de dex (0 = forma final); niveles gen 1 reales,

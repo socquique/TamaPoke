@@ -11,8 +11,7 @@ This project is not affiliated with or endorsed by any of those companies.
 
 | Resource | Source | Use in the project |
 |---|---|---|
-| **Pet animations** (idle, walk, sleep, eat, hurt, attack…) | [PMD Sprite Collaboration (PMDCollab/SpriteCollab)](https://github.com/PMDCollab/SpriteCollab) | Mystery-Dungeon-style animated sprites shown on the main screen, the stat card and the minigame |
-| **Pokédex sprites** (animated) | [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/gen5ani/) (gen 5 ani) | The thumbnails and the gallery detail view |
+| **All sprites** (idle, walk, sleep, eat, hurt, attack…) | [PMD Sprite Collaboration (PMDCollab/SpriteCollab)](https://github.com/PMDCollab/SpriteCollab) | Mystery-Dungeon-style animated sprites used everywhere: main screen, stat card, minigame, and the Pokédex grid + detail view |
 | **Gen 1 base stats** | [PokéAPI](https://pokeapi.co) | Real ATK/DEF/SPD/HP for each species |
 
 The **SpriteCollab** sprites are the work of its community of artists under their

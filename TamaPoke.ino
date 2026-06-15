@@ -48,7 +48,7 @@ struct {
   float x = 233, targetX = 233;
 } beh;
 #define PET_GROUND 304  // linea de suelo de la mascota
-SdMon galleryMon;  // sprite grande de la vista detalle de la galeria
+PmdMon galleryPmd;  // sprite grande de la vista detalle de la galeria (PMD/TPK2, legal)
 
 // galeria pokedex
 bool galleryOpen = false;
@@ -358,7 +358,7 @@ void handleSerial() {
     galleryOpen = !galleryOpen;
     galleryDetail = 0;
     galleryDirty = true;
-    if (!galleryOpen) galleryMon.unload();
+    if (!galleryOpen) galleryPmd.unload();
     Serial.println("DONE");
   } else if (line == "EGGS") {
     // simula 20 tiradas de huevo (no cambia el estado del juego)
@@ -525,14 +525,14 @@ void onSwipe(int dir) {
   }
   if (galleryDetail) {  // en detalle: volver a la rejilla
     galleryDetail = 0;
-    galleryMon.unload();
+    galleryPmd.unload();
     galleryDirty = true;
     return;
   }
   int np = galleryPage - dir;  // deslizar a la izquierda avanza pagina
   if (np < 0) {                // retroceder desde la primera = salir
     galleryOpen = false;
-    galleryMon.unload();
+    galleryPmd.unload();
     return;
   }
   if (np > 9) np = 9;
@@ -1693,18 +1693,9 @@ void renderGallery() {
     gfx->setTextSize(3);
     gfx->setCursor(CX - strlen(head) * 9, 56);
     gfx->print(head);
-    if (galleryMon.loaded) {
-      int s = galleryMon.scale;
-      int x = CX - galleryMon.w * s / 2, y = 215 - galleryMon.h * s / 2;
-      uint16_t fm = galleryMon.frameMs ? galleryMon.frameMs : 100;
-      uint16_t fi = reg ? (millis() / fm) % galleryMon.frames : 0;
-      const uint8_t *fr = galleryMon.data + (uint32_t)fi * galleryMon.w * galleryMon.h;
-      for (int r = 0; r < galleryMon.h; r++)
-        for (int c = 0; c < galleryMon.w; c++) {
-          uint8_t idx = fr[r * galleryMon.w + c];
-          if (idx == 0xFF) continue;
-          gfx->fillRect(x + c * s, y + r * s, s, s, reg ? galleryMon.pal[idx] : INK_K);
-        }
+    if (galleryPmd.loaded) {
+      // animado y a color si esta registrado; silueta estatica si no (estilo "?")
+      drawPmdActM(galleryPmd, PMD_IDLE, CX, 300, reg ? millis() : 0, true, !reg, 6);
     } else {
       const uint8_t *t = thumbs.get(galleryDetail);
       if (t) drawThumb(t, CX - GAL_CELL, 135, 4, !reg);
@@ -1764,13 +1755,13 @@ void renderGallery() {
 void galleryTap(int16_t x, int16_t y) {
   if (galleryDetail) {  // volver a la rejilla
     galleryDetail = 0;
-    galleryMon.unload();
+    galleryPmd.unload();
     galleryDirty = true;
     return;
   }
   if (y < 72) {  // tocar la cabecera = salir
     galleryOpen = false;
-    galleryMon.unload();
+    galleryPmd.unload();
     return;
   }
   int c = (x - GAL_X) / GAL_CELL, r = (y - GAL_Y) / GAL_CELL;
@@ -1778,7 +1769,7 @@ void galleryTap(int16_t x, int16_t y) {
   int16_t dex = galleryPage * 16 + r * 4 + c + 1;
   if (dex > 151) return;
   galleryDetail = dex;
-  galleryMon.load(dex, pet.isShinyRegistered(dex));
+  galleryPmd.load(dex, pet.isShinyRegistered(dex));
 }
 
 void drawBattery() {

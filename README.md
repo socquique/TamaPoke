@@ -5,9 +5,9 @@ A gen-1-Pokémon-inspired tamagotchi for the
 over QSPI, CST9217 touch over I2C). Raise any of the 151, evolve it, train it
 and complete them all (shinies included).
 
-> **Personal, non-commercial fan project.** Code is MIT; the sprites belong to
-> Nintendo/Game Freak and the artists of PMD SpriteCollab and Pokémon Showdown,
-> and the 3D case is CC BY-NC-SA. See **[License](#license)** and **Credits**.
+> **Personal, non-commercial fan project.** Code is MIT; the sprites are from
+> PMD SpriteCollab (CC BY-NC, Pokémon © Nintendo/Game Freak), and the 3D case is
+> CC BY-NC-SA. See **[License](#license)** and **Credits**.
 
 ## Status
 
@@ -148,20 +148,28 @@ arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn "$FQBN" .
 the SD over Web Serial, no Arduino needed. Serve it over HTTPS or `localhost`
 (secure context) and open it in **Chrome/Edge**. See [`web/README.md`](web/README.md).
 
-### Loading the sprites onto the SD (dev path)
+### Generate and load the sprites yourself
 
-The firmware accepts files over USB (PUT protocol with per-block ACK), so you
-don't have to remove the card. The board formats the SD to FAT if it won't mount.
+All sprites come from **[PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)**
+(CC BY-NC). You can regenerate the whole set and load it onto your board with the
+pipeline below — the firmware accepts files over USB (PUT protocol with per-block
+ACK), so you don't have to remove the card (it formats the SD to FAT if needed).
 
 ```bash
-python3 tools/pack_sd.py        # animated (gallery): the 151 + shiny -> tools/sdcard/mons/[s]NNN.bin
-python3 tools/pack_pmd.py       # PMD (main screen): the 151 + shiny -> p[s]NNN.bin
-python3 tools/make_thumbs.py    # gallery thumbnails -> thumbs.bin
-python3 tools/pack_bundle.py    # bundle everything into web/sprites.pak (for the web installer)
-python3 tools/send_sd.py        # send tools/sdcard/mons/* to the SD over USB
+python3 tools/pack_pmd.py       # fetch + pack PMD sprites: the 151 + shiny -> tools/sdcard/mons/p[s]NNN.bin
+python3 tools/make_thumbs.py    # Pokédex thumbnails (from the PMD sprites) -> thumbs.bin
+python3 tools/send_sd.py        # send tools/sdcard/mons/* to the board's SD over USB
 ```
 
-(~58 MB total; ~40 MB are the PMD sprites. Versioned under `tools/sdcard/`.)
+To make the **one-click web-installer bundle** instead of sending over USB:
+
+```bash
+python3 tools/pack_bundle.py    # bundle tools/sdcard/mons/* into web/sprites.pak
+```
+
+Then load it from the web installer's **"Load sprites"** button (or `send_sd.py`
+above). `pack_pmd.py` also takes individual dex numbers, e.g. `pack_pmd.py 7 25`.
+(~40 MB total, all PMD. Versioned under `tools/sdcard/`.)
 
 ## How to play
 
@@ -206,21 +214,21 @@ witness it), each opening a two-option dialog:
 - **Runaway** (dark button, total neglect for 1 h): a somber "feels abandoned"
   ending in the rain — caring for the creature cancels it.
 
-## Sprites: two sources
+## Sprites: PMD SpriteCollab everywhere
 
-- **PMD SpriteCollab** (main screen, stat card, minigame): behaviour sprites —
-  `tools/pack_pmd.py` packs actions (Idle, Walk L/R, Sleep, Eat, Hurt, Attack,
-  Pose, Nod, DeepBreath) into the multi-action **TPK2** format (`/mons/pNNN.bin`).
-  The engine in `TamaPoke.ino` makes the creature wander, gesture, curl up to
-  sleep, chew and wince. Anchored by the feet (lowest content row), not the canvas.
-- **Animated sprites from Showdown** (Pokédex / gallery): `tools/pack_sd.py` →
-  **TPK1** format (`/mons/NNN.bin`). Also a fallback if the PMD sprite is missing.
+- **PMD SpriteCollab** (everything — main screen, stat card, minigame **and the
+  Pokédex grid + detail view**): behaviour sprites — `tools/pack_pmd.py` packs
+  actions (Idle, Walk L/R, Sleep, Eat, Hurt, Attack, Pose, Nod, DeepBreath) into
+  the multi-action **TPK2** format (`/mons/pNNN.bin`). The engine in `TamaPoke.ino`
+  makes the creature wander, gesture, curl up to sleep, chew and wince. Anchored by
+  the feet (lowest content row), not the canvas. The Pokédex thumbnails
+  (`thumbs.bin`, TPTH) are derived from these by `tools/make_thumbs.py`.
 - **In-house workshop** (`tools/sprites.py`): 9 primitive-drawn sprites as a
   no-SD fallback + the UI icons. Generates `species.h`. Preview in
   `tools/sheet.png`, emit with `python3 tools/sprites.py emit`.
 
-`sdmon.h/.cpp` loads both formats into PSRAM (`SdMon` for TPK1, `PmdMon` for
-TPK2) and the thumbnails (`SdThumbs`).
+`sdmon.h/.cpp` loads the PMD sprites into PSRAM (`PmdMon` for TPK2) plus the
+thumbnails (`SdThumbs`). `SdMon` (TPK1) remains as a dormant legacy fallback only.
 
 ## Pokédex and species data
 
@@ -291,7 +299,7 @@ beach, forest, volcano, mountain, snow). Sleeping forces night.
 - `species.h` — GENERATED (`sprites.py`): fallback sprites, UI icons, colours
 - `pin_config.h` — the board's official pins
 - `tools/` — pipeline: `dex_data.py` (data), `dex_stats.py`, `gen_dex.py`,
-  `sprites.py` (workshop), `pack_sd.py` / `pack_pmd.py` / `make_thumbs.py`
+  `sprites.py` (workshop), `pack_pmd.py` / `make_thumbs.py`
   (packers), `pack_bundle.py` (web bundle), `send_sd.py` (SD upload), `touch_log.py`
 - `tools/sdcard/mons/` — the generated .bin files (animated, shiny, PMD, thumbnails)
 - `web/` — the browser installer (ESP Web Tools + Web Serial sprite loader)
@@ -320,18 +328,17 @@ To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in
 
 ## Credits
 
-Main-screen animations: [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)
-(community). Pokédex sprites: [Pokémon Showdown](https://play.pokemonshowdown.com).
-Base stats: [PokéAPI](https://pokeapi.co). Pokémon is a ™ of Nintendo / Game Freak /
-The Pokémon Company. Non-commercial, personal-use project. Full list in
-[`CREDITS.md`](CREDITS.md).
+All sprites: [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)
+(community, CC BY-NC). Base stats: [PokéAPI](https://pokeapi.co). Pokémon is a ™ of
+Nintendo / Game Freak / The Pokémon Company. Non-commercial, personal-use project.
+Full list in [`CREDITS.md`](CREDITS.md).
 
 ## License
 
 - **Source code** (firmware + tooling): **[MIT](LICENSE)**.
 - **Sprites & names**: © Nintendo / Game Freak / The Pokémon Company; pixel art
-  from [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (CC BY-NC 4.0)
-  and [Pokémon Showdown](https://play.pokemonshowdown.com). **Non-commercial use only.**
+  from [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (CC BY-NC 4.0).
+  **Non-commercial use only.**
 - **3D-printed case**: remix of *"Pokeball"* by **yoyothechicken**
   ([MakerWorld #839922](https://makerworld.com/es/models/839922-pokeball)),
   licensed **CC BY-NC-SA**, and shared here under the same terms.
