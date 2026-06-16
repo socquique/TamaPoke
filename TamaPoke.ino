@@ -24,7 +24,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.1"
+#define FW_VERSION "1.2"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1431,8 +1431,12 @@ void renderCardProfile() {
   char head[26];
   snprintf(head, sizeof(head), T(S_NAME_FMT), pet.shiny ? "*" : "", nm, pet.level());
   gfx->setTextColor(d.accent);
-  gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(head) * 9, 34);
+  // auto-encoge: a tamano 3 los nombres largos no caben en la franja estrecha de
+  // arriba de la pantalla redonda, asi que se cortaban por el borde
+  int hlen = strlen(head);
+  int hts = (hlen <= 11) ? 3 : 2;
+  gfx->setTextSize(hts);
+  gfx->setCursor(CX - hlen * (hts == 3 ? 9 : 6), hts == 3 ? 34 : 40);
   gfx->print(head);
   if (pet.nick[0]) {  // especie real bajo el apodo
     gfx->setTextColor(UI_TRACK);
@@ -1702,8 +1706,10 @@ void renderGallery() {
     snprintf(head, sizeof(head), "N.%03d %s%s", galleryDetail,
              pet.isShinyRegistered(galleryDetail) ? "*" : "", reg ? d.name : "???");
     gfx->setTextColor(reg ? d.accent : UI_INK);
-    gfx->setTextSize(3);
-    gfx->setCursor(CX - strlen(head) * 9, 56);
+    int glen = strlen(head);
+    int gts = (glen <= 13) ? 3 : 2;  // auto-encoge nombres largos (no caben a t3)
+    gfx->setTextSize(gts);
+    gfx->setCursor(CX - glen * (gts == 3 ? 9 : 6), gts == 3 ? 56 : 60);
     gfx->print(head);
     if (galleryPmd.loaded) {
       // animado y a color si esta registrado; silueta estatica si no (estilo "?")
