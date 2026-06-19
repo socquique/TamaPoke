@@ -9,6 +9,8 @@ and complete them all (shinies included).
 > PMD SpriteCollab (CC BY-NC, Pokémon © Nintendo/Game Freak), and the 3D case is
 > CC BY-NC-SA. See **[License](#license)** and **Credits**.
 
+🔴 **3D-printed Pokéball case + print profiles → [on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)** · flash it in your browser → **[web installer](https://socquique.github.io/TamaPoke/web/)**
+
 ## Status
 
 Running on hardware. Implemented: the 151 + shinies animated from microSD, full
@@ -320,11 +322,9 @@ To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in
 - **Wild encounters / battle** — designed (see project memory): resolution by
   ATK/DEF/SPD with PMD Attack/Hurt animations, trainer rank as endgame. Style
   still to pick (auto / timing / turn-based).
-- **3D case** for MakerWorld.
 - **Soak test** 24–48 h (instrumentation ready: `HEALTH` command/heartbeat).
-- **Going public**: to use free GitHub Pages the repo must be public — strip the
-  third-party sprites from history first, or host the sprite bundle as a release
-  asset. The web installer already serves the firmware + a one-click sprite bundle.
+
+*(Done: 3D-printed case [published on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi); repo public with the browser installer + one-click sprite bundle.)*
 
 ## Credits
 
