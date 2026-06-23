@@ -88,11 +88,21 @@ static const Note N_MEDAL[]  = {{784, 70}, {0, 25}, {784, 70}, {0, 25}, {1047, 2
 static const Note N_DENY[]   = {{300, 110}, {200, 170}};
 static const Note N_BYE[]    = {{784, 150}, {659, 150}, {523, 280}};
 static const Note N_LEVEL[]  = {{784, 70}, {1047, 130}};
+static const Note N_BATTLE_WIN[]   = {{659, 65}, {784, 65}, {988, 90}, {1319, 170}};
+static const Note N_BATTLE_LOSS[]  = {{392, 120}, {330, 120}, {247, 220}};
+static const Note N_CATCH_OK[]     = {{784, 60}, {988, 70}, {1319, 160}};
+static const Note N_CATCH_FAIL[]   = {{523, 70}, {0, 18}, {392, 110}, {294, 170}};
+static const Note N_DAILY_GOAL[]   = {{1175, 55}, {0, 25}, {1568, 120}};
+static const Note N_EVENT_SPARKLE[] = {{1568, 45}, {1976, 75}, {0, 20}, {1760, 60}};
+static const Note N_REST[]         = {{392, 100}, {523, 160}};
+static const Note N_COUNTER[]      = {{988, 45}, {0, 18}, {1319, 65}};
 
 struct SfxDef { const Note *n; uint8_t len; };
 static const SfxDef SFX[SFX_COUNT] = {
   {N_TAP, 1}, {N_EAT, 3}, {N_PLAY, 2}, {N_HEART, 2}, {N_HATCH, 4},
   {N_EVOLVE, 5}, {N_MEDAL, 5}, {N_DENY, 2}, {N_BYE, 3}, {N_LEVEL, 2},
+  {N_BATTLE_WIN, 4}, {N_BATTLE_LOSS, 3}, {N_CATCH_OK, 3}, {N_CATCH_FAIL, 4},
+  {N_DAILY_GOAL, 3}, {N_EVENT_SPARKLE, 4}, {N_REST, 2}, {N_COUNTER, 3},
 };
 
 static int16_t buf[256 * 2];  // estéreo intercalado (L=R)

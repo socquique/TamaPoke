@@ -14,6 +14,14 @@ enum Sfx : uint8_t {
   SFX_DENY,     // accion no permitida
   SFX_BYE,      // despedida
   SFX_LEVEL,    // sube de nivel
+  SFX_BATTLE_WIN,
+  SFX_BATTLE_LOSS,
+  SFX_CATCH_OK,
+  SFX_CATCH_FAIL,
+  SFX_DAILY_GOAL,
+  SFX_EVENT_SPARKLE,
+  SFX_REST,
+  SFX_COUNTER,
   SFX_COUNT
 };
 

@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.12-catch-v1"
+#define FW_VERSION "1.13-sound-v2"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1726,7 +1726,7 @@ void acceptPetEvent() {
   else if (type == PET_EVENT_SPARKLE) msg = S_EVENT_LUCKY;
   snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(msg));
   petEventFeedbackUntil = millis() + 1800;
-  sfxPlay(type == PET_EVENT_BERRY ? SFX_EAT : SFX_HEART);
+  sfxPlay(type == PET_EVENT_BERRY ? SFX_EAT : (type == PET_EVENT_SPARKLE ? SFX_EVENT_SPARKLE : SFX_HEART));
 }
 
 void closeBattle() {
@@ -1787,11 +1787,11 @@ void finishBattle() {
     battleReward = pet.applyBattleWin(battleDex, closeWin);
     battleCatchOffered = true;
     battleCatchChance = pet.catchChanceForWild(battleDex, battleLevel, battlePlayer.level, closeWin);
-    sfxPlay(SFX_MEDAL);
+    sfxPlay(SFX_BATTLE_WIN);
   } else {
     battleReward = {};
     pet.applyBattleLoss();
-    sfxPlay(SFX_DENY);
+    sfxPlay(SFX_BATTLE_LOSS);
   }
 }
 
@@ -1815,8 +1815,14 @@ void performBattleAction(BattleAction action) {
   } else {
     snprintf(battleMsg, sizeof(battleMsg), T(S_MISSED));
   }
-  sfxPlay(battleTurn.playerDamage > 0 ? SFX_PLAY : SFX_TAP);
-  if (battleTurn.battleEnded) finishBattle();
+  if (battleTurn.battleEnded) {
+    finishBattle();
+    return;
+  }
+  if (battleTurn.restFailed) sfxPlay(SFX_DENY);
+  else if (battleTurn.counterReady) sfxPlay(SFX_COUNTER);
+  else if (battleTurn.playerRested) sfxPlay(SFX_REST);
+  else sfxPlay(battleTurn.playerDamage > 0 ? SFX_PLAY : SFX_TAP);
 }
 
 void battleTap(int16_t x, int16_t y) {
@@ -1828,7 +1834,7 @@ void battleTap(int16_t x, int16_t y) {
         battleCatchDone = true;
         battleCatchSuccess = pet.tryCatchWild(battleDex, battleLevel, battlePlayer.level, closeWin, (uint8_t)random(100));
         battleCatchChance = pet.catchChanceForWild(battleDex, battleLevel, battlePlayer.level, closeWin);
-        sfxPlay(battleCatchSuccess ? SFX_MEDAL : SFX_DENY);
+        sfxPlay(battleCatchSuccess ? SFX_CATCH_OK : SFX_CATCH_FAIL);
         galleryDirty = true;
         return;
       }

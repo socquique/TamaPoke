@@ -312,6 +312,7 @@ void Pet::noteDailyGoal(uint8_t goalType, uint8_t amount) {
       dailyGoalDone |= (1 << i);
       applyDailyReward();
       heartUntil = millis() + HEART_MS;
+      sfxPlay(SFX_DAILY_GOAL);
     }
   }
   if (changed) save();
