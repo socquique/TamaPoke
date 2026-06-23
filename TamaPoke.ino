@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.13-sound-v2"
+#define FW_VERSION "1.13.1-touchfix"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1850,11 +1850,11 @@ void battleTap(int16_t x, int16_t y) {
     return;
   }
   if (battleAttackMenuUntil) {
-    if (x >= 54 && x <= 232 && y >= 280 && y <= 366) {
+    if (x >= 66 && x <= 232 && y >= 292 && y <= 352) {
       performBattleAction(BATTLE_ATTACK_QUICK);
       return;
     }
-    if (x >= 234 && x <= 412 && y >= 280 && y <= 366) {
+    if (x >= 234 && x <= 400 && y >= 292 && y <= 352) {
       performBattleAction(BATTLE_ATTACK_HEAVY);
       return;
     }
