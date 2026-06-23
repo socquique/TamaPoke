@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.14.1-settings-v2"
+#define FW_VERSION "1.14.2-catch-touch"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -537,6 +537,10 @@ void handleTouch() {
     swallowGesture = (dimStage > 0) || screenOff;  // si estaba a oscuras, solo despierta
     screenOff = false;
     lastInteract = millis();
+    if (!swallowGesture && gameOpen && gameMode == 1) {
+      catchTap(x, y);        // juego de reflejos: cuenta al tocar, no al soltar
+      swallowGesture = true; // evita doble tap al levantar el dedo
+    }
   } else if (pressed) {  // sigue apoyado
     tXl = x;
     tYl = y;
