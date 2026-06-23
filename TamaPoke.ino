@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.14.2-catch-touch"
+#define FW_VERSION "1.14.3-ball-hard"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -88,6 +88,7 @@ float ballX, ballY, ballVX, ballVY, gamePetX;
 uint8_t gameScore, gameMisses;
 float hitX, hitY;             // ultimo golpe (anillo de impacto)
 uint32_t hitTime = 0;
+uint32_t ballLastHitAt = 0;
 bool gameNewHi = false;
 uint8_t gameGain = 0;
 uint32_t catchUntil = 0, catchTargetUntil = 0;
@@ -1099,6 +1100,7 @@ void startGame() {
   gameNewHi = false;
   gameGain = 0;
   hitTime = 0;
+  ballLastHitAt = 0;
   gamePetX = 233;
   respawnBall();
 }
@@ -1156,7 +1158,7 @@ void respawnBall() {
   float sp = 2.35f + gameScore * 0.105f;  // exigente desde el inicio
   if (sp > 6.4f) sp = 6.4f;
   ballVX = random(2) ? sp : -sp;
-  ballVY = 0;
+  ballVY = 1.15f;             // empieza cayendo: menos margen para taps gratis
 }
 
 int ballHitRadius() {
@@ -1182,10 +1184,12 @@ void gameTap(int16_t x, int16_t y) {
   float dx = ballX - x, dy = ballY - y;
   int hitRadius = ballHitRadius();
   if (dx * dx + dy * dy < hitRadius * hitRadius) {  // toque a la bola!
+    uint32_t now = millis();
+    if (now - ballLastHitAt < 240 || ballVY < -0.8f) return;
     gameScore++;
     sfxPlay(SFX_PLAY);
-    // golpe mas suave: impulso moderado que crece poco a poco con la puntuacion
-    float lift = 6.25f + (gameScore > 14 ? 3.2f : gameScore * 0.20f);
+    // impulso moderado; el bloqueo evita encadenar rebotes al inicio
+    float lift = 5.85f + (gameScore > 14 ? 3.0f : gameScore * 0.18f);
     ballVY = -lift;
     float drift = 0.22f + (gameScore >= 8 ? 0.04f : 0.0f) + (gameScore >= 18 ? 0.04f : 0.0f);
     ballVX += dx * drift;
@@ -1193,7 +1197,8 @@ void gameTap(int16_t x, int16_t y) {
     if (ballVX < -9.0f) ballVX = -9.0f;
     hitX = ballX;
     hitY = ballY;
-    hitTime = millis();
+    hitTime = now;
+    ballLastHitAt = now;
   }
 }
 
@@ -1261,10 +1266,10 @@ void memoTap(int16_t x, int16_t y) {
 }
 
 void stepGame() {
-  float grav = 0.58f + gameScore * 0.024f;  // cae rapido desde el inicio
-  if (gameScore >= 8) grav += 0.075f;
-  if (gameScore >= 18) grav += 0.075f;
-  if (grav > 1.35f) grav = 1.35f;
+  float grav = 0.82f + gameScore * 0.032f;  // cae exigente desde el inicio
+  if (gameScore >= 8) grav += 0.10f;
+  if (gameScore >= 18) grav += 0.12f;
+  if (grav > 1.65f) grav = 1.65f;
   ballVY += grav;
   ballX += ballVX;
   ballY += ballVY;
