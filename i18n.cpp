@@ -46,7 +46,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "CARACTER", "EQUILIBRADO", "JUGUETON", "VALIENTE", "TRANQUILO", "PEREZOSO",
     "Estable", "Ama jugar", "Listo para luchar", "Relajado", "Comodo",
     "RECORDS", "EDAD %lud",
-    "DIA", "OK", "BONUS", "CUIDAR", "JUGAR", "GANAR", "ATRAPA 5", "MEMO 3",
+    "DIARIO", "HECHO", "BONUS", "CUIDAR", "JUGAR", "GANAR", "ATRAPA 5", "MEMO 3",
     "ATRAPAR", "DEJAR", "ATRAPADO!", "ESCAPO", "ATRAPADO", "CRIADO",
   },
   // ---------------- EN ----------------
@@ -88,7 +88,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PERSONALITY", "BALANCED", "PLAYFUL", "BRAVE", "CALM", "LAZY",
     "Steady", "Loves games", "Battle ready", "Relaxed", "Cozy",
     "RECORDS", "AGE %lud",
-    "DAILY", "OK", "BONUS", "CARE", "PLAY", "WIN", "CATCH 5", "MEMO 3",
+    "DAILY", "DONE", "BONUS", "CARE", "PLAY", "WIN", "CATCH 5", "MEMO 3",
     "CATCH", "LEAVE", "CAUGHT!", "ESCAPED", "CAUGHT", "RAISED",
   },
   // ---------------- FR ----------------
@@ -130,7 +130,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "CARACTERE", "EQUILIBRE", "JOUEUR", "BRAVE", "CALME", "PARESSEUX",
     "Stable", "Aime jouer", "Pret au combat", "Detendu", "Douillet",
     "RECORDS", "AGE %lud",
-    "JOUR", "OK", "BONUS", "SOIN", "JOUER", "GAGNER", "ATTRAPE 5", "MEMO 3",
+    "QUOTIDIEN", "FAIT", "BONUS", "SOIN", "JOUER", "GAGNER", "ATTRAPE 5", "MEMO 3",
     "CAPTURER", "LAISSER", "CAPTURE!", "FUI", "CAPTURE", "ELEVE",
   },
   // ---------------- DE ----------------
@@ -150,7 +150,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "%s   ALTER %lud", "Name tippen: umbenennen",
     "KAMPF", "ANG", "VER", "INI", "GEW", "KRAFT TRAINIEREN",
     "MEDAILLEN %d/%d", "tippen: zurueck",
-    "NAME:", "tippen zum zurueck",
+    "NAME:", "tippen: zurueck",
     "ESS", "FRO", "ENE", "HYG",
     "REK %u",
     "FORTSCHRITT", "Lv.%u", "%u min bis Lv.%u", "ENTWICKLUNG", "Endform",
@@ -159,7 +159,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "TON AN", "TON AUS",
     "ENTWICKELN", "%s will dir etwas sagen...", "%s fuehlt sich verlassen...",
     "Entwickeln?", "Form behalten", "Abschied?", "Lebwohl", "Zusammen bleiben",
-    "Waehle dein Starter",
+    "Starter waehlen",
     "Keine Sprites", "Auf die SD laden",
     "WILDER KAMPF", "KAEMPFEN", "FLIEHEN", "SIEG!", "NIEDERLAGE", "%u Runden", "Schaden %u/%u", "OK",
     "ANGRIFF", "AUSWEICHEN", "RUHEN", "Treffer %u", "Verfehlt!", "Ausgewichen!", "Heilung +%u", "Geflohen",
@@ -172,7 +172,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "WESEN", "AUSGEGLICHEN", "VERSPIELT", "MUTIG", "RUHIG", "TRAEGE",
     "Stabil", "Mag Spiele", "Kampfbereit", "Entspannt", "Gemuetlich",
     "REKORDE", "ALTER %lud",
-    "TAG", "OK", "BONUS", "PFLEGE", "SPIELEN", "SIEG", "FANG 5", "MEMO 3",
+    "TAEGLICH", "FERTIG", "BONUS", "PFLEGE", "SPIELEN", "SIEG", "FANG 5", "MEMO 3",
     "FANGEN", "GEHEN", "GEFANGEN!", "ENTKOMMEN", "GEFANGEN", "AUFGEZOGEN",
   },
   // ---------------- IT ----------------
@@ -214,7 +214,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "CARATTERE", "EQUILIBRATO", "GIOCOSO", "CORAGGIOSO", "CALMO", "PIGRO",
     "Stabile", "Ama giocare", "Pronto a lottare", "Rilassato", "Comodo",
     "RECORD", "ETA %lud",
-    "GIORNO", "OK", "BONUS", "CURA", "GIOCA", "VINCI", "PRENDI 5", "MEMO 3",
+    "QUOTID.", "FATTO", "BONUS", "CURA", "GIOCA", "VINCI", "PRENDI 5", "MEMO 3",
     "PRENDI", "LASCIA", "PRESO!", "FUGGITO", "PRESO", "ALLEVATO",
   },
   // ---------------- PT ----------------
@@ -256,7 +256,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PERSONALIDADE", "EQUILIBRADO", "BRINCALHAO", "VALENTE", "CALMO", "PREGUICOSO",
     "Estavel", "Gosta de jogos", "Pronto p/ lutar", "Relaxado", "Confortavel",
     "RECORDES", "IDADE %lud",
-    "DIA", "OK", "BONUS", "CUIDAR", "JOGAR", "VENCER", "APANHA 5", "MEMO 3",
+    "DIARIO", "FEITO", "BONUS", "CUIDAR", "JOGAR", "VENCER", "APANHA 5", "MEMO 3",
     "APANHAR", "DEIXAR", "APANHADO!", "FUGIU", "APANHADO", "CRIADO",
   },
 };

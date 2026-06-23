@@ -1,15 +1,15 @@
 {
   "name": "TamaPoke",
-  "version": "1.13.1-touchfix",
+  "version": "1.13.2-i18n",
   "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "firmware/tamapoke-1.13.1-touchfix-bootloader.bin", "offset": 0 },
-        { "path": "firmware/tamapoke-1.13.1-touchfix-partitions.bin", "offset": 32768 },
-        { "path": "firmware/tamapoke-1.13.1-touchfix-boot_app0.bin", "offset": 57344 },
-        { "path": "firmware/tamapoke-1.13.1-touchfix-app.bin", "offset": 65536 }
+        { "path": "firmware/tamapoke-1.13.2-i18n-bootloader.bin", "offset": 0 },
+        { "path": "firmware/tamapoke-1.13.2-i18n-partitions.bin", "offset": 32768 },
+        { "path": "firmware/tamapoke-1.13.2-i18n-boot_app0.bin", "offset": 57344 },
+        { "path": "firmware/tamapoke-1.13.2-i18n-app.bin", "offset": 65536 }
       ]
     }
   ]
