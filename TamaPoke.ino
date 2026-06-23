@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.13.6-card-taps"
+#define FW_VERSION "1.14-pokedex-v2"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -61,6 +61,7 @@ bool galleryOpen = false;
 bool galleryDirty = false;
 int galleryPage = 0;        // 10 paginas de 16
 int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
+uint8_t galleryFilter = 0;  // 0 todos, 1 criados, 2 capturados
 
 bool screenOff = false;       // pulsacion corta del boton PWR
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
@@ -609,12 +610,13 @@ void onSwipe(int dir) {
     return;
   }
   int np = galleryPage - dir;  // deslizar a la izquierda avanza pagina
+  int maxPage = galleryPageCount() - 1;
   if (np < 0) {                // retroceder desde la primera = salir
     galleryOpen = false;
     galleryPmd.unload();
     return;
   }
-  if (np > 9) np = 9;
+  if (np > maxPage) np = maxPage;
   if (np != galleryPage) {
     galleryPage = np;
     galleryDirty = true;
@@ -2738,8 +2740,38 @@ void keyboardTap(int16_t x, int16_t y) {
 // ---------- galeria pokedex ----------
 
 #define GAL_X 73
-#define GAL_Y 84
+#define GAL_Y 92
 #define GAL_CELL 80
+
+bool galleryDexVisible(int16_t dex) {
+  if (dex < 1 || dex > 151) return false;
+  if (galleryFilter == 1) return pet.isRegistered(dex);
+  if (galleryFilter == 2) return pet.isCaught(dex);
+  return true;
+}
+
+uint16_t galleryFilteredCount() {
+  if (galleryFilter == 0) return 151;
+  uint16_t count = 0;
+  for (int16_t dex = 1; dex <= 151; dex++)
+    if (galleryDexVisible(dex)) count++;
+  return count;
+}
+
+int galleryPageCount() {
+  uint16_t count = galleryFilteredCount();
+  int pages = (count + 15) / 16;
+  return pages > 0 ? pages : 1;
+}
+
+int16_t galleryDexAt(uint16_t index) {
+  for (int16_t dex = 1; dex <= 151; dex++) {
+    if (!galleryDexVisible(dex)) continue;
+    if (index == 0) return dex;
+    index--;
+  }
+  return 0;
+}
 
 // dibuja una miniatura centrada en su celda; sil=true la pinta en tinta
 void drawThumb(const uint8_t *b, int x, int y, int s, bool sil) {
@@ -2782,11 +2814,18 @@ void renderGallery() {
       const uint8_t *t = thumbs.get(galleryDetail);
       if (t) drawThumb(t, CX - GAL_CELL, 135, 4, !known);
     }
-    if (known) {
-      const char *mark = reg ? T(S_RAISED_MARK) : T(S_CAUGHT_MARK);
-      gfx->setTextColor(reg ? UI_BAR_OK : UI_BAR_WARN);
+    if (reg) {
+      const char *mark = T(S_RAISED_MARK);
+      gfx->setTextColor(UI_BAR_OK);
       gfx->setTextSize(2);
-      gfx->setCursor(CX - strlen(mark) * 6, 366);
+      gfx->setCursor(CX - strlen(mark) * 6, caught ? 354 : 366);
+      gfx->print(mark);
+    }
+    if (caught) {
+      const char *mark = T(S_CAUGHT_MARK);
+      gfx->setTextColor(UI_BAR_WARN);
+      gfx->setTextSize(2);
+      gfx->setCursor(CX - strlen(mark) * 6, reg ? 376 : 366);
       gfx->print(mark);
     }
     gfx->setTextColor(UI_INK);
@@ -2802,17 +2841,34 @@ void renderGallery() {
 
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
-  char head[24];
-  snprintf(head, sizeof(head), T(S_POKEDEX_FMT), pet.registeredCount());
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(head) * 9, 36);
+  gfx->setCursor(CX - 7 * 9, 28);
+  gfx->print("POKEDEX");
+
+  char head[28];
+  snprintf(head, sizeof(head), "R:%u C:%u", pet.registeredCount(), pet.caughtCount());
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(head) * 6, 54);
   gfx->print(head);
+
+  const char *filters[3] = { T(S_FILTER_ALL), T(S_RAISED_MARK), T(S_CAUGHT_MARK) };
+  for (int i = 0; i < 3; i++) {
+    int fx = 74 + i * 106;
+    uint16_t fill = (galleryFilter == i) ? UI_INK : UI_WHITE;
+    uint16_t text = (galleryFilter == i) ? UI_BG_DAY : UI_INK;
+    gfx->fillRoundRect(fx, 74, 96, 18, 6, fill);
+    gfx->drawRoundRect(fx, 74, 96, 18, 6, UI_INK);
+    gfx->setTextColor(text);
+    gfx->setTextSize(1);
+    gfx->setCursor(fx + (96 - (int)strlen(filters[i]) * 6) / 2, 80);
+    gfx->print(filters[i]);
+  }
 
   for (int r = 0; r < 4; r++) {
     for (int c = 0; c < 4; c++) {
-      int16_t dex = galleryPage * 16 + r * 4 + c + 1;
-      if (dex > 151) break;
+      int16_t dex = galleryDexAt(galleryPage * 16 + r * 4 + c);
+      if (dex <= 0) continue;
       int x = GAL_X + c * GAL_CELL, y = GAL_Y + r * GAL_CELL;
       const uint8_t *t = thumbs.get(dex);
       if (t) {
@@ -2842,9 +2898,11 @@ void renderGallery() {
     }
   }
   // puntos de pagina
-  for (int i = 0; i < 10; i++) {
-    if (i == galleryPage) gfx->fillCircle(170 + i * 14, 436, 4, UI_INK);
-    else gfx->drawCircle(170 + i * 14, 436, 3, UI_INK);
+  int pages = galleryPageCount();
+  int dotX = CX - (pages - 1) * 7;
+  for (int i = 0; i < pages; i++) {
+    if (i == galleryPage) gfx->fillCircle(dotX + i * 14, 436, 4, UI_INK);
+    else gfx->drawCircle(dotX + i * 14, 436, 3, UI_INK);
   }
   gfx->flush();
 }
@@ -2856,15 +2914,26 @@ void galleryTap(int16_t x, int16_t y) {
     galleryDirty = true;
     return;
   }
-  if (y < 72) {  // tocar la cabecera = salir
+  if (y < 46) {  // tocar la cabecera = salir
     galleryOpen = false;
     galleryPmd.unload();
     return;
   }
+  if (y >= 68 && y < GAL_Y) {
+    int f = (x - 74) / 106;
+    if (f >= 0 && f < 3 && x >= 74 + f * 106 && x <= 170 + f * 106) {
+      galleryFilter = (uint8_t)f;
+      galleryPage = 0;
+      galleryDirty = true;
+      sfxPlay(SFX_TAP);
+      return;
+    }
+  }
+  if (x < GAL_X || y < GAL_Y) return;
   int c = (x - GAL_X) / GAL_CELL, r = (y - GAL_Y) / GAL_CELL;
   if (c < 0 || c > 3 || r < 0 || r > 3) return;
-  int16_t dex = galleryPage * 16 + r * 4 + c + 1;
-  if (dex > 151) return;
+  int16_t dex = galleryDexAt(galleryPage * 16 + r * 4 + c);
+  if (dex <= 0) return;
   galleryDetail = dex;
   galleryPmd.load(dex, pet.isShinyRegistered(dex));
 }
