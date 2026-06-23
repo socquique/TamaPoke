@@ -8,6 +8,8 @@ struct BattleStats {
   uint16_t def;
   uint16_t spe;
   uint8_t level;
+  uint8_t type1 = 0;
+  uint8_t type2 = 0;
 };
 
 struct BattleOptions {

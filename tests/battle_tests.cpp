@@ -132,6 +132,8 @@ static void testWildStatsUseDexBaseAndLevel() {
   EXPECT_EQ(stats.atk, DEX_TBL[4].bAtk + 7);
   EXPECT_EQ(stats.def, DEX_TBL[4].bDef + 7);
   EXPECT_EQ(stats.spe, DEX_TBL[4].bSpe + 7);
+  EXPECT_EQ(stats.type1, TYPE_FIRE);
+  EXPECT_EQ(stats.type2, TYPE_NONE);
 }
 
 static void testBattleRuntimeStartsWithScaledHp() {
@@ -253,6 +255,23 @@ static void testHeavyAttackCanBeDodgedWhenQuickWouldHit() {
   EXPECT_EQ(heavyTurn.playerDamage, 0);
 }
 
+static void testTypeAdvantageLightlyChangesDamage() {
+  BattleStats neutral = { 0, 80, 50, 50, 20, TYPE_NORMAL, TYPE_NONE };
+  BattleStats fire = { 0, 80, 50, 50, 20, TYPE_FIRE, TYPE_NONE };
+  BattleStats grass = { 0, 80, 50, 50, 20, TYPE_GRASS, TYPE_NONE };
+
+  BattleRuntime normalVsGrass = beginBattleRuntime(neutral, grass);
+  BattleRuntime fireVsGrass = beginBattleRuntime(fire, grass);
+  BattleRuntime grassVsFire = beginBattleRuntime(grass, fire);
+
+  BattleTurnResult neutralTurn = stepBattle(normalVsGrass, BATTLE_ATTACK, 50);
+  BattleTurnResult fireTurn = stepBattle(fireVsGrass, BATTLE_ATTACK, 50);
+  BattleTurnResult resistedTurn = stepBattle(grassVsFire, BATTLE_ATTACK, 50);
+
+  EXPECT_TRUE(fireTurn.playerDamage > neutralTurn.playerDamage);
+  EXPECT_TRUE(resistedTurn.playerDamage < neutralTurn.playerDamage);
+}
+
 static void testCounterDamageStillUsesTurnCap() {
   BattleRuntime battle = beginBattleRuntime({ 0, 650, 60, 70, 30 },
                                             { 0, 10, 20, 20, 30 });
@@ -301,6 +320,7 @@ int main() {
   testCounterBoostsNextAttackDamage();
   testQuickAndHeavyAttackDamageTradeoff();
   testHeavyAttackCanBeDodgedWhenQuickWouldHit();
+  testTypeAdvantageLightlyChangesDamage();
   testCounterDamageStillUsesTurnCap();
   testTurnBattleEndsAtRoundLimitByRemainingHp();
 

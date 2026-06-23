@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.14.3-ball-hard"
+#define FW_VERSION "1.15-type-battle"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1665,6 +1665,10 @@ BattleStats petBattleStats() {
   stats.def = pet.defStat();
   stats.spe = pet.speStat();
   stats.hp = 0;
+  if (!pet.isEgg() && pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) {
+    stats.type1 = DEX_TBL[pet.speciesId].type1;
+    stats.type2 = DEX_TBL[pet.speciesId].type2;
+  }
   return stats;
 }
 

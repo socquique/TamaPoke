@@ -14,6 +14,112 @@ uint8_t clampedLuck(uint8_t luck) {
   return luck > 99 ? 99 : luck;
 }
 
+int8_t typeRelation(uint8_t attackType, uint8_t defendType) {
+  if (attackType == TYPE_NONE || defendType == TYPE_NONE) return 0;
+  switch (attackType) {
+    case TYPE_NORMAL:
+      if (defendType == TYPE_ROCK || defendType == TYPE_STEEL) return -1;
+      if (defendType == TYPE_GHOST) return -2;
+      return 0;
+    case TYPE_FIRE:
+      if (defendType == TYPE_BUG || defendType == TYPE_STEEL || defendType == TYPE_GRASS || defendType == TYPE_ICE) return 1;
+      if (defendType == TYPE_ROCK || defendType == TYPE_FIRE || defendType == TYPE_WATER || defendType == TYPE_DRAGON) return -1;
+      return 0;
+    case TYPE_WATER:
+      if (defendType == TYPE_GROUND || defendType == TYPE_ROCK || defendType == TYPE_FIRE) return 1;
+      if (defendType == TYPE_WATER || defendType == TYPE_GRASS || defendType == TYPE_DRAGON) return -1;
+      return 0;
+    case TYPE_ELECTRIC:
+      if (defendType == TYPE_FLYING || defendType == TYPE_WATER) return 1;
+      if (defendType == TYPE_GRASS || defendType == TYPE_ELECTRIC || defendType == TYPE_DRAGON) return -1;
+      if (defendType == TYPE_GROUND) return -2;
+      return 0;
+    case TYPE_GRASS:
+      if (defendType == TYPE_GROUND || defendType == TYPE_ROCK || defendType == TYPE_WATER) return 1;
+      if (defendType == TYPE_FLYING || defendType == TYPE_POISON || defendType == TYPE_BUG ||
+          defendType == TYPE_STEEL || defendType == TYPE_FIRE || defendType == TYPE_GRASS ||
+          defendType == TYPE_DRAGON) return -1;
+      return 0;
+    case TYPE_ICE:
+      if (defendType == TYPE_FLYING || defendType == TYPE_GROUND || defendType == TYPE_GRASS || defendType == TYPE_DRAGON) return 1;
+      if (defendType == TYPE_STEEL || defendType == TYPE_FIRE || defendType == TYPE_WATER || defendType == TYPE_ICE) return -1;
+      return 0;
+    case TYPE_FIGHTING:
+      if (defendType == TYPE_NORMAL || defendType == TYPE_ROCK || defendType == TYPE_STEEL ||
+          defendType == TYPE_ICE || defendType == TYPE_DARK) return 1;
+      if (defendType == TYPE_FLYING || defendType == TYPE_POISON || defendType == TYPE_BUG ||
+          defendType == TYPE_PSYCHIC || defendType == TYPE_FAIRY) return -1;
+      if (defendType == TYPE_GHOST) return -2;
+      return 0;
+    case TYPE_POISON:
+      if (defendType == TYPE_GRASS || defendType == TYPE_FAIRY) return 1;
+      if (defendType == TYPE_POISON || defendType == TYPE_GROUND || defendType == TYPE_ROCK || defendType == TYPE_GHOST) return -1;
+      if (defendType == TYPE_STEEL) return -2;
+      return 0;
+    case TYPE_GROUND:
+      if (defendType == TYPE_POISON || defendType == TYPE_ROCK || defendType == TYPE_STEEL ||
+          defendType == TYPE_FIRE || defendType == TYPE_ELECTRIC) return 1;
+      if (defendType == TYPE_BUG || defendType == TYPE_GRASS) return -1;
+      if (defendType == TYPE_FLYING) return -2;
+      return 0;
+    case TYPE_FLYING:
+      if (defendType == TYPE_FIGHTING || defendType == TYPE_BUG || defendType == TYPE_GRASS) return 1;
+      if (defendType == TYPE_ROCK || defendType == TYPE_STEEL || defendType == TYPE_ELECTRIC) return -1;
+      return 0;
+    case TYPE_PSYCHIC:
+      if (defendType == TYPE_FIGHTING || defendType == TYPE_POISON) return 1;
+      if (defendType == TYPE_STEEL || defendType == TYPE_PSYCHIC) return -1;
+      if (defendType == TYPE_DARK) return -2;
+      return 0;
+    case TYPE_BUG:
+      if (defendType == TYPE_GRASS || defendType == TYPE_PSYCHIC || defendType == TYPE_DARK) return 1;
+      if (defendType == TYPE_FIGHTING || defendType == TYPE_FLYING || defendType == TYPE_POISON ||
+          defendType == TYPE_GHOST || defendType == TYPE_STEEL || defendType == TYPE_FIRE ||
+          defendType == TYPE_FAIRY) return -1;
+      return 0;
+    case TYPE_ROCK:
+      if (defendType == TYPE_FLYING || defendType == TYPE_BUG || defendType == TYPE_FIRE || defendType == TYPE_ICE) return 1;
+      if (defendType == TYPE_FIGHTING || defendType == TYPE_GROUND || defendType == TYPE_STEEL) return -1;
+      return 0;
+    case TYPE_GHOST:
+      if (defendType == TYPE_GHOST || defendType == TYPE_PSYCHIC) return 1;
+      if (defendType == TYPE_DARK) return -1;
+      if (defendType == TYPE_NORMAL) return -2;
+      return 0;
+    case TYPE_DRAGON:
+      if (defendType == TYPE_DRAGON) return 1;
+      if (defendType == TYPE_STEEL) return -1;
+      if (defendType == TYPE_FAIRY) return -2;
+      return 0;
+    case TYPE_DARK:
+      if (defendType == TYPE_GHOST || defendType == TYPE_PSYCHIC) return 1;
+      if (defendType == TYPE_FIGHTING || defendType == TYPE_DARK || defendType == TYPE_FAIRY) return -1;
+      return 0;
+    case TYPE_STEEL:
+      if (defendType == TYPE_ROCK || defendType == TYPE_ICE || defendType == TYPE_FAIRY) return 1;
+      if (defendType == TYPE_STEEL || defendType == TYPE_FIRE || defendType == TYPE_WATER || defendType == TYPE_ELECTRIC) return -1;
+      return 0;
+    case TYPE_FAIRY:
+      if (defendType == TYPE_FIGHTING || defendType == TYPE_DRAGON || defendType == TYPE_DARK) return 1;
+      if (defendType == TYPE_POISON || defendType == TYPE_STEEL || defendType == TYPE_FIRE) return -1;
+      return 0;
+  }
+  return 0;
+}
+
+uint16_t applyTypeMultiplier(uint16_t damage, const BattleStats &attacker, const BattleStats &defender) {
+  uint32_t scaled = damage;
+  const uint8_t defendTypes[2] = { defender.type1, defender.type2 };
+  for (uint8_t i = 0; i < 2; i++) {
+    int8_t relation = typeRelation(attacker.type1, defendTypes[i]);
+    if (relation > 0) scaled = scaled * 120 / 100;
+    else if (relation == -1) scaled = scaled * 85 / 100;
+    else if (relation == -2) scaled = scaled * 70 / 100;
+  }
+  if (scaled < 1) scaled = 1;
+  return scaled > 65535 ? 65535 : (uint16_t)scaled;
+}
+
 uint16_t damageFor(const BattleStats &attacker, const BattleStats &defender, uint8_t luck) {
   uint16_t level = attacker.level > 0 ? attacker.level : 1;
   uint32_t pressure = (uint32_t)attacker.atk * (10 + level / 4);
@@ -22,7 +128,8 @@ uint16_t damageFor(const BattleStats &attacker, const BattleStats &defender, uin
   uint32_t variation = 90 + (clampedLuck(luck) % 21);  // 90..110 %
   uint32_t damage = base * variation / 100;
   if (damage == 0) damage = 1;
-  return damage > 65535 ? 65535 : (uint16_t)damage;
+  if (damage > 65535) damage = 65535;
+  return applyTypeMultiplier((uint16_t)damage, attacker, defender);
 }
 
 void applyHit(uint16_t &hpLeft, uint16_t damage, uint16_t &damageTotal) {
@@ -119,6 +226,8 @@ BattleStats wildBattleStats(int16_t dex, uint8_t level) {
   stats.def = entry.bDef + lvl;
   stats.spe = entry.bSpe + lvl;
   stats.level = lvl;
+  stats.type1 = entry.type1;
+  stats.type2 = entry.type2;
   return stats;
 }
 

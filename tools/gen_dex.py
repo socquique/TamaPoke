@@ -7,7 +7,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from dex_data import DEX, TYPE_ACCENTS, CLASSIC, RARE, LEGENDARY
+from dex_data import DEX, TYPE_ACCENTS, BATTLE_TYPES, CLASSIC, RARE, LEGENDARY
 from dex_stats import BASE_STATS
 
 
@@ -28,6 +28,28 @@ TYPE_BIOME = {
 # excepciones por dex# (el tipo no basta): fosiles marinos roca/agua -> playa
 BIOME_OVERRIDE = {138: 1, 139: 1, 140: 1, 141: 1}  # Omanyte, Omastar, Kabuto, Kabutops
 
+BATTLE_TYPE_IDS = {
+    'none': 0,
+    'normal': 1,
+    'fire': 2,
+    'water': 3,
+    'electric': 4,
+    'grass': 5,
+    'ice': 6,
+    'fighting': 7,
+    'poison': 8,
+    'ground': 9,
+    'flying': 10,
+    'psychic': 11,
+    'bug': 12,
+    'rock': 13,
+    'ghost': 14,
+    'dragon': 15,
+    'dark': 16,
+    'steel': 17,
+    'fairy': 18,
+}
+
 
 def main():
     out = []
@@ -38,6 +60,12 @@ def main():
     out.append(
         "// rareza: 0 = solo por evolucion, 1 = comun, 2 = raro, 3 = legendario\n"
         "enum : uint8_t { R_EVO = 0, R_COMUN, R_RARO, R_LEGENDARIO };\n\n"
+        "// tipos de combate: datos actuales de PokeAPI para las 151 especies Kanto\n"
+        "enum : uint8_t {\n"
+        "  TYPE_NONE = 0, TYPE_NORMAL, TYPE_FIRE, TYPE_WATER, TYPE_ELECTRIC, TYPE_GRASS,\n"
+        "  TYPE_ICE, TYPE_FIGHTING, TYPE_POISON, TYPE_GROUND, TYPE_FLYING, TYPE_PSYCHIC,\n"
+        "  TYPE_BUG, TYPE_ROCK, TYPE_GHOST, TYPE_DRAGON, TYPE_DARK, TYPE_STEEL, TYPE_FAIRY\n"
+        "};\n\n"
         "struct DexEntry {\n"
         "  const char *name;\n"
         "  uint8_t evolvesTo;    // numero de dex, 0 = forma final\n"
@@ -45,6 +73,7 @@ def main():
         "  uint8_t rarity;       // sale de huevo si > 0\n"
         "  uint16_t accent;      // color RGB565 del tipo para la UI\n"
         "  uint8_t bHp, bAtk, bDef, bSpe;  // base stats reales de gen 1\n"
+        "  uint8_t type1, type2; // tipos de combate, TYPE_NONE si no hay secundario\n"
         "  uint8_t biome;        // 0 pradera 1 playa 2 bosque 3 volcan 4 montana 5 nieve\n"
         "};\n\n")
     # formas base = las que no son evolucion de nadie (las ramas de Eevee si lo son)
@@ -52,7 +81,7 @@ def main():
     evolved = {d[4] for d in DEX if d[4]} | {135, 136}
     rarities = []
     out.append("static const DexEntry DEX_TBL[DEX_COUNT + 1] = {\n")
-    out.append('  { "?", 0, 0, 0, 0x2946, 50, 50, 50, 50, 0 },  // 0: sin usar\n')
+    out.append('  { "?", 0, 0, 0, 0x2946, 50, 50, 50, 50, TYPE_NONE, TYPE_NONE, 0 },  // 0: sin usar\n')
     for num, slug, display, typ, evo, lvl in DEX:
         acc = rgb565(TYPE_ACCENTS[typ])
         if num in evolved:
@@ -66,7 +95,10 @@ def main():
         rarities.append(rar)
         hp, atk, df, spe = BASE_STATS[num]
         bio = BIOME_OVERRIDE.get(num, TYPE_BIOME[typ])
-        out.append(f'  {{ "{display}", {evo}, {lvl}, {rar}, 0x{acc:04X}, {hp}, {atk}, {df}, {spe}, {bio} }},  // {num} {typ}\n')
+        type1, type2 = BATTLE_TYPES[num]
+        t1 = f"TYPE_{type1.upper()}"
+        t2 = "TYPE_NONE" if type2 is None else f"TYPE_{type2.upper()}"
+        out.append(f'  {{ "{display}", {evo}, {lvl}, {rar}, 0x{acc:04X}, {hp}, {atk}, {df}, {spe}, {t1}, {t2}, {bio} }},  // {num} {type1}' + (f'/{type2}' if type2 else '') + '\n')
     out.append("};\n\n")
     out.append("// el primer huevo de la partida: iniciales clasicos\n")
     out.append("static const int16_t CLASSIC_DEX[] = { %s };\n" % ", ".join(map(str, CLASSIC)))
