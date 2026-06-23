@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.13.5-ball-hard"
+#define FW_VERSION "1.13.6-card-taps"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -649,13 +649,13 @@ void onTap(int16_t x, int16_t y) {
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
     if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
-    else if (cardPage == 3 && y >= 294 && y <= 330 && x >= 96 && x <= 370) {
+    else if (cardPage == 3 && y >= 286 && y <= 336 && x >= 82 && x <= 384) {
       cardOpen = false;
       startBattle();
-    } else if (cardPage == 3 && y >= 338 && y <= 374 && x >= 96 && x <= 370) {
+    } else if (cardPage == 3 && y >= 330 && y <= 388 && x >= 82 && x <= 384) {
       cardOpen = false;            // boton ENTRENAR FUERZA
       startSack();
-    } else {
+    } else if (y >= 400) {
       cardOpen = false;
     }
     return;
