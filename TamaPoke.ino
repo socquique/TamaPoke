@@ -1972,8 +1972,15 @@ void renderBattle() {
   gfx->setTextSize(2);
   gfx->setCursor(28, 82);
   gfx->print(left);
-  gfx->setCursor(438 - strlen(right) * 12, 82);
+  int rightLen = strlen(right);
+  int rightTextSize = rightLen <= 12 ? 2 : 1;
+  int rightTextW = rightLen * (rightTextSize == 2 ? 12 : 6);
+  int rightX = 408 - rightTextW;
+  if (rightX < 246) rightX = 246;
+  gfx->setTextSize(rightTextSize);
+  gfx->setCursor(rightX, rightTextSize == 2 ? 82 : 88);
   gfx->print(right);
+  gfx->setTextSize(2);
 
   uint16_t playerMax = battleRun.playerMaxHp;
   uint16_t enemyMax = battleRun.enemyMaxHp;
