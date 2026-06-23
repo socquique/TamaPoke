@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.13.2-i18n"
+#define FW_VERSION "1.13.3-catch-balance"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1101,9 +1101,10 @@ void spawnCatchTarget() {
   catchX = 86 + random(294);
   catchY = 118 + random(206);
   catchIcon = random(3);
-  uint32_t life = 1150;
-  if (gameScore > 8) life = 920;
-  if (gameScore > 16) life = 760;
+  uint32_t life = 980;
+  uint32_t speedup = (uint32_t)gameScore * 35;
+  if (speedup > 530) speedup = 530;
+  life -= speedup;
   catchTargetUntil = millis() + life;
 }
 
