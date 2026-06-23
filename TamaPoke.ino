@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.13.3-catch-balance"
+#define FW_VERSION "1.13.4-ball-balance"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1147,10 +1147,16 @@ void startMemoGame() {
 void respawnBall() {
   ballX = 150 + random(166);
   ballY = 96;
-  float sp = 1.6f + gameScore * 0.05f;  // mas viva segun avanzas
-  if (sp > 4.0f) sp = 4.0f;
+  float sp = 1.7f + gameScore * 0.065f;  // mas viva segun avanzas
+  if (sp > 4.8f) sp = 4.8f;
   ballVX = random(2) ? sp : -sp;
   ballVY = 0;
+}
+
+int ballHitRadius() {
+  if (gameScore >= 20) return 54;
+  if (gameScore >= 10) return 60;
+  return 68;
 }
 
 void gameTap(int16_t x, int16_t y) {
@@ -1168,15 +1174,17 @@ void gameTap(int16_t x, int16_t y) {
     return;
   }
   float dx = ballX - x, dy = ballY - y;
-  if (dx * dx + dy * dy < 74 * 74) {  // toque a la bola!
+  int hitRadius = ballHitRadius();
+  if (dx * dx + dy * dy < hitRadius * hitRadius) {  // toque a la bola!
     gameScore++;
     sfxPlay(SFX_PLAY);
     // golpe mas suave: impulso moderado que crece poco a poco con la puntuacion
     float lift = 6.6f + (gameScore > 16 ? 3.5f : gameScore * 0.22f);
     ballVY = -lift;
-    ballVX += dx * 0.12f;
-    if (ballVX > 6.5f) ballVX = 6.5f;
-    if (ballVX < -6.5f) ballVX = -6.5f;
+    float drift = 0.14f + (gameScore >= 12 ? 0.03f : 0.0f) + (gameScore >= 24 ? 0.03f : 0.0f);
+    ballVX += dx * drift;
+    if (ballVX > 7.2f) ballVX = 7.2f;
+    if (ballVX < -7.2f) ballVX = -7.2f;
     hitX = ballX;
     hitY = ballY;
     hitTime = millis();
@@ -1247,8 +1255,10 @@ void memoTap(int16_t x, int16_t y) {
 }
 
 void stepGame() {
-  float grav = 0.40f + gameScore * 0.013f;  // cae un poco mas rapido cada vez
-  if (grav > 0.80f) grav = 0.80f;
+  float grav = 0.42f + gameScore * 0.016f;  // cae mas rapido cada vez
+  if (gameScore >= 8) grav += 0.045f;
+  if (gameScore >= 20) grav += 0.055f;
+  if (grav > 0.95f) grav = 0.95f;
   ballVY += grav;
   ballX += ballVX;
   ballY += ballVY;
