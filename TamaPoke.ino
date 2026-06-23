@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.11-daily-goals"
+#define FW_VERSION "1.12-catch-v1"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -118,6 +118,11 @@ BattleAction battleLastAction = BATTLE_ATTACK;
 BattleReward battleReward = {};
 char battleMsg[28] = "";
 uint32_t battleAttackMenuUntil = 0;
+bool battleCatchOffered = false;
+bool battleCatchTried = false;
+bool battleCatchDone = false;
+bool battleCatchSuccess = false;
+uint8_t battleCatchChance = 0;
 
 #define WILD_COOLDOWN_MS (20UL * 60UL * 1000UL)
 #define WILD_PROMPT_MS 20000UL
@@ -1728,6 +1733,11 @@ void closeBattle() {
   battleOpen = false;
   battleResolved = false;
   battleAttackMenuUntil = 0;
+  battleCatchOffered = false;
+  battleCatchTried = false;
+  battleCatchDone = false;
+  battleCatchSuccess = false;
+  battleCatchChance = 0;
   wildPmd.unload();
 }
 
@@ -1753,6 +1763,11 @@ void startBattleWith(int16_t forcedDex, uint8_t forcedLevel) {
   battleReward = {};
   battleMsg[0] = 0;
   battleAttackMenuUntil = 0;
+  battleCatchOffered = false;
+  battleCatchTried = false;
+  battleCatchDone = false;
+  battleCatchSuccess = false;
+  battleCatchChance = 0;
   battleResolved = false;
   battleOpen = true;
   wildPmd.unload();
@@ -1770,6 +1785,8 @@ void finishBattle() {
   if (battleTurn.playerWon) {
     bool closeWin = battleRun.playerHp <= battleRun.playerMaxHp / 3;
     battleReward = pet.applyBattleWin(battleDex, closeWin);
+    battleCatchOffered = true;
+    battleCatchChance = pet.catchChanceForWild(battleDex, battleLevel, battlePlayer.level, closeWin);
     sfxPlay(SFX_MEDAL);
   } else {
     battleReward = {};
@@ -1804,6 +1821,25 @@ void performBattleAction(BattleAction action) {
 
 void battleTap(int16_t x, int16_t y) {
   if (battleResolved) {
+    if (battleCatchOffered && !battleCatchDone && battleTurn.playerWon) {
+      if (x >= 76 && x <= 224 && y >= 392 && y <= 448) {
+        bool closeWin = battleRun.playerHp <= battleRun.playerMaxHp / 3;
+        battleCatchTried = true;
+        battleCatchDone = true;
+        battleCatchSuccess = pet.tryCatchWild(battleDex, battleLevel, battlePlayer.level, closeWin, (uint8_t)random(100));
+        battleCatchChance = pet.catchChanceForWild(battleDex, battleLevel, battlePlayer.level, closeWin);
+        sfxPlay(battleCatchSuccess ? SFX_MEDAL : SFX_DENY);
+        galleryDirty = true;
+        return;
+      }
+      if (x >= 242 && x <= 390 && y >= 392 && y <= 448) {
+        battleCatchDone = true;
+        battleCatchTried = false;
+        sfxPlay(SFX_TAP);
+        return;
+      }
+      return;
+    }
     if (x >= 118 && x <= 348 && y >= 392 && y <= 454) closeBattle();
     return;
   }
@@ -1989,11 +2025,26 @@ void renderBattle() {
         gfx->print(reward);
       }
     }
-    gfx->fillRoundRect(118, 396, 230, 52, 14, UI_BAR_OK);
-    gfx->setTextColor(UI_BG_DAY);
-    gfx->setTextSize(3);
-    gfx->setCursor(CX - strlen(T(S_OK)) * 9, 413);
-    gfx->print(T(S_OK));
+    if (battleTurn.playerWon && battleCatchOffered && !battleCatchDone) {
+      gfx->fillRoundRect(76, 396, 148, 52, 14, UI_BAR_OK);
+      gfx->fillRoundRect(242, 396, 148, 52, 14, UI_TRACK);
+      gfx->setTextColor(UI_BG_DAY);
+      drawBattleButtonLabel(76, 414, 148, T(S_CATCH_WILD));
+      drawBattleButtonLabel(242, 414, 148, T(S_LEAVE_WILD));
+    } else {
+      if (battleCatchDone && battleCatchTried) {
+        const char *catchMsg = battleCatchSuccess ? T(S_CAUGHT_OK) : T(S_ESCAPED);
+        gfx->setTextColor(battleCatchSuccess ? UI_BAR_OK : UI_BAR_BAD);
+        gfx->setTextSize(2);
+        gfx->setCursor(CX - strlen(catchMsg) * 6, 378);
+        gfx->print(catchMsg);
+      }
+      gfx->fillRoundRect(118, 396, 230, 52, 14, UI_BAR_OK);
+      gfx->setTextColor(UI_BG_DAY);
+      gfx->setTextSize(3);
+      gfx->setCursor(CX - strlen(T(S_OK)) * 9, 413);
+      gfx->print(T(S_OK));
+    }
   } else {
     char roundBuf[14];
     snprintf(roundBuf, sizeof(roundBuf), "R%u", battleRun.round + 1);
@@ -2689,21 +2740,30 @@ void renderGallery() {
     gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
     const DexEntry &d = DEX_TBL[galleryDetail];
     bool reg = pet.isRegistered(galleryDetail);
+    bool caught = pet.isCaught(galleryDetail);
+    bool known = reg || caught;
     char head[24];
     snprintf(head, sizeof(head), "N.%03d %s%s", galleryDetail,
-             pet.isShinyRegistered(galleryDetail) ? "*" : "", reg ? d.name : "???");
-    gfx->setTextColor(reg ? d.accent : UI_INK);
+             pet.isShinyRegistered(galleryDetail) ? "*" : "", known ? d.name : "???");
+    gfx->setTextColor(known ? d.accent : UI_INK);
     int glen = strlen(head);
     int gts = (glen <= 13) ? 3 : 2;  // auto-encoge nombres largos (no caben a t3)
     gfx->setTextSize(gts);
     gfx->setCursor(CX - glen * (gts == 3 ? 9 : 6), gts == 3 ? 56 : 60);
     gfx->print(head);
     if (galleryPmd.loaded) {
-      // animado y a color si esta registrado; silueta estatica si no (estilo "?")
-      drawPmdActM(galleryPmd, PMD_IDLE, CX, 300, reg ? millis() : 0, true, !reg, 6);
+      // animado y a color si se conoce; silueta estatica si no (estilo "?")
+      drawPmdActM(galleryPmd, PMD_IDLE, CX, 300, known ? millis() : 0, true, !known, 6);
     } else {
       const uint8_t *t = thumbs.get(galleryDetail);
-      if (t) drawThumb(t, CX - GAL_CELL, 135, 4, !reg);
+      if (t) drawThumb(t, CX - GAL_CELL, 135, 4, !known);
+    }
+    if (known) {
+      const char *mark = reg ? T(S_RAISED_MARK) : T(S_CAUGHT_MARK);
+      gfx->setTextColor(reg ? UI_BAR_OK : UI_BAR_WARN);
+      gfx->setTextSize(2);
+      gfx->setCursor(CX - strlen(mark) * 6, 366);
+      gfx->print(mark);
     }
     gfx->setTextColor(UI_INK);
     gfx->setTextSize(2);
@@ -2732,12 +2792,20 @@ void renderGallery() {
       int x = GAL_X + c * GAL_CELL, y = GAL_Y + r * GAL_CELL;
       const uint8_t *t = thumbs.get(dex);
       if (t) {
-        drawThumb(t, x, y, 2, !pet.isRegistered(dex));
+        bool reg = pet.isRegistered(dex);
+        bool caught = pet.isCaught(dex);
+        bool known = reg || caught;
+        drawThumb(t, x, y, 2, !known);
         if (pet.isShinyRegistered(dex)) {
           gfx->setTextColor(UI_BAR_WARN);
           gfx->setTextSize(2);
           gfx->setCursor(x + 62, y + 4);
           gfx->print("*");
+        } else if (caught && !reg) {
+          gfx->setTextColor(UI_BAR_WARN);
+          gfx->setTextSize(1);
+          gfx->setCursor(x + 60, y + 6);
+          gfx->print("C");
         }
       } else {
         char num[6];

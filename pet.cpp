@@ -396,6 +396,48 @@ uint16_t Pet::registeredCount() const {
   return n;
 }
 
+uint16_t Pet::caughtCount() const {
+  uint16_t n = 0;
+  for (int i = 1; i <= 151; i++)
+    if (isCaught(i)) n++;
+  return n;
+}
+
+void Pet::registerCaught(int16_t dex) {
+  if (dex < 1 || dex > 151) return;
+  dexCaught[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+  save();
+}
+
+uint8_t Pet::catchChanceForWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, bool closeWin) const {
+  if (wildDex < 1 || wildDex > DEX_COUNT) return 0;
+  const DexEntry &wild = DEX_TBL[wildDex];
+  if (wild.rarity == R_LEGENDARIO) return 0;
+  int chance = wild.rarity == R_RARO ? 28 : 55;
+  int levelGap = (int)wildLevel - (int)(petLevel ? petLevel : 1);
+  if (levelGap > 0) chance -= levelGap * 4;
+  else if (levelGap < 0) chance += (-levelGap) * 2;
+  if (closeWin) chance += 8;
+  chance += bond / 20;
+  if (wild.rarity == R_RARO && chance > 60) chance = 60;
+  if (chance > 75) chance = 75;
+  if (chance < 10) chance = 10;
+  return (uint8_t)chance;
+}
+
+bool Pet::tryCatchWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, bool closeWin, uint8_t luckRoll) {
+  uint8_t chance = catchChanceForWild(wildDex, wildLevel, petLevel, closeWin);
+  if (chance == 0) return false;
+  if ((luckRoll % 100) < chance) {
+    registerCaught(wildDex);
+    joy = clamp100((int)joy + 4);
+    addBond(1);
+    save();
+    return true;
+  }
+  return false;
+}
+
 // forma final que ya cumplio su ciclo (7 dias): lista para despedirse. La
 // despedida la dispara el usuario con el boton (no salta sola, para que la vea)
 bool Pet::canFarewellNow() const {
@@ -751,6 +793,7 @@ void Pet::save() {
   prefs.putUChar("lend", lastEnd);
   if (lastSeenEpoch) prefs.putUInt("seen", lastSeenEpoch);
   prefs.putBytes("dexreg", dexReg, sizeof(dexReg));
+  prefs.putBytes("dexcgt", dexCaught, sizeof(dexCaught));
   prefs.putUShort("strk", streak);
   prefs.putUShort("bstrk", bestStreak);
   prefs.putUInt("cday", lastCareDay);
@@ -813,6 +856,7 @@ void Pet::load() {
   sleeping = prefs.getBool("sleep", false);
   lastEnd = prefs.getUChar("lend", CER_NONE);
   prefs.getBytes("dexreg", dexReg, sizeof(dexReg));
+  prefs.getBytes("dexcgt", dexCaught, sizeof(dexCaught));
   streak = prefs.getUShort("strk", 0);
   bestStreak = prefs.getUShort("bstrk", 0);
   lastCareDay = prefs.getUInt("cday", 0);

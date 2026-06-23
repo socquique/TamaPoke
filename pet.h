@@ -81,6 +81,7 @@ public:
   uint8_t lastEnd = CER_NONE;   // como acabo la anterior (afecta al huevo)
   uint8_t dexReg[19] = { 0 };       // pokedex de criados (bitmap 151 bits)
   uint8_t dexShinyReg[19] = { 0 };  // criados en version shiny
+  uint8_t dexCaught[19] = { 0 };    // pokedex de salvajes capturados
   // racha de cuidado diario (del jugador: persiste entre crianzas)
   uint16_t streak = 0, bestStreak = 0;
   uint32_t lastCareDay = 0;
@@ -170,10 +171,17 @@ public:
   bool isRegistered(int16_t dex) const {
     return dex >= 1 && dex <= 151 && (dexReg[(dex - 1) >> 3] & (1 << ((dex - 1) & 7)));
   }
+  bool isCaught(int16_t dex) const {
+    return dex >= 1 && dex <= 151 && (dexCaught[(dex - 1) >> 3] & (1 << ((dex - 1) & 7)));
+  }
   bool isShinyRegistered(int16_t dex) const {
     return dex >= 1 && dex <= 151 && (dexShinyReg[(dex - 1) >> 3] & (1 << ((dex - 1) & 7)));
   }
   uint16_t registeredCount() const;
+  uint16_t caughtCount() const;
+  void registerCaught(int16_t dex);
+  uint8_t catchChanceForWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, bool closeWin) const;
+  bool tryCatchWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, bool closeWin, uint8_t luckRoll);
   bool lineHasUnregistered(int16_t base) const;
   uint8_t eggRarity() const;       // rareza del huevo actual (sin revelar especie)
   int16_t pickEggSpecies();        // publica para poder simular tiradas (EGGS)

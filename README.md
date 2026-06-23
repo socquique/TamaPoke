@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://shadowenemyx.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.11--daily--goals-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.12--catch--v1-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/ShadowEnemyx/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/ShadowEnemyx/TamaPoke/stargazers)
@@ -29,7 +29,8 @@ backgrounds, ball minigame, training bag, animated bath, RTC with offline
 progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
 **sound (ES8311)**, **6 UI languages (English default)**, **starter choice on
 first run**, a one-click **web installer**, manual and rare optional wild
-battles, extra minigames, pet events, personality/profile cards and daily goals.
+battles, one-shot catch attempts after wins, extra minigames, pet events,
+personality/profile cards and daily goals.
 
 Pending: longer hardware soak testing and polish. See **Roadmap**.
 
@@ -123,6 +124,8 @@ SPEED ← minigames, DEFENSE ← memo/good care). Wild battles can be started fr
 the Battle card, and rare optional wild prompts can appear on the main screen.
 Battles are turn-based with quick/heavy attacks, dodge/counter and limited rest.
 Wins/losses/streaks are tracked and wins give small training rewards.
+After a win, you get one optional catch attempt; caught wild Pokémon are marked
+separately in the Pokédex and do not replace the active pet.
 
 ## Hardware
 

@@ -47,6 +47,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Estable", "Ama jugar", "Listo para luchar", "Relajado", "Comodo",
     "RECORDS", "EDAD %lud",
     "DIA", "OK", "BONUS", "CUIDAR", "JUGAR", "GANAR", "ATRAPA 5", "MEMO 3",
+    "ATRAPAR", "DEJAR", "ATRAPADO!", "ESCAPO", "ATRAPADO", "CRIADO",
   },
   // ---------------- EN ----------------
   {
@@ -88,6 +89,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Steady", "Loves games", "Battle ready", "Relaxed", "Cozy",
     "RECORDS", "AGE %lud",
     "DAILY", "OK", "BONUS", "CARE", "PLAY", "WIN", "CATCH 5", "MEMO 3",
+    "CATCH", "LEAVE", "CAUGHT!", "ESCAPED", "CAUGHT", "RAISED",
   },
   // ---------------- FR ----------------
   {
@@ -129,6 +131,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Stable", "Aime jouer", "Pret au combat", "Detendu", "Douillet",
     "RECORDS", "AGE %lud",
     "JOUR", "OK", "BONUS", "SOIN", "JOUER", "GAGNER", "ATTRAPE 5", "MEMO 3",
+    "CAPTURER", "LAISSER", "CAPTURE!", "FUI", "CAPTURE", "ELEVE",
   },
   // ---------------- DE ----------------
   {
@@ -170,6 +173,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Stabil", "Mag Spiele", "Kampfbereit", "Entspannt", "Gemuetlich",
     "REKORDE", "ALTER %lud",
     "TAG", "OK", "BONUS", "PFLEGE", "SPIELEN", "SIEG", "FANG 5", "MEMO 3",
+    "FANGEN", "GEHEN", "GEFANGEN!", "ENTKOMMEN", "GEFANGEN", "AUFGEZOGEN",
   },
   // ---------------- IT ----------------
   {
@@ -211,6 +215,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Stabile", "Ama giocare", "Pronto a lottare", "Rilassato", "Comodo",
     "RECORD", "ETA %lud",
     "GIORNO", "OK", "BONUS", "CURA", "GIOCA", "VINCI", "PRENDI 5", "MEMO 3",
+    "PRENDI", "LASCIA", "PRESO!", "FUGGITO", "PRESO", "ALLEVATO",
   },
   // ---------------- PT ----------------
   {
@@ -252,6 +257,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Estavel", "Gosta de jogos", "Pronto p/ lutar", "Relaxado", "Confortavel",
     "RECORDES", "IDADE %lud",
     "DIA", "OK", "BONUS", "CUIDAR", "JOGAR", "VENCER", "APANHA 5", "MEMO 3",
+    "APANHAR", "DEIXAR", "APANHADO!", "FUGIU", "APANHADO", "CRIADO",
   },
 };
 

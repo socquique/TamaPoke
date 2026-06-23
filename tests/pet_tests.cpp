@@ -254,6 +254,43 @@ static void testDailyBattleGoalCompletesOnWinOnly() {
   EXPECT_TRUE(pet.dailyGoalComplete(2));
 }
 
+static void testCaughtDexIsSeparateFromRaisedDex() {
+  Pet pet = hatchedPet(4);
+
+  EXPECT_EQ(pet.caughtCount(), 0);
+  EXPECT_TRUE(!pet.isRegistered(66));
+
+  pet.registerCaught(66);
+  EXPECT_TRUE(pet.isCaught(66));
+  EXPECT_TRUE(!pet.isRegistered(66));
+  EXPECT_EQ(pet.caughtCount(), 1);
+
+  pet.registerCaught(66);
+  EXPECT_EQ(pet.caughtCount(), 1);
+}
+
+static void testCatchChanceAndRolls() {
+  Pet pet = hatchedPet(4);
+  pet.bond = 40;
+
+  uint8_t common = pet.catchChanceForWild(66, 5, 5, false);
+  uint8_t rare = pet.catchChanceForWild(95, 5, 5, false);
+  uint8_t highLevel = pet.catchChanceForWild(66, 12, 5, false);
+  uint8_t close = pet.catchChanceForWild(66, 5, 5, true);
+
+  EXPECT_TRUE(common > rare);
+  EXPECT_TRUE(highLevel < common);
+  EXPECT_TRUE(close > common);
+  EXPECT_EQ(pet.catchChanceForWild(144, 5, 5, true), 0);
+
+  EXPECT_TRUE(pet.tryCatchWild(66, 5, 5, false, common - 1));
+  EXPECT_TRUE(pet.isCaught(66));
+  EXPECT_TRUE(!pet.tryCatchWild(95, 5, 5, false, 99));
+  EXPECT_TRUE(!pet.isCaught(95));
+  EXPECT_TRUE(!pet.tryCatchWild(144, 5, 5, true, 0));
+  EXPECT_TRUE(!pet.isCaught(144));
+}
+
 static void testCareBonusCapsStreakContribution() {
   Pet pet;
   pet.streak = 99;
@@ -339,6 +376,8 @@ int main() {
   testPersonalityIsDerivedWithoutMutating();
   testDailyGoalsProgressAndReset();
   testDailyBattleGoalCompletesOnWinOnly();
+  testCaughtDexIsSeparateFromRaisedDex();
+  testCatchChanceAndRolls();
   testCareBonusCapsStreakContribution();
   testFarewellAndRunawayReadiness();
   testBattleRewardsAndProgression();
