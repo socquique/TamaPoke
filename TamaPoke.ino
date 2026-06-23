@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.13.4-ball-balance"
+#define FW_VERSION "1.13.5-ball-hard"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1145,18 +1145,18 @@ void startMemoGame() {
 }
 
 void respawnBall() {
-  ballX = 150 + random(166);
+  ballX = 130 + random(206);
   ballY = 96;
-  float sp = 1.7f + gameScore * 0.065f;  // mas viva segun avanzas
-  if (sp > 4.8f) sp = 4.8f;
+  float sp = 2.35f + gameScore * 0.105f;  // exigente desde el inicio
+  if (sp > 6.4f) sp = 6.4f;
   ballVX = random(2) ? sp : -sp;
   ballVY = 0;
 }
 
 int ballHitRadius() {
-  if (gameScore >= 20) return 54;
-  if (gameScore >= 10) return 60;
-  return 68;
+  if (gameScore >= 20) return 44;
+  if (gameScore >= 8) return 50;
+  return 58;
 }
 
 void gameTap(int16_t x, int16_t y) {
@@ -1179,12 +1179,12 @@ void gameTap(int16_t x, int16_t y) {
     gameScore++;
     sfxPlay(SFX_PLAY);
     // golpe mas suave: impulso moderado que crece poco a poco con la puntuacion
-    float lift = 6.6f + (gameScore > 16 ? 3.5f : gameScore * 0.22f);
+    float lift = 6.25f + (gameScore > 14 ? 3.2f : gameScore * 0.20f);
     ballVY = -lift;
-    float drift = 0.14f + (gameScore >= 12 ? 0.03f : 0.0f) + (gameScore >= 24 ? 0.03f : 0.0f);
+    float drift = 0.22f + (gameScore >= 8 ? 0.04f : 0.0f) + (gameScore >= 18 ? 0.04f : 0.0f);
     ballVX += dx * drift;
-    if (ballVX > 7.2f) ballVX = 7.2f;
-    if (ballVX < -7.2f) ballVX = -7.2f;
+    if (ballVX > 9.0f) ballVX = 9.0f;
+    if (ballVX < -9.0f) ballVX = -9.0f;
     hitX = ballX;
     hitY = ballY;
     hitTime = millis();
@@ -1255,10 +1255,10 @@ void memoTap(int16_t x, int16_t y) {
 }
 
 void stepGame() {
-  float grav = 0.42f + gameScore * 0.016f;  // cae mas rapido cada vez
-  if (gameScore >= 8) grav += 0.045f;
-  if (gameScore >= 20) grav += 0.055f;
-  if (grav > 0.95f) grav = 0.95f;
+  float grav = 0.58f + gameScore * 0.024f;  // cae rapido desde el inicio
+  if (gameScore >= 8) grav += 0.075f;
+  if (gameScore >= 18) grav += 0.075f;
+  if (grav > 1.35f) grav = 1.35f;
   ballVY += grav;
   ballX += ballVX;
   ballY += ballVY;
@@ -1269,8 +1269,8 @@ void stepGame() {
     float nx = dx / d, ny = dy / d;
     float dot = ballVX * nx + ballVY * ny;
     if (dot > 0) {
-      ballVX = (ballVX - 2 * dot * nx) * 0.85f;
-      ballVY = (ballVY - 2 * dot * ny) * 0.85f;
+      ballVX = (ballVX - 2 * dot * nx) * 0.94f;
+      ballVY = (ballVY - 2 * dot * ny) * 0.94f;
     }
     ballX = CX + nx * 205;
     ballY = CY + ny * 205;
