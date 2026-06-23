@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.14-pokedex-v2"
+#define FW_VERSION "1.14.1-settings-v2"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -2165,6 +2165,16 @@ void drawClockBtn(int x, int y, const char *l) {
 #define LANG_PILL_W 96
 static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT" };
 
+void drawStatusLine(int y, const char *label, const char *value, uint16_t valueColor) {
+  gfx->setTextSize(1);
+  gfx->setTextColor(UI_TRACK);
+  gfx->setCursor(94, y);
+  gfx->print(label);
+  gfx->setTextColor(valueColor);
+  gfx->setCursor(172, y);
+  gfx->print(value);
+}
+
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
@@ -2210,29 +2220,22 @@ void renderClock() {
   gfx->setCursor(LANG_PILL_X + (LANG_PILL_W - (int)strlen(lp) * 12) / 2, LANG_PILL_Y + 8);
   gfx->print(lp);
 
-  gfx->fillRoundRect(133, 340, 200, 48, 14, UI_BAR_OK);
+  char fwLine[34];
+  snprintf(fwLine, sizeof(fwLine), "v%s", FW_VERSION);
+  drawStatusLine(334, "FW", fwLine, UI_INK);
+  drawStatusLine(348, "SAVE", pet.saveLoadedFromNvs ? "OK" : "NEW", pet.saveLoadedFromNvs ? UI_BAR_OK : UI_BAR_WARN);
+  drawStatusLine(362, "SD", sdReady ? "OK" : "NO", sdReady ? UI_BAR_OK : UI_BAR_WARN);
+  drawStatusLine(376, "SPR", (pmd.loaded || mon.loaded) ? "OK" : "FLASH/NO", (pmd.loaded || mon.loaded) ? UI_BAR_OK : UI_BAR_WARN);
+  char petLine[32];
+  if (pet.isEgg()) snprintf(petLine, sizeof(petLine), "EGG");
+  else snprintf(petLine, sizeof(petLine), "#%d LV%u", pet.speciesId, pet.level());
+  drawStatusLine(390, "PET", petLine, UI_INK);
+
+  gfx->fillRoundRect(133, 404, 200, 40, 13, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - 18, 352);
+  gfx->setCursor(CX - 18, 414);
   gfx->print("OK");
-
-  gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_CLOCK_CANCEL)) * 6, 410);
-  gfx->print(T(S_CLOCK_CANCEL));
-
-  const char *saveLabel = pet.saveLoadedFromNvs ? "SAVE OK" : "SAVE NEW";
-  gfx->setTextColor(pet.saveLoadedFromNvs ? UI_BAR_OK : UI_BAR_WARN);
-  gfx->setTextSize(1);
-  gfx->setCursor(CX - (int)strlen(saveLabel) * 3, 424);
-  gfx->print(saveLabel);
-
-  // version del firmware (discreta, abajo del todo)
-  char ver[40];
-  snprintf(ver, sizeof(ver), "TamaPoke v%s", FW_VERSION);
-  gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(CX - (int)strlen(ver) * 3, 436);
-  gfx->print(ver);
   gfx->flush();
 }
 
@@ -2256,7 +2259,7 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
   }
-  if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
+  if (y >= 404 && y <= 444 && x >= 133 && x <= 333) { applyClock(); return; }
 }
 
 // llama + numero de racha arriba a la izquierda

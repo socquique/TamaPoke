@@ -6,7 +6,7 @@
 set -e
 cd "$(dirname "$0")/.."
 FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
-VERSION="1.14-pokedex-v2"
+VERSION="1.14.1-settings-v2"
 
 echo "Compilando..."
 arduino-cli compile --fqbn "$FQBN" --export-binaries .
