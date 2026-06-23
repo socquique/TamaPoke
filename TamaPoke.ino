@@ -21,10 +21,11 @@
 #include "rtcbat.h"
 #include "i18n.h"
 #include "audio.h"
+#include "battle.h"
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.2"
+#define FW_VERSION "1.11-daily-goals"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -40,6 +41,7 @@ Pet pet;
 SdMon mon;          // sprite B/N (respaldo y minijuego si no hay PMD)
 PmdMon pmd;         // sprite PMD multi-accion (pantalla principal)
 PmdMon evoPmd;      // forma anterior, solo durante el parpadeo de evolucion
+PmdMon wildPmd;     // rival salvaje en la pantalla de combate
 int16_t monFor = -2;
 bool monShinyFor = false;
 
@@ -65,7 +67,8 @@ bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
-uint8_t cardPage = 0;         // 0 perfil, 1 stats+medallas
+#define CARD_COUNT 6
+uint8_t cardPage = 0;         // 0 perfil, 1 personalidad, 2 diario, 3 combate, 4 medallas, 5 progreso
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 
@@ -77,12 +80,22 @@ uint32_t feedMenuUntil = 0;   // selector de comida abierto hasta este millis
 
 // minijuego "toques": mantener la pokeball en el aire
 bool gameOpen = false;
+bool gameMenuOpen = false;
+uint8_t gameMode = 0;  // 0 ball, 1 catch, 2 memo
 uint32_t gameOverUntil = 0;
 float ballX, ballY, ballVX, ballVY, gamePetX;
 uint8_t gameScore, gameMisses;
 float hitX, hitY;             // ultimo golpe (anillo de impacto)
 uint32_t hitTime = 0;
 bool gameNewHi = false;
+uint8_t gameGain = 0;
+uint32_t catchUntil = 0, catchTargetUntil = 0;
+int16_t catchX = 0, catchY = 0;
+uint8_t catchIcon = 0;
+uint8_t memoSeq[14] = { 0 };
+uint8_t memoLen = 0, memoShow = 0, memoInput = 0, memoRounds = 0;
+uint32_t memoNextAt = 0;
+bool memoShowing = false;
 
 // saco de entrenamiento (entrena la fuerza)
 bool sackOpen = false;
@@ -91,6 +104,39 @@ uint16_t sackHits = 0;
 float sackShake = 0;
 uint8_t sackGain = 0;
 bool sackNewHi = false;
+
+bool battleOpen = false;
+bool battleResolved = false;
+int16_t battleDex = 0;
+uint8_t battleLevel = 1;
+BattleStats battlePlayer = {};
+BattleStats battleEnemy = {};
+BattleResult battleResult = {};
+BattleRuntime battleRun = {};
+BattleTurnResult battleTurn = {};
+BattleAction battleLastAction = BATTLE_ATTACK;
+BattleReward battleReward = {};
+char battleMsg[28] = "";
+uint32_t battleAttackMenuUntil = 0;
+
+#define WILD_COOLDOWN_MS (20UL * 60UL * 1000UL)
+#define WILD_PROMPT_MS 20000UL
+#define WILD_CHECK_MS 60000UL
+uint32_t wildPromptUntil = 0;
+uint32_t nextWildEligible = 0;
+uint32_t lastWildCheck = 0;
+int16_t wildPromptDex = 0;
+uint8_t wildPromptLevel = 1;
+
+#define PET_EVENT_COOLDOWN_MS (15UL * 60UL * 1000UL)
+#define PET_EVENT_PROMPT_MS 18000UL
+#define PET_EVENT_CHECK_MS 60000UL
+uint32_t petEventUntil = 0;
+uint32_t nextPetEventEligible = 0;
+uint32_t lastPetEventCheck = 0;
+uint8_t petEventType = PET_EVENT_BERRY;
+uint32_t petEventFeedbackUntil = 0;
+char petEventMsg[18] = "";
 
 // las 9 especies con sprite propio en flash (respaldo sin SD): dex -> indice
 int flashIdxForDex(int16_t dex) {
@@ -201,6 +247,9 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
 
   pet.begin();
+  Serial.printf("SAVE %s spec=%d lv=%u wins=%u losses=%u streak=%u\n",
+                pet.saveLoadedFromNvs ? "loaded" : "created",
+                pet.speciesId, pet.level(), pet.battleWins, pet.battleLosses, pet.battleStreak);
   sdBegin();
   thumbs.load();
 
@@ -257,6 +306,9 @@ void loop() {
   handleTouch();
   handleSerial();
   ensureMon();
+  pet.ensureDailyGoals();
+  maybeOfferWildEncounter(now);
+  maybeOfferPetEvent(now);
 
   // pulsacion corta del PWR: pantalla on/off
   static uint32_t lastPwr = 0;
@@ -298,7 +350,7 @@ void loop() {
   // 85 ms en juego/saco: margen seguro para que el redibujado no pise el envio
   // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
   // sprites grandes el dibujo tarda mas, asi que se deja colchon)
-  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen) ? 85 : 100)) {
+  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen || battleOpen) ? 85 : 100)) {
     lastRender = now;
     render();
   }
@@ -409,6 +461,17 @@ void handleSerial() {
       if (pet.isRegistered(i)) Serial.printf(" %d", i);
     Serial.println();
     Serial.println("DONE");
+  } else if (line == "SAVEINFO") {
+    Serial.printf("fw=%s save=%s createdBoot=%d spec=%d level=%u egg=%d starter=%d age=%lu\n",
+                  FW_VERSION, pet.saveLoadedFromNvs ? "loaded" : "created",
+                  pet.saveCreatedThisBoot, pet.speciesId, pet.level(), pet.isEgg(),
+                  pet.awaitingStarter(), (unsigned long)pet.ageMinutes);
+    Serial.printf("battle wins=%u losses=%u streak=%u best=%u nick=%s\n",
+                  pet.battleWins, pet.battleLosses, pet.battleStreak,
+                  pet.bestBattleStreak, pet.nick);
+    Serial.printf("records ball=%u catch=%u memo=%u sack=%u\n",
+                  pet.gameHi, pet.catchHi, pet.memoHi, pet.strHi);
+    Serial.println("DONE");
   } else if (line == "HEALTH") {
     Serial.printf("up=%lus heap=%u min=%u sd=%d mon=%d\n",
                   (unsigned long)(millis() / 1000), ESP.getFreeHeap(),
@@ -496,7 +559,10 @@ void openClock();  // prototipo
 
 void onSwipeV(int dir) {
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
-  if (gameOpen || galleryOpen || kbOpen || sackOpen || pet.ceremony) return;
+  if (wildPromptUntil && millis() < wildPromptUntil) return;
+  if (wildPromptUntil) wildPromptUntil = 0;
+  if (gameMenuOpen) return;
+  if (gameOpen || galleryOpen || kbOpen || sackOpen || battleOpen || pet.ceremony) return;
   if (clockOpen) { clockOpen = false; return; }
   if (cardOpen) {
     if (dir < 0) cardOpen = false;  // arriba cierra la ficha
@@ -513,10 +579,13 @@ void onSwipeV(int dir) {
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
-  if (gameOpen || kbOpen || clockOpen) return;
-  if (cardOpen) {  // dentro de la ficha: cambiar entre las 4 paginas
+  if (wildPromptUntil && millis() < wildPromptUntil) return;
+  if (wildPromptUntil) wildPromptUntil = 0;
+  if (gameMenuOpen) return;
+  if (gameOpen || kbOpen || clockOpen || battleOpen) return;
+  if (cardOpen) {  // dentro de la ficha: cambiar paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
-    cardPage = p < 0 ? 0 : (p > 3 ? 3 : p);
+    cardPage = p < 0 ? 0 : (p >= CARD_COUNT ? CARD_COUNT - 1 : p);
     return;
   }
   if (!galleryOpen) {
@@ -575,7 +644,10 @@ void onTap(int16_t x, int16_t y) {
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
     if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
-    else if (cardPage == 1 && y >= 300 && y <= 340 && x >= 96 && x <= 370) {
+    else if (cardPage == 3 && y >= 294 && y <= 330 && x >= 96 && x <= 370) {
+      cardOpen = false;
+      startBattle();
+    } else if (cardPage == 3 && y >= 338 && y <= 374 && x >= 96 && x <= 370) {
       cardOpen = false;            // boton ENTRENAR FUERZA
       startSack();
     } else {
@@ -585,6 +657,37 @@ void onTap(int16_t x, int16_t y) {
   }
   if (gameOpen) {
     gameTap(x, y);
+    return;
+  }
+  if (battleOpen) {
+    battleTap(x, y);
+    return;
+  }
+  if (petEventUntil && millis() < petEventUntil && inPetEventHit(x, y)) {
+    acceptPetEvent();
+    return;
+  }
+  if (gameMenuOpen) {
+    if (x >= 88 && x <= 378 && y >= 176 && y <= 224) startGame();
+    else if (x >= 88 && x <= 378 && y >= 236 && y <= 284) startCatchGame();
+    else if (x >= 88 && x <= 378 && y >= 296 && y <= 344) startMemoGame();
+    else gameMenuOpen = false;
+    return;
+  }
+  if (wildPromptUntil) {
+    if (millis() < wildPromptUntil) {
+      bool fight = (x >= 93 && x <= 373 && y >= 226 && y <= 270);
+      bool later = (x >= 93 && x <= 373 && y >= 278 && y <= 322);
+      if (fight) {
+        startBattleWith(wildPromptDex, wildPromptLevel);
+      } else if (later) {
+        wildPromptUntil = 0;
+        scheduleNextWild(millis());
+        sfxPlay(SFX_TAP);
+      }
+    } else {
+      wildPromptUntil = 0;
+    }
     return;
   }
   if (choiceKind) {          // dialogo de decision: boton accion (arriba) / mantener (abajo)
@@ -642,7 +745,7 @@ void onTap(int16_t x, int16_t y) {
       if (i == 0) {
         if (!pet.sleeping) feedMenuUntil = millis() + 6000;
       } else if (i == 1) {
-        startGame();
+        if (!pet.sleeping) gameMenuOpen = true;
       } else if (i == 2) {
         pet.toggleLight();
       } else {
@@ -817,6 +920,10 @@ void render() {
     renderSack();
     return;
   }
+  if (battleOpen) {
+    renderBattle();
+    return;
+  }
   if (kbOpen) {
     renderKeyboard();
     return;
@@ -883,6 +990,8 @@ void render() {
     drawBars();
     drawButtons();
     drawCelebration();
+    drawPetEvent();
+    if (gameMenuOpen) drawGameMenu();
     if (pet.wantEvolveButton()) drawEvolveButton();        // CTA rojo: evolucionar
     else if (pet.canRunawayNow()) drawRunawayButton();     // CTA sombrio: escapada (abandono)
     else if (pet.wantFarewellButton()) drawFarewellButton();  // CTA dorado: despedida
@@ -893,6 +1002,11 @@ void render() {
     gfx->setTextSize(3);
     gfx->setCursor(320, 130);
     gfx->print("Zz");
+  }
+
+  if (wildPromptUntil) {
+    if (millis() > wildPromptUntil) wildPromptUntil = 0;
+    else drawWildPrompt();
   }
 
   // selector de comida
@@ -943,16 +1057,85 @@ void render() {
 
 // ---------- minijuego: toques con la pokeball ----------
 
+void drawGameMenu() {
+  gfx->fillRoundRect(78, 144, 310, 218, 18, UI_WHITE);
+  gfx->drawRoundRect(78, 144, 310, 218, 18, UI_INK);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  const char *title = "PLAY";
+  gfx->setCursor(CX - strlen(title) * 9, 160);
+  gfx->print(title);
+  const char *labels[3] = { T(S_GAME_BALL), T(S_GAME_CATCH), T(S_GAME_MEMO) };
+  uint16_t cols[3] = { UI_BAR_BAD, UI_BAR_WARN, 0x4C98 };
+  for (int i = 0; i < 3; i++) {
+    int y = 176 + i * 60;
+    gfx->fillRoundRect(88, y, 290, 48, 12, cols[i]);
+    gfx->setTextColor(i == 1 ? UI_INK : UI_BG_DAY);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - strlen(labels[i]) * 6, y + 16);
+    gfx->print(labels[i]);
+  }
+}
+
 void startGame() {
   if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+  gameMenuOpen = false;
   gameOpen = true;
+  gameMode = 0;
   gameOverUntil = 0;
   gameScore = 0;
   gameMisses = 0;
   gameNewHi = false;
+  gameGain = 0;
   hitTime = 0;
   gamePetX = 233;
   respawnBall();
+}
+
+void spawnCatchTarget() {
+  catchX = 86 + random(294);
+  catchY = 118 + random(206);
+  catchIcon = random(3);
+  uint32_t life = 1150;
+  if (gameScore > 8) life = 920;
+  if (gameScore > 16) life = 760;
+  catchTargetUntil = millis() + life;
+}
+
+void startCatchGame() {
+  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+  gameMenuOpen = false;
+  gameOpen = true;
+  gameMode = 1;
+  gameOverUntil = 0;
+  gameScore = 0;
+  gameMisses = 0;
+  gameNewHi = false;
+  gameGain = 0;
+  catchUntil = millis() + 20000;
+  spawnCatchTarget();
+}
+
+void startMemoRound() {
+  if (memoLen < 14) memoSeq[memoLen++] = random(4);
+  memoShow = 0;
+  memoInput = 0;
+  memoShowing = true;
+  memoNextAt = millis() + 350;
+}
+
+void startMemoGame() {
+  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+  gameMenuOpen = false;
+  gameOpen = true;
+  gameMode = 2;
+  gameOverUntil = 0;
+  gameScore = 0;
+  gameNewHi = false;
+  gameGain = 0;
+  memoLen = 0;
+  memoRounds = 0;
+  startMemoRound();
 }
 
 void respawnBall() {
@@ -965,6 +1148,14 @@ void respawnBall() {
 }
 
 void gameTap(int16_t x, int16_t y) {
+  if (gameMode == 1) {
+    catchTap(x, y);
+    return;
+  }
+  if (gameMode == 2) {
+    memoTap(x, y);
+    return;
+  }
   if (gameOverUntil) return;
   if (y < 72) {  // tocar la cabecera = abandonar sin premio
     gameOpen = false;
@@ -983,6 +1174,69 @@ void gameTap(int16_t x, int16_t y) {
     hitX = ballX;
     hitY = ballY;
     hitTime = millis();
+  }
+}
+
+void finishCatchGame() {
+  gameNewHi = (gameScore > pet.catchHi);
+  gameGain = pet.applyCatchResult(gameScore);
+  sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
+  gameOverUntil = millis() + 4000;
+}
+
+void catchTap(int16_t x, int16_t y) {
+  if (gameOverUntil) return;
+  if (y < 72) { gameOpen = false; return; }
+  int dx = x - catchX, dy = y - catchY;
+  if (dx * dx + dy * dy <= 52 * 52) {
+    gameScore++;
+    hitX = catchX;
+    hitY = catchY;
+    hitTime = millis();
+    sfxPlay(SFX_PLAY);
+    spawnCatchTarget();
+  } else if (++gameMisses >= 3) {
+    finishCatchGame();
+  } else {
+    sfxPlay(SFX_DENY);
+  }
+}
+
+void finishMemoGame() {
+  gameScore = memoRounds;
+  gameNewHi = (memoRounds > pet.memoHi);
+  gameGain = pet.applyMemoResult(memoRounds);
+  sfxPlay(gameNewHi && memoRounds > 0 ? SFX_MEDAL : SFX_LEVEL);
+  gameOverUntil = millis() + 4000;
+}
+
+int memoPadAt(int16_t x, int16_t y) {
+  const int16_t px[4] = { 142, 324, 142, 324 };
+  const int16_t py[4] = { 164, 164, 318, 318 };
+  for (int i = 0; i < 4; i++) {
+    int dx = x - px[i], dy = y - py[i];
+    if (dx * dx + dy * dy <= 54 * 54) return i;
+  }
+  return -1;
+}
+
+void memoTap(int16_t x, int16_t y) {
+  if (gameOverUntil) return;
+  if (y < 72) { gameOpen = false; return; }
+  if (memoShowing) return;
+  int pad = memoPadAt(x, y);
+  if (pad < 0) return;
+  if (pad != memoSeq[memoInput]) {
+    sfxPlay(SFX_DENY);
+    finishMemoGame();
+    return;
+  }
+  sfxPlay(SFX_PLAY);
+  memoInput++;
+  if (memoInput >= memoLen) {
+    memoRounds++;
+    if (memoLen >= 14) finishMemoGame();
+    else startMemoRound();
   }
 }
 
@@ -1141,12 +1395,150 @@ void drawGameScene() {
   gfx->fillRect(0, hor, 466, 466 - hor, soil);
 }
 
+void drawGameResult(const char *recordFmt, uint16_t record, StrId gainFmt) {
+  drawGameScene();
+  if (millis() > gameOverUntil) {
+    gameOpen = false;
+    return;
+  }
+  bool night = sceneHour() < 6 || sceneHour() >= 20;
+  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+  char buf[22];
+  snprintf(buf, sizeof(buf), T(S_SCORE_FMT), gameScore);
+  gfx->setTextColor(ink);
+  gfx->setTextSize(4);
+  gfx->setCursor(CX - strlen(buf) * 12, 148);
+  gfx->print(buf);
+  char gain[18];
+  snprintf(gain, sizeof(gain), T(gainFmt), gameGain);
+  gfx->setTextColor(gainFmt == S_DEF_GAIN_FMT ? 0x4C98 : UI_BAR_WARN);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(gain) * 9, 204);
+  gfx->print(gain);
+  gfx->setTextSize(2);
+  if (gameNewHi && gameScore > 0) {
+    gfx->setTextColor(UI_BAR_WARN);
+    gfx->setCursor(CX - strlen(T(S_NEW_RECORD)) * 6, 256);
+    gfx->print(T(S_NEW_RECORD));
+  } else {
+    char rec[20];
+    snprintf(rec, sizeof(rec), recordFmt, record);
+    gfx->setTextColor(ink);
+    gfx->setCursor(CX - strlen(rec) * 6, 256);
+    gfx->print(rec);
+  }
+  gfx->flush();
+}
+
+void renderCatchGame() {
+  uint32_t now = millis();
+  if (gameOverUntil) {
+    drawGameResult(T(S_RECORD_FMT), pet.catchHi, S_SPD_GAIN_FMT);
+    return;
+  }
+  if (now >= catchUntil || gameMisses >= 3) {
+    finishCatchGame();
+    return;
+  }
+  if (now > catchTargetUntil) {
+    if (++gameMisses >= 3) {
+      finishCatchGame();
+      return;
+    }
+    spawnCatchTarget();
+  }
+  drawGameScene();
+  bool night = sceneHour() < 6 || sceneHour() >= 20;
+  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+  gfx->setTextColor(ink);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_CATCH_TITLE)) * 9, 32);
+  gfx->print(T(S_CATCH_TITLE));
+  char score[16], rec[16];
+  snprintf(score, sizeof(score), T(S_SCORE_FMT), gameScore);
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.catchHi);
+  gfx->setTextSize(2);
+  gfx->setCursor(50, 78);
+  gfx->print(score);
+  gfx->setCursor(294, 78);
+  gfx->print(rec);
+  for (int i = 0; i < 3; i++) {
+    if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
+    else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
+  }
+  const char *const *icon = catchIcon == 0 ? SPR_ICON_FOOD : (catchIcon == 1 ? SPR_ICON_BERRY_B : SPR_ICON_BERRY_G);
+  gfx->fillCircle(catchX, catchY, 34, UI_WHITE);
+  gfx->drawCircle(catchX, catchY, 36, UI_BAR_WARN);
+  drawMap(icon, 16, catchX - 24, catchY - 24, 3, false);
+  int bw = 280;
+  int fw = (int)((uint32_t)bw * (catchUntil - now) / 20000);
+  if (fw < 0) fw = 0;
+  gfx->fillRoundRect(CX - bw / 2, 362, bw, 16, 5, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 362, fw, 16, 5, UI_BAR_OK);
+  uint32_t ht = millis() - hitTime;
+  if (hitTime && ht < 220) gfx->drawCircle((int)hitX, (int)hitY, 42 + ht / 8, UI_BAR_WARN);
+  gfx->flush();
+}
+
+void stepMemoGame() {
+  if (!memoShowing || millis() < memoNextAt) return;
+  memoShow++;
+  if (memoShow >= memoLen) {
+    memoShowing = false;
+    memoInput = 0;
+  } else {
+    memoNextAt = millis() + 520;
+  }
+}
+
+void renderMemoGame() {
+  if (gameOverUntil) {
+    drawGameResult(T(S_RECORD_FMT), pet.memoHi, S_DEF_GAIN_FMT);
+    return;
+  }
+  stepMemoGame();
+  drawGameScene();
+  bool night = sceneHour() < 6 || sceneHour() >= 20;
+  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+  char roundBuf[18], rec[16];
+  snprintf(roundBuf, sizeof(roundBuf), T(S_ROUND_FMT), memoRounds + 1);
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.memoHi);
+  gfx->setTextColor(ink);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_GAME_MEMO)) * 9, 34);
+  gfx->print(T(S_GAME_MEMO));
+  gfx->setTextSize(2);
+  gfx->setCursor(60, 82);
+  gfx->print(roundBuf);
+  gfx->setCursor(310, 82);
+  gfx->print(rec);
+  const int16_t px[4] = { 142, 324, 142, 324 };
+  const int16_t py[4] = { 164, 164, 318, 318 };
+  const uint16_t col[4] = { UI_BAR_BAD, UI_BAR_WARN, 0x4C98, UI_BAR_OK };
+  int active = memoShowing ? memoSeq[memoShow] : -1;
+  for (int i = 0; i < 4; i++) {
+    uint16_t fill = i == active ? UI_WHITE : col[i];
+    gfx->fillCircle(px[i], py[i], 48, fill);
+    gfx->drawCircle(px[i], py[i], 52, ink);
+  }
+  gfx->flush();
+}
+
 void renderGame() {
   // sin fillScreen(NEGRO): drawGameScene cubre los 466x466 completos. Si el
   // DMA del flush anterior aun lee el buffer, vera contenido valido (no negro
   // a medio pintar), que era el parpadeo a 25 fps.
   bool night = sceneHour() < 6 || sceneHour() >= 20;
   uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+
+  if (gameMode == 1) {
+    renderCatchGame();
+    return;
+  }
+  if (gameMode == 2) {
+    renderMemoGame();
+    return;
+  }
 
   if (gameOverUntil) {
     drawGameScene();
@@ -1229,6 +1621,416 @@ void renderGame() {
 
   // la pokeball
   drawMap(SPR_ICON_PLAY, 16, (int)ballX - 24, (int)ballY - 24, 3, false);
+
+  gfx->flush();
+}
+
+// ---------- combate salvaje manual ----------
+
+uint16_t battleHpFor(const BattleStats &stats) {
+  return stats.hp ? stats.hp : (uint16_t)(30 + stats.level * 5 + stats.def);
+}
+
+BattleStats petBattleStats() {
+  BattleStats stats = {};
+  stats.level = pet.level();
+  stats.atk = pet.atkStat();
+  stats.def = pet.defStat();
+  stats.spe = pet.speStat();
+  stats.hp = 0;
+  return stats;
+}
+
+void scheduleNextWild(uint32_t now) {
+  nextWildEligible = now + WILD_COOLDOWN_MS;
+}
+
+bool mainScreenReadyForWild() {
+  if (screenOff || pet.awaitingStarter() || pet.isEgg() || pet.sleeping || pet.ceremony) return false;
+  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen) return false;
+  if (feedMenuUntil || confirmUntil || choiceKind || bathUntil || petEventUntil) return false;
+  if (pet.evolving() || pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton()) return false;
+  return true;
+}
+
+void maybeOfferWildEncounter(uint32_t now) {
+  if (nextWildEligible == 0) {
+    scheduleNextWild(now);
+    return;
+  }
+  if (wildPromptUntil) return;
+  if (now - lastWildCheck < WILD_CHECK_MS) return;
+  lastWildCheck = now;
+  if (now < nextWildEligible) return;
+  if (!mainScreenReadyForWild()) return;
+  if ((uint8_t)random(100) >= 8) return;
+
+  wildPromptDex = pickWildSpecies((uint8_t)random(100));
+  wildPromptLevel = wildLevelFor(pet.level(), (uint8_t)random(100));
+  wildPromptUntil = now + WILD_PROMPT_MS;
+  scheduleNextWild(now);
+  sfxPlay(SFX_TAP);
+}
+
+void scheduleNextPetEvent(uint32_t now) {
+  nextPetEventEligible = now + PET_EVENT_COOLDOWN_MS;
+}
+
+bool mainScreenReadyForPetEvent() {
+  if (screenOff || pet.awaitingStarter() || pet.isEgg() || pet.sleeping || pet.ceremony) return false;
+  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen) return false;
+  if (feedMenuUntil || confirmUntil || choiceKind || bathUntil || wildPromptUntil) return false;
+  if (pet.evolving() || pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton()) return false;
+  return true;
+}
+
+void maybeOfferPetEvent(uint32_t now) {
+  if (nextPetEventEligible == 0) {
+    scheduleNextPetEvent(now);
+    return;
+  }
+  if (petEventUntil) {
+    if (now > petEventUntil) petEventUntil = 0;
+    return;
+  }
+  if (now - lastPetEventCheck < PET_EVENT_CHECK_MS) return;
+  lastPetEventCheck = now;
+  if (now < nextPetEventEligible) return;
+  if (!mainScreenReadyForPetEvent()) return;
+  if ((uint8_t)random(100) >= 10) return;
+
+  petEventType = (uint8_t)random(3);
+  petEventUntil = now + PET_EVENT_PROMPT_MS;
+  scheduleNextPetEvent(now);
+  sfxPlay(SFX_TAP);
+}
+
+bool inPetEventHit(int16_t x, int16_t y) {
+  int16_t ex = 366, ey = 286;
+  int dx = x - ex, dy = y - ey;
+  return dx * dx + dy * dy <= 44 * 44;
+}
+
+void acceptPetEvent() {
+  uint8_t type = petEventType;
+  petEventUntil = 0;
+  scheduleNextPetEvent(millis());
+  if (!pet.applyPetEvent(type)) return;
+  StrId msg = S_EVENT_FOUND;
+  if (type == PET_EVENT_HEART) msg = S_EVENT_PET;
+  else if (type == PET_EVENT_SPARKLE) msg = S_EVENT_LUCKY;
+  snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(msg));
+  petEventFeedbackUntil = millis() + 1800;
+  sfxPlay(type == PET_EVENT_BERRY ? SFX_EAT : SFX_HEART);
+}
+
+void closeBattle() {
+  battleOpen = false;
+  battleResolved = false;
+  battleAttackMenuUntil = 0;
+  wildPmd.unload();
+}
+
+void startBattleWith(int16_t forcedDex, uint8_t forcedLevel) {
+  if (!canStartWildBattle(pet.isEgg(), pet.sleeping, pet.ceremony)) return;
+  wildPromptUntil = 0;
+  scheduleNextWild(millis());
+  if (forcedDex >= 1 && forcedDex <= DEX_COUNT) {
+    battleDex = forcedDex;
+    battleLevel = forcedLevel ? forcedLevel : wildLevelFor(pet.level(), (uint8_t)random(100));
+  } else {
+    uint8_t speciesRoll = random(100);
+    uint8_t levelRoll = random(100);
+    battleDex = pickWildSpecies(speciesRoll);
+    battleLevel = wildLevelFor(pet.level(), levelRoll);
+  }
+  battlePlayer = petBattleStats();
+  battleEnemy = wildBattleStats(battleDex, battleLevel);
+  battleEnemy.hp = 0;
+  battleResult = {};
+  battleRun = beginBattleRuntime(battlePlayer, battleEnemy);
+  battleTurn = {};
+  battleReward = {};
+  battleMsg[0] = 0;
+  battleAttackMenuUntil = 0;
+  battleResolved = false;
+  battleOpen = true;
+  wildPmd.unload();
+  wildPmd.load(battleDex, false);
+  sfxPlay(SFX_TAP);
+}
+
+void startBattle() {
+  startBattleWith(0, 0);
+}
+
+void finishBattle() {
+  if (battleResolved) return;
+  battleResolved = true;
+  if (battleTurn.playerWon) {
+    bool closeWin = battleRun.playerHp <= battleRun.playerMaxHp / 3;
+    battleReward = pet.applyBattleWin(battleDex, closeWin);
+    sfxPlay(SFX_MEDAL);
+  } else {
+    battleReward = {};
+    pet.applyBattleLoss();
+    sfxPlay(SFX_DENY);
+  }
+}
+
+void performBattleAction(BattleAction action) {
+  if (battleResolved) return;
+  battleAttackMenuUntil = 0;
+  battleLastAction = action;
+  battleTurn = stepBattle(battleRun, action, (uint8_t)random(100));
+  if (battleTurn.restFailed) {
+    snprintf(battleMsg, sizeof(battleMsg), T(S_NO_REST));
+  } else if (battleTurn.counterReady) {
+    snprintf(battleMsg, sizeof(battleMsg), T(S_COUNTER_READY));
+  } else if (battleTurn.playerRested) {
+    snprintf(battleMsg, sizeof(battleMsg), T(S_RESTED_FMT), battleTurn.playerHeal);
+  } else if (battleTurn.playerDamage > 0) {
+    snprintf(battleMsg, sizeof(battleMsg), T(S_HIT_FMT), battleTurn.playerDamage);
+  } else if (battleTurn.enemyDodged) {
+    snprintf(battleMsg, sizeof(battleMsg), T(S_ENEMY_DODGED));
+  } else if (battleTurn.playerDodged) {
+    snprintf(battleMsg, sizeof(battleMsg), T(S_DODGED));
+  } else {
+    snprintf(battleMsg, sizeof(battleMsg), T(S_MISSED));
+  }
+  sfxPlay(battleTurn.playerDamage > 0 ? SFX_PLAY : SFX_TAP);
+  if (battleTurn.battleEnded) finishBattle();
+}
+
+void battleTap(int16_t x, int16_t y) {
+  if (battleResolved) {
+    if (x >= 118 && x <= 348 && y >= 392 && y <= 454) closeBattle();
+    return;
+  }
+  if (battleAttackMenuUntil) {
+    if (x >= 54 && x <= 232 && y >= 280 && y <= 366) {
+      performBattleAction(BATTLE_ATTACK_QUICK);
+      return;
+    }
+    if (x >= 234 && x <= 412 && y >= 280 && y <= 366) {
+      performBattleAction(BATTLE_ATTACK_HEAVY);
+      return;
+    }
+    return;
+  }
+  if (x >= 184 && x <= 282 && y >= 100 && y <= 136) {
+    closeBattle();
+    sfxPlay(SFX_TAP);
+    return;
+  }
+  if (x >= 58 && x <= 166 && y >= 358 && y <= 416) {
+    battleAttackMenuUntil = 1;
+    sfxPlay(SFX_TAP);
+  } else if (x >= 179 && x <= 287 && y >= 358 && y <= 416) {
+    performBattleAction(BATTLE_DODGE);
+  } else if (x >= 300 && x <= 408 && y >= 358 && y <= 416) {
+    performBattleAction(BATTLE_REST);
+  }
+}
+
+void drawBattleHpBar(int x, int y, uint16_t cur, uint16_t maxHp, uint16_t color) {
+  if (maxHp == 0) maxHp = 1;
+  int w = 150;
+  int fw = (int)((uint32_t)cur * w / maxHp);
+  if (fw > w) fw = w;
+  gfx->fillRoundRect(x, y, w, 14, 4, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(x, y, fw, 14, 4, color);
+}
+
+void battleRewardText(char *buf, size_t len) {
+  if (battleReward.amount == 0) { buf[0] = 0; return; }
+  StrId fmt = S_SPD_GAIN_FMT;
+  if (battleReward.stat == BATTLE_REWARD_ATK) fmt = S_ATK_GAIN_FMT;
+  else if (battleReward.stat == BATTLE_REWARD_DEF) fmt = S_DEF_GAIN_FMT;
+  snprintf(buf, len, T(fmt), battleReward.amount);
+}
+
+void drawBattleButtonLabel(int x, int y, int w, const char *label) {
+  int px = (int)strlen(label) * 12;
+  if (px <= w - 8) {
+    gfx->setTextSize(2);
+    gfx->setCursor(x + (w - px) / 2, y);
+    gfx->print(label);
+  } else {
+    gfx->setTextSize(1);
+    gfx->setCursor(x + (w - (int)strlen(label) * 6) / 2, y + 3);
+    gfx->print(label);
+    gfx->setTextSize(2);
+  }
+}
+
+void drawWildPrompt() {
+  const DexEntry &wild = DEX_TBL[wildPromptDex >= 1 && wildPromptDex <= DEX_COUNT ? wildPromptDex : 1];
+  gfx->fillRoundRect(82, 156, 302, 178, 18, UI_WHITE);
+  gfx->drawRoundRect(82, 156, 302, 178, 18, UI_INK);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_WILD_Q)) * 9, 176);
+  gfx->print(T(S_WILD_Q));
+  char name[28];
+  snprintf(name, sizeof(name), "%s Lv.%u", wild.name, wildPromptLevel);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(name) * 6, 206);
+  gfx->print(name);
+
+  gfx->fillRoundRect(93, 226, 280, 44, 12, UI_BAR_BAD);
+  gfx->fillRoundRect(93, 278, 280, 44, 12, UI_TRACK);
+  gfx->setTextColor(UI_WHITE);
+  gfx->setCursor(CX - strlen(T(S_FIGHT)) * 6, 240);
+  gfx->print(T(S_FIGHT));
+  gfx->setTextColor(UI_BG_DAY);
+  gfx->setCursor(CX - strlen(T(S_LATER)) * 6, 292);
+  gfx->print(T(S_LATER));
+}
+
+void drawPetEvent() {
+  uint32_t now = millis();
+  if (petEventUntil && now > petEventUntil) petEventUntil = 0;
+  if (!petEventUntil && (!petEventFeedbackUntil || now > petEventFeedbackUntil)) return;
+
+  int16_t ex = 366, ey = 286;
+  if (petEventUntil) {
+    gfx->fillCircle(ex, ey, 32, UI_WHITE);
+    gfx->drawCircle(ex, ey, 34, UI_BAR_WARN);
+    if (petEventType == PET_EVENT_BERRY) {
+      drawMap(SPR_ICON_BERRY_G, 16, ex - 24, ey - 24, 3, false);
+    } else if (petEventType == PET_EVENT_HEART) {
+      drawMap(SPR_HEART, 32, ex - 32, ey - 32, 2, false);
+    } else {
+      gfx->setTextColor(UI_BAR_WARN);
+      gfx->setTextSize(4);
+      gfx->setCursor(ex - 12, ey - 18);
+      gfx->print("*");
+      gfx->fillCircle(ex - 14, ey + 12, 4, UI_WHITE);
+      gfx->fillCircle(ex + 16, ey + 10, 4, UI_WHITE);
+    }
+  }
+  if (petEventFeedbackUntil && now <= petEventFeedbackUntil) {
+    gfx->setTextColor(UI_BAR_WARN);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - strlen(petEventMsg) * 6, 292);
+    gfx->print(petEventMsg);
+  }
+}
+
+void renderBattle() {
+  drawGameScene();
+  bool night = sceneHour() < 6 || sceneHour() >= 20;
+  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+  const DexEntry &mine = DEX_TBL[pet.speciesId];
+  const DexEntry &wild = DEX_TBL[battleDex];
+
+  gfx->setTextColor(ink);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_WILD_BATTLE)) * 9, 34);
+  gfx->print(T(S_WILD_BATTLE));
+
+  char left[24], right[24];
+  snprintf(left, sizeof(left), "%s Lv.%u", pet.nick[0] ? pet.nick : mine.name, battlePlayer.level);
+  snprintf(right, sizeof(right), "%s Lv.%u", wild.name, battleLevel);
+  gfx->setTextSize(2);
+  gfx->setCursor(28, 82);
+  gfx->print(left);
+  gfx->setCursor(438 - strlen(right) * 12, 82);
+  gfx->print(right);
+
+  uint16_t playerMax = battleRun.playerMaxHp;
+  uint16_t enemyMax = battleRun.enemyMaxHp;
+  uint16_t playerCur = battleRun.playerHp;
+  uint16_t enemyCur = battleRun.enemyHp;
+  drawBattleHpBar(28, 110, playerCur, playerMax, UI_BAR_OK);
+  drawBattleHpBar(288, 110, enemyCur, enemyMax, UI_BAR_BAD);
+
+  if (!battleResolved) {
+    gfx->fillRoundRect(188, 102, 90, 32, 9, UI_TRACK);
+    gfx->setTextColor(UI_BG_DAY);
+    gfx->setTextSize(2);
+    gfx->setCursor(188 + (90 - (int)strlen(T(S_RUN_BATTLE)) * 12) / 2, 111);
+    gfx->print(T(S_RUN_BATTLE));
+  }
+
+  if (pmd.loaded) drawPmdAct(PMD_IDLE, 142, 286, millis(), true, false, 3);
+  else {
+    const uint8_t *th = thumbs.get(pet.speciesId);
+    if (th) drawThumb(th, 94, 166, 3, false);
+  }
+  if (wildPmd.loaded) drawPmdActM(wildPmd, PMD_IDLE, 328, 286, millis(), true, false, 3);
+  else {
+    const uint8_t *th = thumbs.get(battleDex);
+    if (th) drawThumb(th, 280, 166, 3, false);
+  }
+
+  if (battleResolved) {
+    const char *res = battleTurn.playerWon ? T(S_WIN) : T(S_LOSS);
+    gfx->setTextColor(battleTurn.playerWon ? UI_BAR_OK : UI_BAR_BAD);
+    gfx->setTextSize(4);
+    gfx->setCursor(CX - strlen(res) * 12, 300);
+    gfx->print(res);
+    char rounds[20], damage[28];
+    snprintf(rounds, sizeof(rounds), T(S_ROUNDS_FMT), battleRun.round);
+    snprintf(damage, sizeof(damage), T(S_DAMAGE_FMT), battleRun.playerDamageTotal, battleRun.enemyDamageTotal);
+    gfx->setTextColor(ink);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - strlen(rounds) * 6, 334);
+    gfx->print(rounds);
+    gfx->setCursor(CX - strlen(damage) * 6, 356);
+    gfx->print(damage);
+    if (battleTurn.playerWon) {
+      char reward[20];
+      battleRewardText(reward, sizeof(reward));
+      if (reward[0]) {
+        gfx->setTextColor(UI_BAR_WARN);
+        gfx->setCursor(CX - strlen(reward) * 6, 378);
+        gfx->print(reward);
+      }
+    }
+    gfx->fillRoundRect(118, 396, 230, 52, 14, UI_BAR_OK);
+    gfx->setTextColor(UI_BG_DAY);
+    gfx->setTextSize(3);
+    gfx->setCursor(CX - strlen(T(S_OK)) * 9, 413);
+    gfx->print(T(S_OK));
+  } else {
+    char roundBuf[14];
+    snprintf(roundBuf, sizeof(roundBuf), "R%u", battleRun.round + 1);
+    gfx->setTextColor(ink);
+    gfx->setTextSize(2);
+    gfx->setCursor(32, 318);
+    gfx->print(roundBuf);
+    if (battleMsg[0]) {
+      gfx->setCursor(CX - strlen(battleMsg) * 6, 318);
+      gfx->print(battleMsg);
+      if (battleTurn.enemyDamage > 0) {
+        char eb[16];
+        snprintf(eb, sizeof(eb), "-%u", battleTurn.enemyDamage);
+        gfx->setTextColor(UI_BAR_BAD);
+        gfx->setCursor(CX - strlen(eb) * 6, 340);
+        gfx->print(eb);
+      }
+    }
+
+    if (battleAttackMenuUntil) {
+      gfx->fillRoundRect(74, 298, 150, 46, 12, UI_BAR_BAD);
+      gfx->fillRoundRect(242, 298, 150, 46, 12, UI_BAR_WARN);
+      gfx->setTextColor(UI_BG_DAY);
+      drawBattleButtonLabel(74, 312, 150, T(S_QUICK_ATTACK));
+      drawBattleButtonLabel(242, 312, 150, T(S_HEAVY_ATTACK));
+    }
+
+    gfx->fillRoundRect(58, 358, 108, 58, 13, UI_BAR_BAD);
+    gfx->fillRoundRect(179, 358, 108, 58, 13, 0x4C98);
+    gfx->fillRoundRect(300, 358, 108, 58, 13, UI_BAR_OK);
+    gfx->setTextColor(UI_BG_DAY);
+    drawBattleButtonLabel(58, 380, 108, T(S_ATTACK));
+    drawBattleButtonLabel(179, 380, 108, T(S_DODGE));
+    char restLabel[18];
+    snprintf(restLabel, sizeof(restLabel), "%s %u", T(S_REST), battleRun.restUsesLeft);
+    drawBattleButtonLabel(300, 380, 108, restLabel);
+  }
 
   gfx->flush();
 }
@@ -1342,10 +2144,16 @@ void renderClock() {
   gfx->setCursor(CX - strlen(T(S_CLOCK_CANCEL)) * 6, 410);
   gfx->print(T(S_CLOCK_CANCEL));
 
-  // version del firmware (discreta, abajo del todo)
-  char ver[20];
-  snprintf(ver, sizeof(ver), "TamaPoke v%s", FW_VERSION);
+  const char *saveLabel = pet.saveLoadedFromNvs ? "SAVE OK" : "SAVE NEW";
+  gfx->setTextColor(pet.saveLoadedFromNvs ? UI_BAR_OK : UI_BAR_WARN);
   gfx->setTextSize(1);
+  gfx->setCursor(CX - (int)strlen(saveLabel) * 3, 424);
+  gfx->print(saveLabel);
+
+  // version del firmware (discreta, abajo del todo)
+  char ver[40];
+  snprintf(ver, sizeof(ver), "TamaPoke v%s", FW_VERSION);
+  gfx->setTextColor(UI_TRACK);
   gfx->setCursor(CX - (int)strlen(ver) * 3, 436);
   gfx->print(ver);
   gfx->flush();
@@ -1478,23 +2286,199 @@ void renderCardProfile() {
   gfx->print(T(S_RENAME_HINT));
 }
 
-// pagina 1: combate (4 barras + boton de entrenar)
+StrId personalityNameId(PetPersonality p) {
+  switch (p) {
+    case PERS_PLAYFUL: return S_PERS_PLAYFUL;
+    case PERS_BRAVE: return S_PERS_BRAVE;
+    case PERS_CALM: return S_PERS_CALM;
+    case PERS_LAZY: return S_PERS_LAZY;
+    default: return S_PERS_BALANCED;
+  }
+}
+
+StrId personalityHintId(PetPersonality p) {
+  switch (p) {
+    case PERS_PLAYFUL: return S_PERS_PLAYFUL_HINT;
+    case PERS_BRAVE: return S_PERS_BRAVE_HINT;
+    case PERS_CALM: return S_PERS_CALM_HINT;
+    case PERS_LAZY: return S_PERS_LAZY_HINT;
+    default: return S_PERS_BALANCED_HINT;
+  }
+}
+
+uint16_t personalityColor(PetPersonality p) {
+  switch (p) {
+    case PERS_PLAYFUL: return UI_BAR_WARN;
+    case PERS_BRAVE: return UI_BAR_BAD;
+    case PERS_CALM: return 0x4C98;
+    case PERS_LAZY: return 0xB3C8;
+    default: return UI_BAR_OK;
+  }
+}
+
+void drawPersonalityRecord(int x, int y, const char *label, uint16_t val, uint16_t color) {
+  gfx->fillRoundRect(x, y, 118, 34, 8, UI_WHITE);
+  gfx->drawRoundRect(x, y, 118, 34, 8, color);
+  gfx->setTextColor(color);
+  gfx->setTextSize(1);
+  gfx->setCursor(x + 10, y + 6);
+  gfx->print(label);
+  char num[8];
+  snprintf(num, sizeof(num), "%u", val);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(x + 118 - 12 - (int)strlen(num) * 12, y + 14);
+  gfx->print(num);
+}
+
+// pagina 1: personalidad calculada + records largos, sin tocar balance
+void renderCardPersonality() {
+  PetPersonality pers = pet.personality();
+  const char *title = T(S_PERSONALITY);
+  const char *name = T(personalityNameId(pers));
+  const char *hint = T(personalityHintId(pers));
+  uint16_t col = personalityColor(pers);
+
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(title) * 9, 44);
+  gfx->print(title);
+
+  gfx->fillRoundRect(62, 86, 342, 70, 16, col);
+  gfx->setTextColor(UI_BG_DAY);
+  int nts = (strlen(name) <= 10) ? 3 : 2;
+  gfx->setTextSize(nts);
+  gfx->setCursor(CX - strlen(name) * (nts == 3 ? 9 : 6), nts == 3 ? 104 : 111);
+  gfx->print(name);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(hint) * 6, 136);
+  gfx->print(hint);
+
+  drawCardStat(182, T(S_VIN), pet.bond, 100, C565(0xd4, 0x52, 0x7e));
+  drawCardStat(220, T(S_BAR_JOY), pet.joy, 100, UI_BAR_WARN);
+
+  char age[20];
+  snprintf(age, sizeof(age), T(S_AGE_DAYS_FMT), (unsigned long)(pet.ageMinutes / 1440));
+  gfx->setTextColor(UI_TRACK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(age) * 6, 258);
+  gfx->print(age);
+
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(T(S_RECORDS)) * 6, 286);
+  gfx->print(T(S_RECORDS));
+  drawPersonalityRecord(70, 310, T(S_GAME_BALL), pet.gameHi, UI_BAR_OK);
+  drawPersonalityRecord(198, 310, T(S_GAME_CATCH), pet.catchHi, UI_BAR_WARN);
+  drawPersonalityRecord(70, 350, T(S_GAME_MEMO), pet.memoHi, 0x4C98);
+  drawPersonalityRecord(198, 350, T(S_BATTLE), pet.bestBattleStreak, UI_BAR_BAD);
+}
+
+StrId dailyGoalLabelId(uint8_t goalType) {
+  switch (goalType) {
+    case DAILY_GOAL_CARE: return S_GOAL_CARE;
+    case DAILY_GOAL_PLAY: return S_GOAL_PLAY;
+    case DAILY_GOAL_BATTLE: return S_GOAL_BATTLE;
+    case DAILY_GOAL_CATCH: return S_GOAL_CATCH;
+    case DAILY_GOAL_MEMO: return S_GOAL_MEMO;
+    default: return S_GOAL_CARE;
+  }
+}
+
+uint16_t dailyGoalColor(uint8_t goalType) {
+  switch (goalType) {
+    case DAILY_GOAL_CARE: return C565(0xd4, 0x52, 0x7e);
+    case DAILY_GOAL_PLAY: return UI_BAR_WARN;
+    case DAILY_GOAL_BATTLE: return UI_BAR_BAD;
+    case DAILY_GOAL_CATCH: return UI_BAR_OK;
+    case DAILY_GOAL_MEMO: return 0x4C98;
+    default: return UI_INK;
+  }
+}
+
+void drawDailyGoalRow(int y, uint8_t idx) {
+  uint8_t type = pet.dailyGoalType[idx];
+  uint8_t target = pet.dailyGoalTarget(type);
+  uint8_t progress = pet.dailyGoalProgress[idx] > target ? target : pet.dailyGoalProgress[idx];
+  bool done = pet.dailyGoalComplete(idx);
+  uint16_t col = dailyGoalColor(type);
+  gfx->fillRoundRect(58, y, 350, 52, 12, done ? col : UI_WHITE);
+  gfx->drawRoundRect(58, y, 350, 52, 12, col);
+  gfx->setTextSize(2);
+  gfx->setTextColor(done ? UI_BG_DAY : UI_INK);
+  gfx->setCursor(82, y + 18);
+  gfx->print(T(dailyGoalLabelId(type)));
+
+  char prog[12];
+  snprintf(prog, sizeof(prog), "%u/%u", progress, target);
+  gfx->setCursor(286, y + 18);
+  gfx->print(done ? T(S_DONE) : prog);
+  if (done) {
+    gfx->fillCircle(374, y + 26, 12, UI_BG_DAY);
+    gfx->setTextColor(col);
+    gfx->setCursor(368, y + 18);
+    gfx->print("v");
+  }
+}
+
+// pagina 2: objetivos diarios
+void renderCardDaily() {
+  pet.ensureDailyGoals();
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_DAILY)) * 9, 44);
+  gfx->print(T(S_DAILY));
+
+  uint8_t done = 0;
+  for (uint8_t i = 0; i < DAILY_GOAL_COUNT; i++) {
+    if (pet.dailyGoalComplete(i)) done++;
+    drawDailyGoalRow(104 + i * 70, i);
+  }
+
+  char bonus[24];
+  snprintf(bonus, sizeof(bonus), "%s %u/%u", T(S_REWARD), done, DAILY_GOAL_COUNT);
+  gfx->setTextColor(done == DAILY_GOAL_COUNT ? UI_BAR_OK : UI_TRACK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(bonus) * 6, 324);
+  gfx->print(bonus);
+}
+
+// pagina 3: combate (4 barras + botones)
 void renderCardStats() {
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(T(S_BATTLE)) * 9, 48);
   gfx->print(T(S_BATTLE));
 
-  drawCardStat(118, T(S_STAT_ATK), pet.atkStat(), 260, UI_BAR_BAD);
-  drawCardStat(160, T(S_STAT_DEF), pet.defStat(), 260, 0x4C98);
-  drawCardStat(202, T(S_STAT_SPE), pet.speStat(), 260, UI_BAR_WARN);
-  drawCardStat(244, T(S_STAT_WGT), pet.weight, 100, 0xB3C8);
+  drawCardStat(112, T(S_STAT_ATK), pet.atkStat(), 260, UI_BAR_BAD);
+  drawCardStat(150, T(S_STAT_DEF), pet.defStat(), 260, 0x4C98);
+  drawCardStat(188, T(S_STAT_SPE), pet.speStat(), 260, UI_BAR_WARN);
+  drawCardStat(226, T(S_STAT_WGT), pet.weight, 100, 0xB3C8);
 
-  // boton: saco de entrenamiento de fuerza
-  gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
+  char wl[20], bs[18], bb[16];
+  snprintf(wl, sizeof(wl), T(S_WL_FMT), pet.battleWins, pet.battleLosses);
+  snprintf(bs, sizeof(bs), T(S_BSTREAK_FMT), pet.battleStreak);
+  snprintf(bb, sizeof(bb), T(S_BBEST_FMT), pet.bestBattleStreak);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(74, 266);
+  gfx->print(wl);
+  gfx->setCursor(210, 266);
+  gfx->print(bs);
+  gfx->setCursor(334, 266);
+  gfx->print(bb);
+
+  gfx->fillRoundRect(96, 294, 274, 36, 11, 0x4C98);
   gfx->setTextColor(UI_BG_DAY);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_TRAIN_STR)) * 6, 311);
+  gfx->setCursor(CX - strlen(T(S_WILD_BATTLE)) * 6, 305);
+  gfx->print(T(S_WILD_BATTLE));
+
+  // boton: saco de entrenamiento de fuerza
+  gfx->fillRoundRect(96, 338, 274, 36, 11, UI_BAR_BAD);
+  gfx->setTextColor(UI_BG_DAY);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(T(S_TRAIN_STR)) * 6, 349);
   gfx->print(T(S_TRAIN_STR));
 }
 
@@ -1592,18 +2576,21 @@ void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   if (cardPage == 0) renderCardProfile();
-  else if (cardPage == 1) renderCardStats();
-  else if (cardPage == 2) renderCardMedals();
+  else if (cardPage == 1) renderCardPersonality();
+  else if (cardPage == 2) renderCardDaily();
+  else if (cardPage == 3) renderCardStats();
+  else if (cardPage == 4) renderCardMedals();
   else renderCardProgress();
 
-  // indicador de 4 paginas + ayuda
-  for (int i = 0; i < 4; i++) {
-    if (i == cardPage) gfx->fillCircle(194 + i * 26, 374, 5, UI_INK);
-    else gfx->drawCircle(194 + i * 26, 374, 4, UI_INK);
+  // indicador de paginas + ayuda
+  int dotsX = CX - ((CARD_COUNT - 1) * 24) / 2;
+  for (int i = 0; i < CARD_COUNT; i++) {
+    if (i == cardPage) gfx->fillCircle(dotsX + i * 24, 400, 5, UI_INK);
+    else gfx->drawCircle(dotsX + i * 24, 400, 4, UI_INK);
   }
   gfx->setTextColor(UI_TRACK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 398);
+  gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 420);
   gfx->print(T(S_BACK));
   gfx->flush();
 }

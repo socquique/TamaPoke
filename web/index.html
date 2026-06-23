@@ -46,15 +46,15 @@
   <h2><span class="num">1</span>Flash the firmware</h2>
   <div class="step">
     <p>Plug the board in via USB and press install. Pick the port and wait.</p>
-    <esp-web-install-button manifest="manifest.json">
+    <esp-web-install-button manifest="manifest.json?v=1.11-daily-goals">
       <button slot="activate">⚡ Install TamaPoke</button>
       <span slot="unsupported">Browser not supported (use Chrome/Edge).</span>
       <span slot="not-allowed">Needs HTTPS.</span>
     </esp-web-install-button>
     <p class="note">🔄 <b>Updating to a new version? Install <u>without</u> erasing</b> to keep
-       your Pokémon — the save lives in flash and the sprites on the microSD, so a normal
-       install keeps both. Only a full <b>Erase</b> wipes your saved pet (the SD sprites
-       survive even that). First time on a fresh board? You can erase, no problem.</p>
+       your Pokémon — updates flash only the firmware parts and leave the save area untouched.
+       Only a full <b>Erase</b> wipes your saved pet. First time on a fresh board? You can erase,
+       no problem.</p>
   </div>
 
   <h2><span class="num">2</span>Load the sprites onto the microSD</h2>

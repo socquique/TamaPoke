@@ -19,6 +19,23 @@
 enum : uint8_t { CER_NONE = 0, CER_FAREWELL, CER_RUNAWAY, CER_RELEASE };
 
 enum PetMood : uint8_t { MOOD_HAPPY, MOOD_SAD, MOOD_EATING, MOOD_SLEEPING };
+enum PetEventType : uint8_t { PET_EVENT_BERRY = 0, PET_EVENT_HEART, PET_EVENT_SPARKLE };
+enum PetPersonality : uint8_t {
+  PERS_BALANCED = 0,
+  PERS_PLAYFUL,
+  PERS_BRAVE,
+  PERS_CALM,
+  PERS_LAZY,
+};
+
+enum DailyGoalType : uint8_t {
+  DAILY_GOAL_CARE = 0,
+  DAILY_GOAL_PLAY,
+  DAILY_GOAL_BATTLE,
+  DAILY_GOAL_CATCH,
+  DAILY_GOAL_MEMO,
+};
+#define DAILY_GOAL_COUNT 3
 
 // medallas del individuo (bitmask)
 enum : uint16_t {
@@ -27,6 +44,18 @@ enum : uint16_t {
   MED_FINAL = 1 << 6, MED_FIT = 1 << 7,
 };
 #define MED_COUNT 8
+
+enum BattleRewardStat : uint8_t {
+  BATTLE_REWARD_NONE = 0,
+  BATTLE_REWARD_ATK,
+  BATTLE_REWARD_DEF,
+  BATTLE_REWARD_SPE,
+};
+
+struct BattleReward {
+  BattleRewardStat stat = BATTLE_REWARD_NONE;
+  uint8_t amount = 0;
+};
 
 class Pet {
 public:
@@ -64,6 +93,16 @@ public:
   uint16_t lastMilestone = 0;  // hito de racha ya celebrado
   uint16_t gameHi = 0;     // record del minijuego (del jugador)
   uint16_t strHi = 0;      // record de golpes al saco
+  uint16_t catchHi = 0;    // record de capturas del minijuego catch
+  uint16_t memoHi = 0;     // record de rondas del minijuego memo
+  uint16_t battleWins = 0, battleLosses = 0;
+  uint16_t battleStreak = 0, bestBattleStreak = 0;
+  uint32_t dailyGoalDay = 0;
+  uint8_t dailyGoalType[DAILY_GOAL_COUNT] = { DAILY_GOAL_CARE, DAILY_GOAL_PLAY, DAILY_GOAL_CATCH };
+  uint8_t dailyGoalProgress[DAILY_GOAL_COUNT] = { 0, 0, 0 };
+  uint8_t dailyGoalDone = 0;
+  bool saveLoadedFromNvs = false;
+  bool saveCreatedThisBoot = false;
 
   void begin();                 // carga estado de NVS (o crea el primer huevo)
   void update(uint32_t nowMs);  // llamar en cada loop()
@@ -76,7 +115,16 @@ public:
     return !isEgg() && (speciesId % 3) == color;  // gusto oculto por especie
   }
   void playResult(uint8_t score);  // recompensa del minijuego (entrena VEL)
+  uint8_t applyCatchResult(uint8_t score);
+  uint8_t applyMemoResult(uint8_t rounds);
+  bool applyPetEvent(uint8_t eventType);
+  PetPersonality personality() const;
+  void ensureDailyGoals();
+  uint8_t dailyGoalTarget(uint8_t goalType) const;
+  bool dailyGoalComplete(uint8_t index) const;
   uint8_t trainStrength(uint16_t hits);  // saco de entrenamiento (entrena FUE)
+  BattleReward applyBattleWin(int16_t wildDex, bool closeWin);
+  void applyBattleLoss();
 
   // stats de combate: base real de gen 1 x genes + nivel + entrenamiento
   uint16_t atkStat() const;
@@ -177,6 +225,8 @@ private:
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void addBond(uint8_t amt);
+  void noteDailyGoal(uint8_t goalType, uint8_t amount);
+  void applyDailyReward();
   void checkMedals();
   void tick();
   void hatch();

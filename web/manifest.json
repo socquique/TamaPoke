@@ -1,12 +1,15 @@
 {
   "name": "TamaPoke",
-  "version": "1.2",
+  "version": "1.11-daily-goals",
   "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "firmware/tamapoke.bin", "offset": 0 }
+        { "path": "firmware/tamapoke-1.11-daily-goals-bootloader.bin", "offset": 0 },
+        { "path": "firmware/tamapoke-1.11-daily-goals-partitions.bin", "offset": 32768 },
+        { "path": "firmware/tamapoke-1.11-daily-goals-boot_app0.bin", "offset": 57344 },
+        { "path": "firmware/tamapoke-1.11-daily-goals-app.bin", "offset": 65536 }
       ]
     }
   ]

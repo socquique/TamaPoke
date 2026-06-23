@@ -1,12 +1,12 @@
 # TamaPoke
 
-[![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://socquique.github.io/TamaPoke/web/)
+[![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://shadowenemyx.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.2-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.11--daily--goals-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
-[![Stars](https://img.shields.io/github/stars/socquique/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/socquique/TamaPoke/stargazers)
+[![Stars](https://img.shields.io/github/stars/ShadowEnemyx/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/ShadowEnemyx/TamaPoke/stargazers)
 
 A gen-1-Pokémon-inspired tamagotchi for the
 **Waveshare ESP32-S3-Touch-AMOLED-1.75** (round 466×466 AMOLED, CO5300 driver
@@ -17,7 +17,7 @@ and complete them all (shinies included).
 > PMD SpriteCollab (CC BY-NC, Pokémon © Nintendo/Game Freak), and the 3D case is
 > CC BY-NC-SA. See **[License](#license)** and **Credits**.
 
-🔴 **3D-printed Pokéball case + print profiles → [on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)** · flash it in your browser → **[web installer](https://socquique.github.io/TamaPoke/web/)**
+🔴 **3D-printed Pokéball case + print profiles → [on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)** · flash it in your browser → **[web installer](https://shadowenemyx.github.io/TamaPoke/web/)**
 
 ## Status
 
@@ -28,10 +28,10 @@ training), retention hooks (streak / bond / medals / name), biome + real-time
 backgrounds, ball minigame, training bag, animated bath, RTC with offline
 progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
 **sound (ES8311)**, **6 UI languages (English default)**, **starter choice on
-first run**, and a one-click **web installer**.
+first run**, a one-click **web installer**, manual and rare optional wild
+battles, extra minigames, pet events, personality/profile cards and daily goals.
 
-Pending: wild encounters / battle (designed, not implemented), 3D case, soak
-test. See **Roadmap**.
+Pending: longer hardware soak testing and polish. See **Roadmap**.
 
 ## Game manual (the actual numbers)
 
@@ -62,7 +62,8 @@ While **awake**, per minute:
 - 🍎 **Berry** (3 flavors): +25 FOOD. Each species has a **hidden favorite flavor**
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
 - 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
-- ⚽ **Play / minigame:** +JOY, −ENE; the minigame trains **SPEED** and burns weight.
+- ⚽ **Play / minigames:** ball, catch and memo add variety; rewards are moderate
+  and train SPEED/DEFENSE while costing a little energy/food.
 - 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
 - 🫧 **Bath:** clears poops, HYG → 100.
 - 👆 **Pet it:** +5 JOY + bond.
@@ -118,7 +119,10 @@ After any ending, a **new egg** appears.
 
 ### Battle stats
 ATK / DEF / SPD = real **Gen-1 base** × genes + level + training (STRENGTH ← bag,
-SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the roadmap.)*
+SPEED ← minigames, DEFENSE ← memo/good care). Wild battles can be started from
+the Battle card, and rare optional wild prompts can appear on the main screen.
+Battles are turn-based with quick/heavy attacks, dodge/counter and limited rest.
+Wins/losses/streaks are tracked and wins give small training rewards.
 
 ## Hardware
 
@@ -193,7 +197,7 @@ If one bottoms out it counts as a *slip-up*.
 **Buttons (bottom arc, icons):**
 - 🍎 **Feed** → food menu: 3 berries (each species has a hidden favourite that
   gives a bonus) and a candy (+happiness but it fattens; weight makes it sluggish).
-- ⚽ **Play** → the pokeball minigame (trains SPEED).
+- ⚽ **Play** → game menu: ball, catch and memo.
 - 🌙 **Light** → sleep/wake (recovers energy, dims the screen). While asleep,
   needs decay much slower (rest).
 - 🫧 **Bath** → a foam scene that cleans up the poops.
@@ -201,9 +205,9 @@ If one bottoms out it counts as a *slip-up*.
 **Touch gestures:**
 - Tap the creature = pet it (+happiness, bond).
 - Horizontal swipe = open the **Pokédex / gallery**.
-- Vertical swipe up = open the **stat card** (4 pages: Profile / Battle / Medals /
-  Progress; swipe between them; tap the name on Profile to rename; on Battle the
-  "Train strength" button opens the bag).
+- Vertical swipe up = open the **card view** (Profile / Personality / Daily /
+  Battle / Medals / Progress; swipe between them; tap the name on Profile to
+  rename; on Battle you can start wild battles or open the training bag).
 - Swipe down = **set the clock** and pick the **language** + sound on/off.
 - Long press (3 s) on the creature = **release** dialog.
 
@@ -262,6 +266,15 @@ hatch) + level + **training**:
 
 Shown on the Battle page of the stat card. The (hidden) weight goes up with candy
 and burns off with training.
+
+## Daily goals, events and personality
+
+- **Daily goals**: three small optional tasks per day, shown on the Daily card.
+  Completing one gives a small joy/bond bonus; ignoring them has no penalty.
+- **Pet events**: rare positive bubbles on the main screen (berry, heart,
+  sparkle) that can be tapped for tiny rewards.
+- **Personality**: derived from play style and shown on the Personality card
+  without changing balance yet.
 
 ## Retention: streak, bond, medals, name
 
@@ -325,12 +338,22 @@ runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio tes
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
 
+## Native logic tests
+
+The core pet rules in `pet.cpp` can be checked on a desktop without ESP32
+hardware. The tests use small Arduino/Preferences stubs and cover hatching,
+evolution gates, battle stat calculation, training rewards and lifecycle
+readiness.
+
+```bash
+cd tests
+make test
+```
+
 ## Roadmap
 
-- **Wild encounters / battle** — designed (see project memory): resolution by
-  ATK/DEF/SPD with PMD Attack/Hurt animations, trainer rank as endgame. Style
-  still to pick (auto / timing / turn-based).
 - **Soak test** 24–48 h (instrumentation ready: `HEALTH` command/heartbeat).
+- **Polish** daily goals, personality reactions and long-term progression.
 
 *(Done: 3D-printed case [published on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi); repo public with the browser installer + one-click sprite bundle.)*
 

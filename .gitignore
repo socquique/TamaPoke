@@ -1,5 +1,6 @@
 # artefactos de compilacion
 build/
+tests/build/
 
 # cacheas y artefactos regenerables del taller
 tools/downloads/
@@ -12,4 +13,5 @@ tools/demo_anim.js
 tools/demo_compare.js
 
 .DS_Store
+._*
 tools/pmd_cache/
