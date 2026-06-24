@@ -107,15 +107,21 @@ int8_t typeRelation(uint8_t attackType, uint8_t defendType) {
   return 0;
 }
 
-uint16_t applyTypeMultiplier(uint16_t damage, const BattleStats &attacker, const BattleStats &defender) {
-  uint32_t scaled = damage;
-  const uint8_t defendTypes[2] = { defender.type1, defender.type2 };
+uint8_t effectPctFor(uint8_t attackType, uint8_t defendType1, uint8_t defendType2) {
+  uint32_t pct = 100;
+  const uint8_t defendTypes[2] = { defendType1, defendType2 };
   for (uint8_t i = 0; i < 2; i++) {
-    int8_t relation = typeRelation(attacker.type1, defendTypes[i]);
-    if (relation > 0) scaled = scaled * 120 / 100;
-    else if (relation == -1) scaled = scaled * 85 / 100;
-    else if (relation == -2) scaled = scaled * 70 / 100;
+    int8_t relation = typeRelation(attackType, defendTypes[i]);
+    if (relation > 0) pct = pct * 120 / 100;
+    else if (relation == -1) pct = pct * 85 / 100;
+    else if (relation == -2) pct = pct * 70 / 100;
   }
+  if (pct < 1) pct = 1;
+  return pct > 255 ? 255 : (uint8_t)pct;
+}
+
+uint16_t applyTypeMultiplier(uint16_t damage, const BattleStats &attacker, const BattleStats &defender) {
+  uint32_t scaled = (uint32_t)damage * effectPctFor(attacker.type1, defender.type1, defender.type2) / 100;
   if (scaled < 1) scaled = 1;
   return scaled > 65535 ? 65535 : (uint16_t)scaled;
 }
@@ -192,6 +198,10 @@ uint8_t enemyDodgeChance(const BattleRuntime &battle, BattleAction action) {
 }
 }  // namespace
 
+uint8_t battleTypeEffectPct(uint8_t attackType, uint8_t defendType1, uint8_t defendType2) {
+  return effectPctFor(attackType, defendType1, defendType2);
+}
+
 bool canStartWildBattle(bool isEgg, bool sleeping, uint8_t ceremony) {
   return !isEgg && !sleeping && ceremony == 0;
 }
@@ -253,6 +263,8 @@ BattleTurnResult stepBattle(BattleRuntime &battle, BattleAction action, uint8_t 
   }
 
   uint8_t luck = clampedLuck(luckRoll);
+  turn.playerTypePct = battleTypeEffectPct(battle.player.type1, battle.enemy.type1, battle.enemy.type2);
+  turn.enemyTypePct = battleTypeEffectPct(battle.enemy.type1, battle.player.type1, battle.player.type2);
   if (action == BATTLE_REST && battle.restUsesLeft == 0) {
     turn.playerRested = true;
     turn.restFailed = true;

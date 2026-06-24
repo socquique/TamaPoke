@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.15-type-battle"
+#define FW_VERSION "1.15.1-type-ui"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1833,7 +1833,9 @@ void performBattleAction(BattleAction action) {
   } else if (battleTurn.playerRested) {
     snprintf(battleMsg, sizeof(battleMsg), T(S_RESTED_FMT), battleTurn.playerHeal);
   } else if (battleTurn.playerDamage > 0) {
-    snprintf(battleMsg, sizeof(battleMsg), T(S_HIT_FMT), battleTurn.playerDamage);
+    if (battleTurn.playerTypePct > 100) snprintf(battleMsg, sizeof(battleMsg), "%s %u", T(S_EFFECTIVE), battleTurn.playerDamage);
+    else if (battleTurn.playerTypePct < 100) snprintf(battleMsg, sizeof(battleMsg), "%s %u", T(S_NOT_EFFECTIVE), battleTurn.playerDamage);
+    else snprintf(battleMsg, sizeof(battleMsg), T(S_HIT_FMT), battleTurn.playerDamage);
   } else if (battleTurn.enemyDodged) {
     snprintf(battleMsg, sizeof(battleMsg), T(S_ENEMY_DODGED));
   } else if (battleTurn.playerDodged) {
@@ -1932,6 +1934,69 @@ void drawBattleButtonLabel(int x, int y, int w, const char *label) {
   }
 }
 
+const char *battleTypeName(uint8_t type) {
+  switch (type) {
+    case TYPE_NORMAL: return "NORMAL";
+    case TYPE_FIRE: return "FIRE";
+    case TYPE_WATER: return "WATER";
+    case TYPE_ELECTRIC: return "ELEC";
+    case TYPE_GRASS: return "GRASS";
+    case TYPE_ICE: return "ICE";
+    case TYPE_FIGHTING: return "FIGHT";
+    case TYPE_POISON: return "POISON";
+    case TYPE_GROUND: return "GROUND";
+    case TYPE_FLYING: return "FLY";
+    case TYPE_PSYCHIC: return "PSY";
+    case TYPE_BUG: return "BUG";
+    case TYPE_ROCK: return "ROCK";
+    case TYPE_GHOST: return "GHOST";
+    case TYPE_DRAGON: return "DRAGON";
+    case TYPE_DARK: return "DARK";
+    case TYPE_STEEL: return "STEEL";
+    case TYPE_FAIRY: return "FAIRY";
+  }
+  return "";
+}
+
+uint16_t battleTypeColor(uint8_t type) {
+  switch (type) {
+    case TYPE_FIRE: return 0xEA87;
+    case TYPE_WATER: return 0x4C98;
+    case TYPE_ELECTRIC: return 0xBCA1;
+    case TYPE_GRASS: return 0x3C49;
+    case TYPE_ICE: return 0x5D99;
+    case TYPE_FIGHTING: return 0xA2A5;
+    case TYPE_POISON: return 0x8A73;
+    case TYPE_GROUND: return 0xB447;
+    case TYPE_FLYING: return 0x8D7F;
+    case TYPE_PSYCHIC: return 0xD28F;
+    case TYPE_BUG: return 0x7CC4;
+    case TYPE_ROCK: return 0x9407;
+    case TYPE_GHOST: return 0x6B33;
+    case TYPE_DRAGON: return 0x5A5F;
+    case TYPE_DARK: return 0x5ACB;
+    case TYPE_STEEL: return 0xA534;
+    case TYPE_FAIRY: return 0xF3B7;
+    default: return 0x8C4D;
+  }
+}
+
+void typeText(char *buf, size_t len, const DexEntry &d) {
+  if (d.type2 == TYPE_NONE) snprintf(buf, len, "%s", battleTypeName(d.type1));
+  else snprintf(buf, len, "%s %s", battleTypeName(d.type1), battleTypeName(d.type2));
+}
+
+void drawTypeText(int x, int y, const DexEntry &d, bool alignRight) {
+  char buf[24];
+  typeText(buf, sizeof(buf), d);
+  int w = (int)strlen(buf) * 6;
+  gfx->setTextSize(1);
+  gfx->setTextColor(battleTypeColor(d.type1));
+  gfx->setCursor(alignRight ? x - w : x, y);
+  gfx->print(buf);
+  gfx->setTextSize(2);
+}
+
 void drawWildPrompt() {
   const DexEntry &wild = DEX_TBL[wildPromptDex >= 1 && wildPromptDex <= DEX_COUNT ? wildPromptDex : 1];
   gfx->fillRoundRect(82, 156, 302, 178, 18, UI_WHITE);
@@ -2004,6 +2069,7 @@ void renderBattle() {
   gfx->setTextSize(2);
   gfx->setCursor(28, 82);
   gfx->print(left);
+  drawTypeText(28, 101, mine, false);
   int rightLen = strlen(right);
   int rightTextSize = rightLen <= 12 ? 2 : 1;
   int rightTextW = rightLen * (rightTextSize == 2 ? 12 : 6);
@@ -2012,6 +2078,7 @@ void renderBattle() {
   gfx->setTextSize(rightTextSize);
   gfx->setCursor(rightX, rightTextSize == 2 ? 82 : 88);
   gfx->print(right);
+  drawTypeText(438, 101, wild, true);
   gfx->setTextSize(2);
 
   uint16_t playerMax = battleRun.playerMaxHp;
@@ -2823,6 +2890,14 @@ void renderGallery() {
     gfx->setTextSize(gts);
     gfx->setCursor(CX - glen * (gts == 3 ? 9 : 6), gts == 3 ? 56 : 60);
     gfx->print(head);
+    if (known) {
+      char types[24];
+      typeText(types, sizeof(types), d);
+      gfx->setTextColor(battleTypeColor(d.type1));
+      gfx->setTextSize(2);
+      gfx->setCursor(CX - strlen(types) * 6, 94);
+      gfx->print(types);
+    }
     if (galleryPmd.loaded) {
       // animado y a color si se conoce; silueta estatica si no (estilo "?")
       drawPmdActM(galleryPmd, PMD_IDLE, CX, 300, known ? millis() : 0, true, !known, 6);

@@ -272,6 +272,12 @@ static void testTypeAdvantageLightlyChangesDamage() {
   EXPECT_TRUE(resistedTurn.playerDamage < neutralTurn.playerDamage);
 }
 
+static void testTypeEffectHelperHandlesDualTypes() {
+  EXPECT_EQ(battleTypeEffectPct(TYPE_FIRE, TYPE_GRASS, TYPE_NONE), 120);
+  EXPECT_EQ(battleTypeEffectPct(TYPE_GRASS, TYPE_FIRE, TYPE_NONE), 85);
+  EXPECT_EQ(battleTypeEffectPct(TYPE_FIRE, TYPE_GRASS, TYPE_ICE), 144);
+}
+
 static void testCounterDamageStillUsesTurnCap() {
   BattleRuntime battle = beginBattleRuntime({ 0, 650, 60, 70, 30 },
                                             { 0, 10, 20, 20, 30 });
@@ -321,6 +327,7 @@ int main() {
   testQuickAndHeavyAttackDamageTradeoff();
   testHeavyAttackCanBeDodgedWhenQuickWouldHit();
   testTypeAdvantageLightlyChangesDamage();
+  testTypeEffectHelperHandlesDualTypes();
   testCounterDamageStillUsesTurnCap();
   testTurnBattleEndsAtRoundLimitByRemainingHp();
 

@@ -49,6 +49,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "DIARIO", "HECHO", "BONUS", "CUIDAR", "JUGAR", "GANAR", "ATRAPA 5", "MEMO 3",
     "ATRAPAR", "DEJAR", "ATRAPADO!", "ESCAPO", "ATRAPADO", "CRIADO",
     "TODOS",
+    "EFECTIVO", "DEBIL",
   },
   // ---------------- EN ----------------
   {
@@ -92,6 +93,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "DAILY", "DONE", "BONUS", "CARE", "PLAY", "WIN", "CATCH 5", "MEMO 3",
     "CATCH", "LEAVE", "CAUGHT!", "ESCAPED", "CAUGHT", "RAISED",
     "ALL",
+    "EFFECTIVE", "WEAK",
   },
   // ---------------- FR ----------------
   {
@@ -135,6 +137,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "QUOTIDIEN", "FAIT", "BONUS", "SOIN", "JOUER", "GAGNER", "ATTRAPE 5", "MEMO 3",
     "CAPTURER", "LAISSER", "CAPTURE!", "FUI", "CAPTURE", "ELEVE",
     "TOUS",
+    "EFFICACE", "FAIBLE",
   },
   // ---------------- DE ----------------
   {
@@ -178,6 +181,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "TAEGLICH", "FERTIG", "BONUS", "PFLEGE", "SPIELEN", "SIEG", "FANG 5", "MEMO 3",
     "FANGEN", "GEHEN", "GEFANGEN!", "ENTKOMMEN", "GEFANGEN", "AUFGEZOGEN",
     "ALLE",
+    "EFFEKTIV", "SCHWACH",
   },
   // ---------------- IT ----------------
   {
@@ -221,6 +225,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "QUOTID.", "FATTO", "BONUS", "CURA", "GIOCA", "VINCI", "PRENDI 5", "MEMO 3",
     "PRENDI", "LASCIA", "PRESO!", "FUGGITO", "PRESO", "ALLEVATO",
     "TUTTI",
+    "EFFICACE", "DEBOLE",
   },
   // ---------------- PT ----------------
   {
@@ -264,6 +269,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "DIARIO", "FEITO", "BONUS", "CUIDAR", "JOGAR", "VENCER", "APANHA 5", "MEMO 3",
     "APANHAR", "DEIXAR", "APANHADO!", "FUGIU", "APANHADO", "CRIADO",
     "TODOS",
+    "EFETIVO", "FRACO",
   },
 };
 
