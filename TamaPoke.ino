@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.15.3-dodge-tune"
+#define FW_VERSION "1.15.4-attack-cancel"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1886,6 +1886,8 @@ void battleTap(int16_t x, int16_t y) {
       performBattleAction(BATTLE_ATTACK_HEAVY);
       return;
     }
+    battleAttackMenuUntil = 0;
+    sfxPlay(SFX_TAP);
     return;
   }
   if (x >= 184 && x <= 282 && y >= 100 && y <= 136) {
