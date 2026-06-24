@@ -15,3 +15,16 @@ tools/demo_compare.js
 .DS_Store
 ._*
 tools/pmd_cache/
+PROJEKT_KONTEXT.md
+
+# local historical firmware builds; keep only the current release tracked
+web/firmware/tamapoke-1.3-*.bin
+web/firmware/tamapoke-1.4-*.bin
+web/firmware/tamapoke-1.5-*.bin
+web/firmware/tamapoke-1.6-*.bin
+web/firmware/tamapoke-1.6.*.bin
+web/firmware/tamapoke-1.7-*.bin
+web/firmware/tamapoke-1.7.*.bin
+web/firmware/tamapoke-1.8-*.bin
+web/firmware/tamapoke-1.9-*.bin
+web/firmware/tamapoke-1.10-profile-personality-*.bin

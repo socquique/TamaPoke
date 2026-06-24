@@ -29,7 +29,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "COM", "FEL", "ENE", "LIM",
     "REC %u",
     "PROGRESO", "Nv.%u", "%u min para Nv.%u", "EVOLUCION", "Forma final",
-    "Listo para evolucionar!", "Sube todo a 40 para evolucionar",
+    "Listo para evolucionar!", "Todo >=40 para evolucionar",
     "Evoluciona en %u niv.", "Descuidos: %u",
     "SON ON", "SON OFF",
     "EVOLUCIONAR", "%s quiere decirte algo...", "%s se siente abandonado...",
