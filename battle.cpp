@@ -296,13 +296,13 @@ BattleTurnResult stepBattle(BattleRuntime &battle, BattleAction action, uint8_t 
   if (battle.enemyHp > 0 && !turn.enemyDodged) {
     uint16_t enemyHit = cappedTurnDamage(battle.enemy, battle.player, battle.playerMaxHp, 99 - luck, false, 100);
     if (action == BATTLE_DODGE) {
-      if (luck < 75) {
+      if (luck < 85) {
         turn.playerDodged = true;
         battle.counterReady = true;
         turn.counterReady = true;
         enemyHit = 0;
       } else {
-        enemyHit = enemyHit > 1 ? enemyHit / 2 : 1;
+        enemyHit = enemyHit > 2 ? enemyHit / 3 : 1;
       }
     }
     if (enemyHit > 0) {

@@ -175,6 +175,21 @@ static void testDodgePreventsEnemyDamageDeterministically() {
   EXPECT_TRUE(battle.counterReady);
 }
 
+static void testDodgePartialFailureStillMitigatesDamage() {
+  BattleStats player = { 0, 50, 40, 60, 10 };
+  BattleStats enemy = { 0, 90, 40, 50, 10 };
+  BattleRuntime normal = beginBattleRuntime(player, enemy);
+  BattleRuntime dodged = beginBattleRuntime(player, enemy);
+
+  BattleTurnResult normalTurn = stepBattle(normal, BATTLE_ATTACK, 95);
+  BattleTurnResult dodgeTurn = stepBattle(dodged, BATTLE_DODGE, 95);
+
+  EXPECT_TRUE(!dodgeTurn.playerDodged);
+  EXPECT_TRUE(dodgeTurn.enemyDamage > 0);
+  EXPECT_TRUE(dodgeTurn.enemyDamage < normalTurn.enemyDamage);
+  EXPECT_TRUE(dodgeTurn.enemyDamage <= normalTurn.enemyDamage / 3 + 1);
+}
+
 static void testRestHealsOnlyToMaxHpAndConsumesUse() {
   BattleRuntime battle = beginBattleRuntime({ 0, 50, 60, 50, 10 },
                                             { 0, 1, 40, 40, 10 });
@@ -321,6 +336,7 @@ int main() {
   testBattleRuntimeStartsWithScaledHp();
   testAttackStepsOneRoundAndAvoidsNormalOneHit();
   testDodgePreventsEnemyDamageDeterministically();
+  testDodgePartialFailureStillMitigatesDamage();
   testRestHealsOnlyToMaxHpAndConsumesUse();
   testRestIsLimitedToTwoUses();
   testCounterBoostsNextAttackDamage();
