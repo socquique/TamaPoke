@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.21-fair-catch"
+#define FW_VERSION "1.22-sound-v3"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -2343,6 +2343,26 @@ void drawClockBtn(int x, int y, const char *l) {
 #define LANG_PILL_H 30
 #define LANG_PILL_X 336          // pildora de idioma (cicla los 6 al tocar)
 #define LANG_PILL_W 96
+#define SOUND_PILL_X 24
+#define SOUND_PILL_W 116
+
+const char *soundModeLabel() {
+  switch (audioMode()) {
+    case SOUND_FULL: return T(S_SND_FULL);
+    case SOUND_MED: return T(S_SND_MED);
+    case SOUND_LOW: return T(S_SND_LOW);
+    default: return T(S_SND_OFF);
+  }
+}
+
+uint8_t nextSoundMode() {
+  switch (audioMode()) {
+    case SOUND_FULL: return SOUND_MED;
+    case SOUND_MED: return SOUND_LOW;
+    case SOUND_LOW: return SOUND_OFF;
+    default: return SOUND_FULL;
+  }
+}
 static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT" };
 
 void drawStatusLine(int y, const char *label, const char *value, uint16_t valueColor) {
@@ -2380,14 +2400,14 @@ void renderClock() {
   gfx->setCursor(276, 256);
   gfx->print(T(S_MIN));
 
-  // interruptor de sonido (izquierda de la fila de idioma)
-  bool snd = audioEnabled();
-  const char *sl = snd ? T(S_SND_ON) : T(S_SND_OFF);
-  gfx->fillRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, snd ? UI_BAR_OK : UI_WHITE);
-  gfx->drawRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, UI_INK);
-  gfx->setTextColor(snd ? UI_BG_DAY : UI_INK);
+  // selector de sonido: mucho / medio / poco / apagado
+  uint8_t sndMode = audioMode();
+  const char *sl = soundModeLabel();
+  gfx->fillRoundRect(SOUND_PILL_X, LANG_PILL_Y, SOUND_PILL_W, LANG_PILL_H, 8, sndMode ? UI_BAR_OK : UI_WHITE);
+  gfx->drawRoundRect(SOUND_PILL_X, LANG_PILL_Y, SOUND_PILL_W, LANG_PILL_H, 8, UI_INK);
+  gfx->setTextColor(sndMode ? UI_BG_DAY : UI_INK);
   gfx->setTextSize(2);
-  gfx->setCursor(34 + (96 - (int)strlen(sl) * 12) / 2, LANG_PILL_Y + 8);
+  gfx->setCursor(SOUND_PILL_X + (SOUND_PILL_W - (int)strlen(sl) * 12) / 2, LANG_PILL_Y + 8);
   gfx->print(sl);
 
   // selector de idioma: una pildora que cicla los 6 idiomas al tocar
@@ -2428,9 +2448,9 @@ void clockTap(int16_t x, int16_t y) {
     return;
   }
   if (y >= LANG_PILL_Y && y <= LANG_PILL_Y + LANG_PILL_H) {
-    if (x >= 34 && x < 130) {                  // interruptor de sonido
-      audioSetEnabled(!audioEnabled());
-      if (audioEnabled()) sfxPlay(SFX_TAP);    // confirma al encender
+    if (x >= SOUND_PILL_X && x < SOUND_PILL_X + SOUND_PILL_W) {
+      audioSetMode(nextSoundMode());
+      if (audioEnabled()) sfxPlay(SFX_LEVEL);  // confirma el nuevo modo si no esta apagado
       return;
     }
     if (x >= LANG_PILL_X && x < LANG_PILL_X + LANG_PILL_W) {  // cicla idioma

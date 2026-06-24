@@ -216,7 +216,7 @@ If one bottoms out it counts as a *slip-up*.
   rename; on Battle you can start wild battles or open the training bag).
   The Box card can page through caught Pokémon and cycle sorting by Dex, type,
   or raised status.
-- Swipe down = **set the clock** and pick the **language** + sound on/off.
+- Swipe down = **set the clock** and pick the **language** + sound level.
 - Long press (3 s) on the creature = **release** dialog.
 
 **Physical PWR button:** short = screen on/off · long (4 s) = full power-off

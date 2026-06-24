@@ -25,7 +25,16 @@ enum Sfx : uint8_t {
   SFX_COUNT
 };
 
+enum SoundMode : uint8_t {
+  SOUND_OFF = 0,
+  SOUND_LOW,
+  SOUND_MED,
+  SOUND_FULL,
+};
+
 void audioBegin();          // init ES8311 + I2S + amplificador + tarea de audio
 void sfxPlay(uint8_t id);   // encola un efecto (no bloquea el loop)
 void audioSetEnabled(bool on);
 bool audioEnabled();
+void audioSetMode(uint8_t mode);
+uint8_t audioMode();
