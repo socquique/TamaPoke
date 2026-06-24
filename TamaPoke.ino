@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.20-collection-refresh"
+#define FW_VERSION "1.20.1-box-v2"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -70,6 +70,8 @@ char nameBuf[12] = "";
 uint8_t nameLen = 0;
 #define CARD_COUNT 7
 uint8_t cardPage = 0;         // 0 perfil, 1 personalidad, 2 diario, 3 caja, 4 combate, 5 medallas, 6 progreso
+uint8_t boxPage = 0;
+uint8_t boxSort = 0;          // 0 dex, 1 tipo, 2 criados primero
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 
@@ -567,7 +569,8 @@ void handleTouch() {
 
 // deslizar vertical: abre/cierra la ficha del bicho
 void openClock();  // prototipo
-int16_t caughtDexAt(uint8_t index);
+int16_t boxDexAt(uint16_t index);
+uint8_t boxPageCount();
 uint8_t currentDayPhase();
 StrId dayPhaseTextId(uint8_t phase);
 
@@ -660,19 +663,32 @@ void onTap(int16_t x, int16_t y) {
   if (cardOpen) {
     if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
     else if (cardPage == 3) {
-      int row = (y - 116) / 43;
-      if (row >= 0 && row < 6 && x >= 58 && x <= 408 && y >= 116 + row * 43 && y <= 152 + row * 43) {
-        int16_t dex = caughtDexAt(row);
-        if (dex > 0) {
+      if (x >= 302 && x <= 408 && y >= 62 && y <= 92) {
+        boxSort = (boxSort + 1) % 3;
+        boxPage = 0;
+        sfxPlay(SFX_TAP);
+      } else if (x >= 76 && x <= 170 && y >= 348 && y <= 386) {
+        if (boxPage > 0) boxPage--;
+        sfxPlay(SFX_TAP);
+      } else if (x >= 296 && x <= 390 && y >= 348 && y <= 386) {
+        uint8_t pages = boxPageCount();
+        if (boxPage + 1 < pages) boxPage++;
+        sfxPlay(SFX_TAP);
+      } else {
+        int row = (y - 122) / 42;
+        if (row >= 0 && row < 5 && x >= 58 && x <= 408 && y >= 122 + row * 42 && y <= 156 + row * 42) {
+          int16_t dex = boxDexAt((uint16_t)boxPage * 5 + row);
+          if (dex > 0) {
+            cardOpen = false;
+            galleryOpen = true;
+            galleryDetail = dex;
+            galleryDirty = true;
+            galleryPmd.load(dex, pet.isShinyRegistered(dex));
+            sfxPlay(SFX_TAP);
+          }
+        } else if (y >= 400) {
           cardOpen = false;
-          galleryOpen = true;
-          galleryDetail = dex;
-          galleryDirty = true;
-          galleryPmd.load(dex, pet.isShinyRegistered(dex));
-          sfxPlay(SFX_TAP);
         }
-      } else if (y >= 400) {
-        cardOpen = false;
       }
     } else if (cardPage == 4 && y >= 286 && y <= 336 && x >= 82 && x <= 384) {
       cardOpen = false;
@@ -2679,20 +2695,72 @@ void renderCardDaily() {
   gfx->print(bonus);
 }
 
-int16_t caughtDexAt(uint8_t index) {
-  for (int16_t dex = 1; dex <= DEX_COUNT; dex++) {
-    if (!pet.isCaught(dex)) continue;
-    if (index == 0) return dex;
-    index--;
+#define BOX_ROWS 5
+
+bool boxComesBefore(int16_t a, int16_t b) {
+  if (boxSort == 1) {
+    const DexEntry &da = DEX_TBL[a];
+    const DexEntry &db = DEX_TBL[b];
+    if (da.type1 != db.type1) return da.type1 < db.type1;
+    if (da.type2 != db.type2) return da.type2 < db.type2;
+  } else if (boxSort == 2) {
+    bool ra = pet.isRegistered(a);
+    bool rb = pet.isRegistered(b);
+    if (ra != rb) return ra;
   }
-  return 0;
+  return a < b;
+}
+
+uint16_t boxBuildList(int16_t *out) {
+  uint16_t n = 0;
+  for (int16_t dex = 1; dex <= DEX_COUNT; dex++)
+    if (pet.isCaught(dex)) out[n++] = dex;
+  for (uint16_t i = 1; i < n; i++) {
+    int16_t v = out[i];
+    int j = i - 1;
+    while (j >= 0 && boxComesBefore(v, out[j])) {
+      out[j + 1] = out[j];
+      j--;
+    }
+    out[j + 1] = v;
+  }
+  return n;
+}
+
+uint8_t boxPageCount() {
+  uint16_t count = pet.caughtCount();
+  uint8_t pages = (count + BOX_ROWS - 1) / BOX_ROWS;
+  return pages > 0 ? pages : 1;
+}
+
+int16_t boxDexAt(uint16_t index) {
+  int16_t list[DEX_COUNT];
+  uint16_t n = boxBuildList(list);
+  return index < n ? list[index] : 0;
+}
+
+const char *boxSortLabel() {
+  if (boxSort == 1) return T(S_SORT_TYPE);
+  if (boxSort == 2) return T(S_SORT_RAISED);
+  return T(S_SORT_DEX);
 }
 
 void renderCardBox() {
+  uint8_t pages = boxPageCount();
+  if (boxPage >= pages) boxPage = pages - 1;
+
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(T(S_BOX)) * 9, 42);
   gfx->print(T(S_BOX));
+
+  const char *sort = boxSortLabel();
+  gfx->fillRoundRect(302, 62, 106, 28, 9, UI_WHITE);
+  gfx->drawRoundRect(302, 62, 106, 28, 9, UI_INK);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(302 + (106 - (int)strlen(sort) * 6) / 2, 73);
+  gfx->print(sort);
 
   char caught[24], known[24], goal[22];
   snprintf(caught, sizeof(caught), T(S_CAUGHT_COUNT_FMT), pet.caughtCount());
@@ -2718,14 +2786,14 @@ void renderCardBox() {
     return;
   }
 
-  for (uint8_t i = 0; i < 6; i++) {
-    int16_t dex = caughtDexAt(i);
+  for (uint8_t i = 0; i < BOX_ROWS; i++) {
+    int16_t dex = boxDexAt((uint16_t)boxPage * BOX_ROWS + i);
     if (dex <= 0) break;
     const DexEntry &d = DEX_TBL[dex];
-    int y = 116 + i * 43;
+    int y = 122 + i * 42;
     bool raised = pet.isRegistered(dex);
-    gfx->fillRoundRect(58, y, 350, 36, 9, UI_WHITE);
-    gfx->drawRoundRect(58, y, 350, 36, 9, d.accent);
+    gfx->fillRoundRect(58, y, 350, 34, 9, UI_WHITE);
+    gfx->drawRoundRect(58, y, 350, 34, 9, d.accent);
     char name[24];
     snprintf(name, sizeof(name), "#%03d %s", dex, dexName(dex));
     int ts = strlen(name) <= 16 ? 2 : 1;
@@ -2745,15 +2813,20 @@ void renderCardBox() {
       gfx->print(T(S_RAISED_MARK));
     }
   }
-  uint16_t extra = pet.caughtCount() > 6 ? pet.caughtCount() - 6 : 0;
-  if (extra) {
-    char more[12];
-    snprintf(more, sizeof(more), "+%u", extra);
-    gfx->setTextColor(UI_TRACK);
-    gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(more) * 6, 376);
-    gfx->print(more);
-  }
+  gfx->fillRoundRect(76, 348, 94, 38, 11, boxPage > 0 ? UI_TRACK : C565(0xe4, 0xe8, 0xee));
+  gfx->fillRoundRect(296, 348, 94, 38, 11, boxPage + 1 < pages ? UI_TRACK : C565(0xe4, 0xe8, 0xee));
+  gfx->setTextColor(UI_BG_DAY);
+  gfx->setTextSize(3);
+  gfx->setCursor(111, 357);
+  gfx->print("<");
+  gfx->setCursor(331, 357);
+  gfx->print(">");
+  char pg[12];
+  snprintf(pg, sizeof(pg), T(S_PAGE_FMT), boxPage + 1, pages);
+  gfx->setTextColor(UI_TRACK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(pg) * 6, 360);
+  gfx->print(pg);
 }
 
 // pagina 3: combate (4 barras + botones)

@@ -55,6 +55,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "FELIZ!", "VINC +1", "ESPERA",
     "MANANA", "DIA", "TARDE", "NOCHE",
     "META DEX %u", "BONUS DEX", "CONOCIDOS %u/151",
+    "DEX", "TIPO", "CRIADO", "%u/%u",
   },
   // ---------------- EN ----------------
   {
@@ -103,6 +104,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "HAPPY!", "BOND +1", "WAIT",
     "MORNING", "DAY", "EVENING", "NIGHT",
     "DEX GOAL %u", "DEX REWARD", "KNOWN %u/151",
+    "DEX", "TYPE", "RAISED", "%u/%u",
   },
   // ---------------- FR ----------------
   {
@@ -151,6 +153,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "HEUREUX!", "LIEN +1", "ATTENDS",
     "MATIN", "JOUR", "SOIR", "NUIT",
     "BUT DEX %u", "BONUS DEX", "CONNUS %u/151",
+    "DEX", "TYPE", "ELEVE", "%u/%u",
   },
   // ---------------- DE ----------------
   {
@@ -199,6 +202,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "FROH!", "BND +1", "WARTEN",
     "MORGEN", "TAG", "ABEND", "NACHT",
     "DEX ZIEL %u", "DEX BONUS", "BEKANNT %u/151",
+    "DEX", "TYP", "AUFZ.", "%u/%u",
   },
   // ---------------- IT ----------------
   {
@@ -247,6 +251,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "FELICE!", "LEG +1", "ASPETTA",
     "MATTINA", "GIORNO", "SERA", "NOTTE",
     "OBIETTIVO DEX %u", "BONUS DEX", "VISTI %u/151",
+    "DEX", "TIPO", "ALLEV.", "%u/%u",
   },
   // ---------------- PT ----------------
   {
@@ -295,6 +300,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "FELIZ!", "LACO +1", "ESPERA",
     "MANHA", "DIA", "TARDE", "NOITE",
     "META DEX %u", "BONUS DEX", "CONHECIDOS %u/151",
+    "DEX", "TIPO", "CRIADO", "%u/%u",
   },
 };
 
