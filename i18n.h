@@ -73,6 +73,7 @@ enum StrId : uint8_t {
 };
 
 const char *T(StrId id);       // texto en el idioma activo
+const char *dexName(int16_t dex); // nombre de Pokemon en el idioma activo
 const char *medalName(int i);  // banner de medalla (MED_COUNT)
 const char *medalLabel(int i); // etiqueta corta de medalla
 const char *medalDesc(int i);  // descripcion larga de medalla

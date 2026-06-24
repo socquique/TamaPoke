@@ -7,7 +7,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from dex_data import DEX, TYPE_ACCENTS, BATTLE_TYPES, CLASSIC, RARE, LEGENDARY
+from dex_data import DEX, TYPE_ACCENTS, BATTLE_TYPES, CLASSIC, RARE, LEGENDARY, LOCALIZED_NAMES
 from dex_stats import BASE_STATS
 
 
@@ -57,6 +57,7 @@ def main():
     out.append("// GENERADO por tools/gen_dex.py desde tools/dex_data.py - no editar\n\n")
     out.append("#define DEX_COUNT 151\n")
     out.append("#define DEX_EEVEE 133  // rama al azar: 134/135/136\n\n")
+    out.append("#define DEX_LANG_COUNT 6\n\n")
     out.append(
         "// rareza: 0 = solo por evolucion, 1 = comun, 2 = raro, 3 = legendario\n"
         "enum : uint8_t { R_EVO = 0, R_COMUN, R_RARO, R_LEGENDARIO };\n\n"
@@ -99,6 +100,16 @@ def main():
         t1 = f"TYPE_{type1.upper()}"
         t2 = "TYPE_NONE" if type2 is None else f"TYPE_{type2.upper()}"
         out.append(f'  {{ "{display}", {evo}, {lvl}, {rar}, 0x{acc:04X}, {hp}, {atk}, {df}, {spe}, {t1}, {t2}, {bio} }},  // {num} {type1}' + (f'/{type2}' if type2 else '') + '\n')
+    out.append("};\n\n")
+    out.append("// nombres localizados en el orden de Lang: ES, EN, FR, DE, IT, PT\n")
+    out.append("static const char *const DEX_NAMES[DEX_LANG_COUNT][DEX_COUNT + 1] = {\n")
+    lang_labels = ("ES", "EN", "FR", "DE", "IT", "PT")
+    for lang_idx, label in enumerate(lang_labels):
+        out.append(f"  // {label}\n")
+        out.append('  { "?"')
+        for num, *_rest in DEX:
+            out.append(f', "{LOCALIZED_NAMES[num][lang_idx]}"')
+        out.append(" },\n")
     out.append("};\n\n")
     out.append("// el primer huevo de la partida: iniciales clasicos\n")
     out.append("static const int16_t CLASSIC_DEX[] = { %s };\n" % ", ".join(map(str, CLASSIC)))

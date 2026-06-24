@@ -1,4 +1,5 @@
 #include "i18n.h"
+#include "dex.h"
 #include "pet.h"        // MED_COUNT
 #include <Preferences.h>
 
@@ -306,6 +307,13 @@ static const char *const MED_DSC[LANG_COUNT][MED_COUNT] = {
 };
 
 const char *T(StrId id) { return STRINGS[gLang][id]; }
+
+const char *dexName(int16_t dex) {
+  if (dex < 1 || dex > DEX_COUNT) return "?";
+  uint8_t lang = (gLang < LANG_COUNT) ? (uint8_t)gLang : LANG_DEFAULT;
+  if (lang >= DEX_LANG_COUNT) lang = LANG_DEFAULT;
+  return DEX_NAMES[lang][dex];
+}
 const char *medalName(int i)  { return MED_NAME[gLang][i]; }
 const char *medalLabel(int i) { return MED_LBL[gLang][i]; }
 const char *medalDesc(int i)  { return MED_DSC[gLang][i]; }
