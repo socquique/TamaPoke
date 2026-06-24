@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.16-localized-names"
+#define FW_VERSION "1.20-collection-refresh"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -68,8 +68,8 @@ bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
-#define CARD_COUNT 6
-uint8_t cardPage = 0;         // 0 perfil, 1 personalidad, 2 diario, 3 combate, 4 medallas, 5 progreso
+#define CARD_COUNT 7
+uint8_t cardPage = 0;         // 0 perfil, 1 personalidad, 2 diario, 3 caja, 4 combate, 5 medallas, 6 progreso
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 
@@ -567,6 +567,9 @@ void handleTouch() {
 
 // deslizar vertical: abre/cierra la ficha del bicho
 void openClock();  // prototipo
+int16_t caughtDexAt(uint8_t index);
+uint8_t currentDayPhase();
+StrId dayPhaseTextId(uint8_t phase);
 
 void onSwipeV(int dir) {
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
@@ -656,10 +659,25 @@ void onTap(int16_t x, int16_t y) {
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
     if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
-    else if (cardPage == 3 && y >= 286 && y <= 336 && x >= 82 && x <= 384) {
+    else if (cardPage == 3) {
+      int row = (y - 116) / 43;
+      if (row >= 0 && row < 6 && x >= 58 && x <= 408 && y >= 116 + row * 43 && y <= 152 + row * 43) {
+        int16_t dex = caughtDexAt(row);
+        if (dex > 0) {
+          cardOpen = false;
+          galleryOpen = true;
+          galleryDetail = dex;
+          galleryDirty = true;
+          galleryPmd.load(dex, pet.isShinyRegistered(dex));
+          sfxPlay(SFX_TAP);
+        }
+      } else if (y >= 400) {
+        cardOpen = false;
+      }
+    } else if (cardPage == 4 && y >= 286 && y <= 336 && x >= 82 && x <= 384) {
       cardOpen = false;
       startBattle();
-    } else if (cardPage == 3 && y >= 330 && y <= 388 && x >= 82 && x <= 384) {
+    } else if (cardPage == 4 && y >= 330 && y <= 388 && x >= 82 && x <= 384) {
       cardOpen = false;            // boton ENTRENAR FUERZA
       startSack();
     } else if (y >= 400) {
@@ -769,8 +787,13 @@ void onTap(int16_t x, int16_t y) {
   // tocar al bicho = caricia
   if (inPetZone(x, y)) {
     Serial.println("PET");
-    pet.caress();
-    if (!pet.sleeping) sfxPlay(SFX_HEART);
+    uint8_t r = pet.interactPet(currentDayPhase() == 2);
+    StrId msg = S_WAIT;
+    if (r & PET_INTERACT_BOND) msg = S_BOND_GAIN;
+    else if (r & PET_INTERACT_JOY) msg = S_HAPPY_FB;
+    snprintf(petEventMsg, sizeof(petEventMsg), "%s", T(msg));
+    petEventFeedbackUntil = millis() + 1600;
+    if (!pet.sleeping) sfxPlay((r & PET_INTERACT_BOND) ? SFX_HEART : SFX_TAP);
   }
 }
 
@@ -796,6 +819,23 @@ uint16_t lerp565(uint16_t a, uint16_t b, int i, int n) {
 int sceneHour() {
   uint32_t e = pet.lastSeenEpoch;
   return e ? (int)((e / 3600) % 24) : 13;
+}
+
+uint8_t currentDayPhase() {
+  int h = sceneHour();
+  if (h >= 6 && h < 12) return 0;
+  if (h >= 12 && h < 18) return 1;
+  if (h >= 18 && h < 22) return 2;
+  return 3;
+}
+
+StrId dayPhaseTextId(uint8_t phase) {
+  switch (phase) {
+    case 0: return S_MORNING;
+    case 2: return S_EVENING;
+    case 3: return S_NIGHT;
+    default: return S_DAY;
+  }
 }
 
 // suelo de cada bioma de dia (de noche se mezcla hacia el azul nocturno)
@@ -1694,9 +1734,17 @@ void maybeOfferWildEncounter(uint32_t now) {
   lastWildCheck = now;
   if (now < nextWildEligible) return;
   if (!mainScreenReadyForWild()) return;
-  if ((uint8_t)random(100) >= 8) return;
+  int16_t cand = pickWildSpecies((uint8_t)random(100));
+  uint8_t phase = currentDayPhase();
+  uint8_t chance = (phase == 3) ? 4 : (phase == 0 ? 7 : 8);
+  if (phase == 3 && cand >= 1 && cand <= DEX_COUNT) {
+    const DexEntry &d = DEX_TBL[cand];
+    if (d.type1 == TYPE_GHOST || d.type2 == TYPE_GHOST ||
+        d.type1 == TYPE_POISON || d.type2 == TYPE_POISON) chance = 8;
+  }
+  if ((uint8_t)random(100) >= chance) return;
 
-  wildPromptDex = pickWildSpecies((uint8_t)random(100));
+  wildPromptDex = cand;
   wildPromptLevel = wildLevelFor(pet.level(), (uint8_t)random(100));
   wildPromptUntil = now + WILD_PROMPT_MS;
   scheduleNextWild(now);
@@ -1728,7 +1776,9 @@ void maybeOfferPetEvent(uint32_t now) {
   lastPetEventCheck = now;
   if (now < nextPetEventEligible) return;
   if (!mainScreenReadyForPetEvent()) return;
-  if ((uint8_t)random(100) >= 10) return;
+  uint8_t phase = currentDayPhase();
+  uint8_t chance = (phase == 0) ? 14 : (phase == 3 ? 8 : 10);
+  if ((uint8_t)random(100) >= chance) return;
 
   petEventType = (uint8_t)random(3);
   petEventUntil = now + PET_EVENT_PROMPT_MS;
@@ -2380,6 +2430,10 @@ void drawCelebration() {
     for (int i = 0; i < MED_COUNT; i++)
       if (pet.newMedal & (1 << i)) { l2 = medalName(i); break; }
     l1 = T(S_MEDAL_BANNER);
+  } else if (pet.showDexReward()) {
+    snprintf(buf, sizeof(buf), T(S_DEX_GOAL_FMT), pet.lastDexRewardGoal());
+    l1 = T(S_DEX_REWARD);
+    l2 = buf;
   } else if (pet.showMilestone()) {
     snprintf(buf, sizeof(buf), T(S_STREAK_DAYS_FMT), pet.streak);
     l1 = T(S_GREAT);
@@ -2605,6 +2659,11 @@ void renderCardDaily() {
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(T(S_DAILY)) * 9, 44);
   gfx->print(T(S_DAILY));
+  const char *phase = T(dayPhaseTextId(currentDayPhase()));
+  gfx->setTextColor(UI_TRACK);
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(phase) * 6, 74);
+  gfx->print(phase);
 
   uint8_t done = 0;
   for (uint8_t i = 0; i < DAILY_GOAL_COUNT; i++) {
@@ -2618,6 +2677,83 @@ void renderCardDaily() {
   gfx->setTextSize(2);
   gfx->setCursor(CX - strlen(bonus) * 6, 324);
   gfx->print(bonus);
+}
+
+int16_t caughtDexAt(uint8_t index) {
+  for (int16_t dex = 1; dex <= DEX_COUNT; dex++) {
+    if (!pet.isCaught(dex)) continue;
+    if (index == 0) return dex;
+    index--;
+  }
+  return 0;
+}
+
+void renderCardBox() {
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_BOX)) * 9, 42);
+  gfx->print(T(S_BOX));
+
+  char caught[24], known[24], goal[22];
+  snprintf(caught, sizeof(caught), T(S_CAUGHT_COUNT_FMT), pet.caughtCount());
+  snprintf(known, sizeof(known), T(S_KNOWN_FMT), pet.knownDexCount());
+  snprintf(goal, sizeof(goal), T(S_DEX_GOAL_FMT), pet.nextDexGoal());
+  gfx->setTextSize(2);
+  gfx->setTextColor(UI_INK);
+  gfx->setCursor(72, 70);
+  gfx->print(caught);
+  gfx->setTextColor(UI_TRACK);
+  gfx->setCursor(72, 92);
+  gfx->print(known);
+  gfx->setCursor(258, 92);
+  gfx->print(goal);
+
+  if (pet.caughtCount() == 0) {
+    gfx->fillRoundRect(82, 178, 302, 72, 16, UI_WHITE);
+    gfx->drawRoundRect(82, 178, 302, 72, 16, UI_TRACK);
+    gfx->setTextColor(UI_TRACK);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - strlen(T(S_NO_CATCHES)) * 6, 207);
+    gfx->print(T(S_NO_CATCHES));
+    return;
+  }
+
+  for (uint8_t i = 0; i < 6; i++) {
+    int16_t dex = caughtDexAt(i);
+    if (dex <= 0) break;
+    const DexEntry &d = DEX_TBL[dex];
+    int y = 116 + i * 43;
+    bool raised = pet.isRegistered(dex);
+    gfx->fillRoundRect(58, y, 350, 36, 9, UI_WHITE);
+    gfx->drawRoundRect(58, y, 350, 36, 9, d.accent);
+    char name[24];
+    snprintf(name, sizeof(name), "#%03d %s", dex, dexName(dex));
+    int ts = strlen(name) <= 16 ? 2 : 1;
+    gfx->setTextSize(ts);
+    gfx->setTextColor(UI_INK);
+    gfx->setCursor(72, y + (ts == 2 ? 7 : 5));
+    gfx->print(name);
+    char types[22];
+    typeText(types, sizeof(types), d);
+    gfx->setTextSize(1);
+    gfx->setTextColor(battleTypeColor(d.type1));
+    gfx->setCursor(72, y + 24);
+    gfx->print(types);
+    if (raised) {
+      gfx->setTextColor(UI_BAR_OK);
+      gfx->setCursor(330, y + 15);
+      gfx->print(T(S_RAISED_MARK));
+    }
+  }
+  uint16_t extra = pet.caughtCount() > 6 ? pet.caughtCount() - 6 : 0;
+  if (extra) {
+    char more[12];
+    snprintf(more, sizeof(more), "+%u", extra);
+    gfx->setTextColor(UI_TRACK);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - strlen(more) * 6, 376);
+    gfx->print(more);
+  }
 }
 
 // pagina 3: combate (4 barras + botones)
@@ -2755,8 +2891,9 @@ void renderCard() {
   if (cardPage == 0) renderCardProfile();
   else if (cardPage == 1) renderCardPersonality();
   else if (cardPage == 2) renderCardDaily();
-  else if (cardPage == 3) renderCardStats();
-  else if (cardPage == 4) renderCardMedals();
+  else if (cardPage == 3) renderCardBox();
+  else if (cardPage == 4) renderCardStats();
+  else if (cardPage == 5) renderCardMedals();
   else renderCardProgress();
 
   // indicador de paginas + ayuda

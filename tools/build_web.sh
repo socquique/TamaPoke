@@ -6,7 +6,7 @@
 set -e
 cd "$(dirname "$0")/.."
 FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
-VERSION="1.16-localized-names"
+VERSION="1.20-collection-refresh"
 
 echo "Compilando..."
 arduino-cli compile --fqbn "$FQBN" --export-binaries .

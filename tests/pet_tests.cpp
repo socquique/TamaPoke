@@ -258,15 +258,64 @@ static void testCaughtDexIsSeparateFromRaisedDex() {
   Pet pet = hatchedPet(4);
 
   EXPECT_EQ(pet.caughtCount(), 0);
+  EXPECT_EQ(pet.knownDexCount(), 1);
   EXPECT_TRUE(!pet.isRegistered(66));
 
   pet.registerCaught(66);
   EXPECT_TRUE(pet.isCaught(66));
   EXPECT_TRUE(!pet.isRegistered(66));
   EXPECT_EQ(pet.caughtCount(), 1);
+  EXPECT_EQ(pet.knownDexCount(), 2);
 
   pet.registerCaught(66);
   EXPECT_EQ(pet.caughtCount(), 1);
+  EXPECT_EQ(pet.knownDexCount(), 2);
+}
+
+static void testDexRewardsApplyOnceAndCap() {
+  Pet pet = hatchedPet(4);
+  pet.joy = 98;
+
+  for (int16_t dex = 10; dex <= 18; dex++) pet.registerCaught(dex);
+
+  EXPECT_EQ(pet.knownDexCount(), 10);
+  EXPECT_EQ(pet.dexRewardMask & 0x01, 0x01);
+  EXPECT_EQ(pet.joy, 100);
+  uint8_t mask = pet.dexRewardMask;
+  uint8_t joy = pet.joy;
+
+  EXPECT_EQ(pet.applyDexRewards(), 0);
+  EXPECT_EQ(pet.dexRewardMask, mask);
+  EXPECT_EQ(pet.joy, joy);
+
+  for (int16_t dex = 19; dex <= 33; dex++) pet.registerCaught(dex);
+  EXPECT_EQ(pet.knownDexCount(), 25);
+  EXPECT_TRUE((pet.dexRewardMask & 0x02) != 0);
+  EXPECT_TRUE(pet.bond > 0);
+}
+
+static void testPetInteractionCooldownAndPersonalityBonus() {
+  Pet pet = hatchedPet(1);
+  pet.ageMinutes = 20;
+  pet.joy = 50;
+  pet.bond = 10;
+
+  uint8_t first = pet.interactPet(true);
+  EXPECT_TRUE((first & PET_INTERACT_JOY) != 0);
+  EXPECT_TRUE((first & PET_INTERACT_BOND) != 0);
+  EXPECT_EQ(pet.joy, 52);
+  EXPECT_EQ(pet.bond, 11);
+
+  uint8_t again = pet.interactPet(true);
+  EXPECT_EQ(again, PET_INTERACT_NONE);
+  EXPECT_EQ(pet.joy, 52);
+  EXPECT_EQ(pet.bond, 11);
+
+  pet.ageMinutes = 30;
+  pet.catchHi = 18;  // playful: more joy
+  uint8_t later = pet.interactPet(false);
+  EXPECT_TRUE((later & PET_INTERACT_JOY) != 0);
+  EXPECT_EQ(pet.joy, 56);
 }
 
 static void testCatchChanceAndRolls() {
@@ -377,6 +426,8 @@ int main() {
   testDailyGoalsProgressAndReset();
   testDailyBattleGoalCompletesOnWinOnly();
   testCaughtDexIsSeparateFromRaisedDex();
+  testDexRewardsApplyOnceAndCap();
+  testPetInteractionCooldownAndPersonalityBonus();
   testCatchChanceAndRolls();
   testCareBonusCapsStreakContribution();
   testFarewellAndRunawayReadiness();

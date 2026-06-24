@@ -28,6 +28,13 @@ enum PetPersonality : uint8_t {
   PERS_LAZY,
 };
 
+enum PetInteractResult : uint8_t {
+  PET_INTERACT_NONE = 0,
+  PET_INTERACT_JOY = 1 << 0,
+  PET_INTERACT_BOND = 1 << 1,
+  PET_INTERACT_ENERGY = 1 << 2,
+};
+
 enum DailyGoalType : uint8_t {
   DAILY_GOAL_CARE = 0,
   DAILY_GOAL_PLAY,
@@ -98,6 +105,8 @@ public:
   uint16_t memoHi = 0;     // record de rondas del minijuego memo
   uint16_t battleWins = 0, battleLosses = 0;
   uint16_t battleStreak = 0, bestBattleStreak = 0;
+  uint32_t lastPetInteractMinute = 0;
+  uint8_t dexRewardMask = 0;
   uint32_t dailyGoalDay = 0;
   uint8_t dailyGoalType[DAILY_GOAL_COUNT] = { DAILY_GOAL_CARE, DAILY_GOAL_PLAY, DAILY_GOAL_CATCH };
   uint8_t dailyGoalProgress[DAILY_GOAL_COUNT] = { 0, 0, 0 };
@@ -119,6 +128,7 @@ public:
   uint8_t applyCatchResult(uint8_t score);
   uint8_t applyMemoResult(uint8_t rounds);
   bool applyPetEvent(uint8_t eventType);
+  uint8_t interactPet(bool eveningBonus);
   PetPersonality personality() const;
   void ensureDailyGoals();
   uint8_t dailyGoalTarget(uint8_t goalType) const;
@@ -179,7 +189,10 @@ public:
   }
   uint16_t registeredCount() const;
   uint16_t caughtCount() const;
+  uint16_t knownDexCount() const;
   void registerCaught(int16_t dex);
+  uint8_t nextDexGoal() const;
+  uint8_t applyDexRewards();
   uint8_t catchChanceForWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, bool closeWin) const;
   bool tryCatchWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, bool closeWin, uint8_t luckRoll);
   bool lineHasUnregistered(int16_t base) const;
@@ -200,6 +213,8 @@ public:
   bool hasMedal(uint16_t m) const { return medals & m; }
   bool showMedal() const { return millis() < medalUntil; }
   bool showMilestone() const { return millis() < milestoneUntil; }
+  bool showDexReward() const { return millis() < dexRewardUntil; }
+  uint8_t lastDexRewardGoal() const { return lastDexReward; }
   int careBonus() const;  // mejora del huevo por racha + vinculo
 
   // guardado periodico diferido: tick() marca pendiente y el loop lo vuelca
@@ -229,6 +244,8 @@ private:
   uint8_t bondToday = 0;       // tope diario de subida de vinculo
   uint32_t medalUntil = 0;     // celebracion de medalla en pantalla
   uint32_t milestoneUntil = 0; // celebracion de hito de racha
+  uint32_t dexRewardUntil = 0;
+  uint8_t lastDexReward = 0;
 
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo

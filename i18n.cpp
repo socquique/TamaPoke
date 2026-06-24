@@ -51,6 +51,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "ATRAPAR", "DEJAR", "ATRAPADO!", "ESCAPO", "ATRAPADO", "CRIADO",
     "TODOS",
     "EFECTIVO", "DEBIL",
+    "CAJA", "SIN CAPTURAS", "CAPTURADOS %u/151",
+    "FELIZ!", "VINC +1", "ESPERA",
+    "MANANA", "DIA", "TARDE", "NOCHE",
+    "META DEX %u", "BONUS DEX", "CONOCIDOS %u/151",
   },
   // ---------------- EN ----------------
   {
@@ -95,6 +99,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "CATCH", "LEAVE", "CAUGHT!", "ESCAPED", "CAUGHT", "RAISED",
     "ALL",
     "EFFECTIVE", "WEAK",
+    "BOX", "NO CATCHES", "CAUGHT %u/151",
+    "HAPPY!", "BOND +1", "WAIT",
+    "MORNING", "DAY", "EVENING", "NIGHT",
+    "DEX GOAL %u", "DEX REWARD", "KNOWN %u/151",
   },
   // ---------------- FR ----------------
   {
@@ -139,6 +147,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "CAPTURER", "LAISSER", "CAPTURE!", "FUI", "CAPTURE", "ELEVE",
     "TOUS",
     "EFFICACE", "FAIBLE",
+    "BOITE", "AUCUNE PRISE", "CAPTURES %u/151",
+    "HEUREUX!", "LIEN +1", "ATTENDS",
+    "MATIN", "JOUR", "SOIR", "NUIT",
+    "BUT DEX %u", "BONUS DEX", "CONNUS %u/151",
   },
   // ---------------- DE ----------------
   {
@@ -183,6 +195,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "FANGEN", "GEHEN", "GEFANGEN!", "ENTKOMMEN", "GEFANGEN", "AUFGEZOGEN",
     "ALLE",
     "EFFEKTIV", "SCHWACH",
+    "BOX", "KEINE FAENGE", "GEFANGEN %u/151",
+    "FROH!", "BND +1", "WARTEN",
+    "MORGEN", "TAG", "ABEND", "NACHT",
+    "DEX ZIEL %u", "DEX BONUS", "BEKANNT %u/151",
   },
   // ---------------- IT ----------------
   {
@@ -227,6 +243,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "PRENDI", "LASCIA", "PRESO!", "FUGGITO", "PRESO", "ALLEVATO",
     "TUTTI",
     "EFFICACE", "DEBOLE",
+    "BOX", "NESSUNA PRESA", "PRESI %u/151",
+    "FELICE!", "LEG +1", "ASPETTA",
+    "MATTINA", "GIORNO", "SERA", "NOTTE",
+    "OBIETTIVO DEX %u", "BONUS DEX", "VISTI %u/151",
   },
   // ---------------- PT ----------------
   {
@@ -271,6 +291,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "APANHAR", "DEIXAR", "APANHADO!", "FUGIU", "APANHADO", "CRIADO",
     "TODOS",
     "EFETIVO", "FRACO",
+    "CAIXA", "SEM CAPTURAS", "APANHADOS %u/151",
+    "FELIZ!", "LACO +1", "ESPERA",
+    "MANHA", "DIA", "TARDE", "NOITE",
+    "META DEX %u", "BONUS DEX", "CONHECIDOS %u/151",
   },
 };
 

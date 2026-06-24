@@ -250,8 +250,10 @@ int16_t Pet::pickEggSpecies() {
 
 void Pet::registerSpecies(int16_t dex) {
   if (dex < 1 || dex > 151) return;
+  bool wasKnown = isRegistered(dex) || isCaught(dex);
   dexReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
   if (shiny) dexShinyReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+  if (!wasKnown) applyDexRewards();
 }
 
 // la racha y el vinculo mejoran el sorteo del huevo (0..~14)
@@ -404,9 +406,57 @@ uint16_t Pet::caughtCount() const {
   return n;
 }
 
+uint16_t Pet::knownDexCount() const {
+  uint16_t n = 0;
+  for (int i = 1; i <= 151; i++)
+    if (isRegistered(i) || isCaught(i)) n++;
+  return n;
+}
+
+uint8_t Pet::nextDexGoal() const {
+  static const uint8_t GOALS[] = { 10, 25, 50, 100, 151 };
+  uint16_t known = knownDexCount();
+  for (uint8_t i = 0; i < sizeof(GOALS); i++)
+    if (known < GOALS[i]) return GOALS[i];
+  return 151;
+}
+
+uint8_t Pet::applyDexRewards() {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  static const uint8_t GOALS[] = { 10, 25, 50, 100, 151 };
+  uint16_t known = knownDexCount();
+  uint8_t reached = 0;
+  for (uint8_t i = 0; i < sizeof(GOALS); i++) {
+    uint8_t bit = 1 << i;
+    if (known < GOALS[i] || (dexRewardMask & bit)) continue;
+    dexRewardMask |= bit;
+    reached = GOALS[i];
+    if (GOALS[i] == 10) joy = clamp100((int)joy + 5);
+    else if (GOALS[i] == 25) addBond(2);
+    else if (GOALS[i] == 50) {
+      if (trAtk <= trDef && trAtk <= trSpe) trAtk = clamp100((int)trAtk + 1);
+      else if (trDef <= trAtk && trDef <= trSpe) trDef = clamp100((int)trDef + 1);
+      else trSpe = clamp100((int)trSpe + 1);
+    } else if (GOALS[i] == 100) {
+      addBond(4);
+    } else {
+      heartUntil = millis() + HEART_MS;
+    }
+  }
+  if (reached) save();
+  if (reached) {
+    lastDexReward = reached;
+    dexRewardUntil = millis() + 4200;
+    sfxPlay(SFX_MEDAL);
+  }
+  return reached;
+}
+
 void Pet::registerCaught(int16_t dex) {
   if (dex < 1 || dex > 151) return;
+  bool wasKnown = isRegistered(dex) || isCaught(dex);
   dexCaught[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+  if (!wasKnown) applyDexRewards();
   save();
 }
 
@@ -643,6 +693,35 @@ bool Pet::applyPetEvent(uint8_t eventType) {
   return true;
 }
 
+uint8_t Pet::interactPet(bool eveningBonus) {
+  if (ceremony != CER_NONE || isEgg() || sleeping) return PET_INTERACT_NONE;
+  uint32_t nowMinute = ageMinutes ? ageMinutes : 1;
+  if (lastPetInteractMinute && nowMinute < lastPetInteractMinute + 10) {
+    heartUntil = millis() + HEART_MS;
+    return PET_INTERACT_NONE;
+  }
+  lastPetInteractMinute = nowMinute;
+  uint8_t result = PET_INTERACT_JOY;
+  PetPersonality p = personality();
+  int joyGain = (p == PERS_PLAYFUL) ? 4 : 2;
+  joy = clamp100((int)joy + joyGain);
+  if (p == PERS_LAZY) {
+    energy = clamp100((int)energy + 2);
+    result |= PET_INTERACT_ENERGY;
+  }
+  bool bondGain = eveningBonus || p == PERS_CALM || (p == PERS_BRAVE && battleWins > 0);
+  if (bondGain) {
+    uint8_t before = bond;
+    addBond(1);
+    if (bond > before) result |= PET_INTERACT_BOND;
+  }
+  heartUntil = millis() + HEART_MS;
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_CARE, 1);
+  save();
+  return result;
+}
+
 PetPersonality Pet::personality() const {
   if (isEgg()) return PERS_BALANCED;
   if (weight >= 72 || energy <= 20) return PERS_LAZY;
@@ -810,6 +889,8 @@ void Pet::save() {
   prefs.putUShort("bloss", battleLosses);
   prefs.putUShort("bstk", battleStreak);
   prefs.putUShort("bbstk", bestBattleStreak);
+  prefs.putUInt("pimin", lastPetInteractMinute);
+  prefs.putUChar("dxrew", dexRewardMask);
   prefs.putUInt("dgday", dailyGoalDay);
   prefs.putBytes("dgtype", dailyGoalType, sizeof(dailyGoalType));
   prefs.putBytes("dgprog", dailyGoalProgress, sizeof(dailyGoalProgress));
@@ -873,6 +954,8 @@ void Pet::load() {
   battleLosses = prefs.getUShort("bloss", 0);
   battleStreak = prefs.getUShort("bstk", 0);
   bestBattleStreak = prefs.getUShort("bbstk", 0);
+  lastPetInteractMinute = prefs.getUInt("pimin", 0);
+  dexRewardMask = prefs.getUChar("dxrew", 0);
   dailyGoalDay = prefs.getUInt("dgday", 0);
   size_t gotTypes = prefs.getBytes("dgtype", dailyGoalType, sizeof(dailyGoalType));
   size_t gotProg = prefs.getBytes("dgprog", dailyGoalProgress, sizeof(dailyGoalProgress));
