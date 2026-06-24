@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.15.1-type-ui"
+#define FW_VERSION "1.15.2-type-chips"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1986,14 +1986,29 @@ void typeText(char *buf, size_t len, const DexEntry &d) {
   else snprintf(buf, len, "%s %s", battleTypeName(d.type1), battleTypeName(d.type2));
 }
 
-void drawTypeText(int x, int y, const DexEntry &d, bool alignRight) {
-  char buf[24];
-  typeText(buf, sizeof(buf), d);
-  int w = (int)strlen(buf) * 6;
+int typeChipWidth(uint8_t type) {
+  return (int)strlen(battleTypeName(type)) * 6 + 14;
+}
+
+void drawTypeChip(int x, int y, uint8_t type) {
+  if (type == TYPE_NONE) return;
+  const char *label = battleTypeName(type);
+  int w = typeChipWidth(type);
+  gfx->fillRoundRect(x, y, w, 16, 5, lerp565(battleTypeColor(type), UI_WHITE, 5, 8));
+  gfx->drawRoundRect(x, y, w, 16, 5, UI_INK);
   gfx->setTextSize(1);
-  gfx->setTextColor(battleTypeColor(d.type1));
-  gfx->setCursor(alignRight ? x - w : x, y);
-  gfx->print(buf);
+  gfx->setTextColor(UI_INK);
+  gfx->setCursor(x + 7, y + 5);
+  gfx->print(label);
+}
+
+void drawTypeChips(int x, int y, const DexEntry &d, bool alignRight) {
+  int w1 = typeChipWidth(d.type1);
+  int w2 = d.type2 == TYPE_NONE ? 0 : typeChipWidth(d.type2);
+  int total = w1 + (w2 ? 4 + w2 : 0);
+  int sx = alignRight ? x - total : x;
+  drawTypeChip(sx, y, d.type1);
+  if (d.type2 != TYPE_NONE) drawTypeChip(sx + w1 + 4, y, d.type2);
   gfx->setTextSize(2);
 }
 
@@ -2069,7 +2084,6 @@ void renderBattle() {
   gfx->setTextSize(2);
   gfx->setCursor(28, 82);
   gfx->print(left);
-  drawTypeText(28, 101, mine, false);
   int rightLen = strlen(right);
   int rightTextSize = rightLen <= 12 ? 2 : 1;
   int rightTextW = rightLen * (rightTextSize == 2 ? 12 : 6);
@@ -2078,7 +2092,6 @@ void renderBattle() {
   gfx->setTextSize(rightTextSize);
   gfx->setCursor(rightX, rightTextSize == 2 ? 82 : 88);
   gfx->print(right);
-  drawTypeText(438, 101, wild, true);
   gfx->setTextSize(2);
 
   uint16_t playerMax = battleRun.playerMaxHp;
@@ -2087,6 +2100,8 @@ void renderBattle() {
   uint16_t enemyCur = battleRun.enemyHp;
   drawBattleHpBar(28, 110, playerCur, playerMax, UI_BAR_OK);
   drawBattleHpBar(288, 110, enemyCur, enemyMax, UI_BAR_BAD);
+  drawTypeChips(28, 130, mine, false);
+  drawTypeChips(438, 130, wild, true);
 
   if (!battleResolved) {
     gfx->fillRoundRect(188, 102, 90, 32, 9, UI_TRACK);
