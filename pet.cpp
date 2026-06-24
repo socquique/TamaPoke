@@ -476,6 +476,15 @@ uint8_t Pet::catchChanceForWild(int16_t wildDex, uint8_t wildLevel, uint8_t petL
   return (uint8_t)chance;
 }
 
+uint8_t Pet::respectCatchChanceForWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel) const {
+  uint8_t normal = catchChanceForWild(wildDex, wildLevel, petLevel, true);
+  if (normal == 0) return 0;
+  uint8_t chance = (uint8_t)((uint16_t)normal * 40 / 100);
+  if (chance < 5) chance = 5;
+  if (chance > 25) chance = 25;
+  return chance;
+}
+
 bool Pet::tryCatchWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, bool closeWin, uint8_t luckRoll) {
   uint8_t chance = catchChanceForWild(wildDex, wildLevel, petLevel, closeWin);
   if (chance == 0) return false;
@@ -483,6 +492,17 @@ bool Pet::tryCatchWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, boo
     registerCaught(wildDex);
     joy = clamp100((int)joy + 4);
     addBond(1);
+    save();
+    return true;
+  }
+  return false;
+}
+
+bool Pet::tryRespectCatchWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, uint8_t luckRoll) {
+  uint8_t chance = respectCatchChanceForWild(wildDex, wildLevel, petLevel);
+  if (chance == 0) return false;
+  if ((luckRoll % 100) < chance) {
+    registerCaught(wildDex);
     save();
     return true;
   }

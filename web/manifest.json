@@ -1,15 +1,15 @@
 {
   "name": "TamaPoke",
-  "version": "1.20.1-box-v2",
+  "version": "1.21-fair-catch",
   "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "firmware/tamapoke-1.20.1-box-v2-bootloader.bin", "offset": 0 },
-        { "path": "firmware/tamapoke-1.20.1-box-v2-partitions.bin", "offset": 32768 },
-        { "path": "firmware/tamapoke-1.20.1-box-v2-boot_app0.bin", "offset": 57344 },
-        { "path": "firmware/tamapoke-1.20.1-box-v2-app.bin", "offset": 65536 }
+        { "path": "firmware/tamapoke-1.21-fair-catch-bootloader.bin", "offset": 0 },
+        { "path": "firmware/tamapoke-1.21-fair-catch-partitions.bin", "offset": 32768 },
+        { "path": "firmware/tamapoke-1.21-fair-catch-boot_app0.bin", "offset": 57344 },
+        { "path": "firmware/tamapoke-1.21-fair-catch-app.bin", "offset": 65536 }
       ]
     }
   ]

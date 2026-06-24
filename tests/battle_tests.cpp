@@ -115,7 +115,12 @@ static void testWildLevelStaysNearPetLevel() {
   EXPECT_EQ(wildLevelFor(1, 0), 1);
   EXPECT_EQ(wildLevelFor(10, 0), 9);
   EXPECT_EQ(wildLevelFor(10, 1), 10);
-  EXPECT_EQ(wildLevelFor(10, 3), 12);
+  EXPECT_EQ(wildLevelFor(10, 2), 11);
+  EXPECT_EQ(wildLevelFor(10, 55), 7);
+  EXPECT_EQ(wildLevelFor(10, 56), 6);
+  EXPECT_EQ(wildLevelFor(10, 57), 8);
+  EXPECT_EQ(wildLevelFor(10, 85), 13);
+  EXPECT_EQ(wildLevelFor(10, 86), 12);
 }
 
 static void testWildSpeciesUsesHatchableNonLegendaryPool() {

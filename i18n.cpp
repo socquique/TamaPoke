@@ -56,6 +56,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MANANA", "DIA", "TARDE", "NOCHE",
     "META DEX %u", "BONUS DEX", "CONOCIDOS %u/151",
     "DEX", "TIPO", "CRIADO", "%u/%u",
+    "CERCA!",
   },
   // ---------------- EN ----------------
   {
@@ -105,6 +106,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MORNING", "DAY", "EVENING", "NIGHT",
     "DEX GOAL %u", "DEX REWARD", "KNOWN %u/151",
     "DEX", "TYPE", "RAISED", "%u/%u",
+    "CLOSE!",
   },
   // ---------------- FR ----------------
   {
@@ -154,6 +156,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MATIN", "JOUR", "SOIR", "NUIT",
     "BUT DEX %u", "BONUS DEX", "CONNUS %u/151",
     "DEX", "TYPE", "ELEVE", "%u/%u",
+    "PRESQUE!",
   },
   // ---------------- DE ----------------
   {
@@ -203,6 +206,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MORGEN", "TAG", "ABEND", "NACHT",
     "DEX ZIEL %u", "DEX BONUS", "BEKANNT %u/151",
     "DEX", "TYP", "AUFZ.", "%u/%u",
+    "KNAPP!",
   },
   // ---------------- IT ----------------
   {
@@ -252,6 +256,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MATTINA", "GIORNO", "SERA", "NOTTE",
     "OBIETTIVO DEX %u", "BONUS DEX", "VISTI %u/151",
     "DEX", "TIPO", "ALLEV.", "%u/%u",
+    "QUASI!",
   },
   // ---------------- PT ----------------
   {
@@ -301,6 +306,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MANHA", "DIA", "TARDE", "NOITE",
     "META DEX %u", "BONUS DEX", "CONHECIDOS %u/151",
     "DEX", "TIPO", "CRIADO", "%u/%u",
+    "PERTO!",
   },
 };
 

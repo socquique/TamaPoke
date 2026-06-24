@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.20.1-box-v2"
+#define FW_VERSION "1.21-fair-catch"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -126,6 +126,7 @@ bool battleCatchOffered = false;
 bool battleCatchTried = false;
 bool battleCatchDone = false;
 bool battleCatchSuccess = false;
+bool battleRespectCatch = false;
 uint8_t battleCatchChance = 0;
 
 #define WILD_COOLDOWN_MS (20UL * 60UL * 1000UL)
@@ -1829,6 +1830,7 @@ void closeBattle() {
   battleCatchTried = false;
   battleCatchDone = false;
   battleCatchSuccess = false;
+  battleRespectCatch = false;
   battleCatchChance = 0;
   wildPmd.unload();
 }
@@ -1859,6 +1861,7 @@ void startBattleWith(int16_t forcedDex, uint8_t forcedLevel) {
   battleCatchTried = false;
   battleCatchDone = false;
   battleCatchSuccess = false;
+  battleRespectCatch = false;
   battleCatchChance = 0;
   battleResolved = false;
   battleOpen = true;
@@ -1878,11 +1881,16 @@ void finishBattle() {
     bool closeWin = battleRun.playerHp <= battleRun.playerMaxHp / 3;
     battleReward = pet.applyBattleWin(battleDex, closeWin);
     battleCatchOffered = true;
+    battleRespectCatch = false;
     battleCatchChance = pet.catchChanceForWild(battleDex, battleLevel, battlePlayer.level, closeWin);
     sfxPlay(SFX_BATTLE_WIN);
   } else {
     battleReward = {};
     pet.applyBattleLoss();
+    bool closeLoss = battleRun.enemyHp > 0 && battleRun.enemyHp * 100UL <= battleRun.enemyMaxHp * 30UL;
+    battleCatchChance = closeLoss ? pet.respectCatchChanceForWild(battleDex, battleLevel, battlePlayer.level) : 0;
+    battleCatchOffered = battleCatchChance > 0;
+    battleRespectCatch = battleCatchOffered;
     sfxPlay(SFX_BATTLE_LOSS);
   }
 }
@@ -1921,13 +1929,18 @@ void performBattleAction(BattleAction action) {
 
 void battleTap(int16_t x, int16_t y) {
   if (battleResolved) {
-    if (battleCatchOffered && !battleCatchDone && battleTurn.playerWon) {
+    if (battleCatchOffered && !battleCatchDone) {
       if (x >= 76 && x <= 224 && y >= 392 && y <= 448) {
         bool closeWin = battleRun.playerHp <= battleRun.playerMaxHp / 3;
         battleCatchTried = true;
         battleCatchDone = true;
-        battleCatchSuccess = pet.tryCatchWild(battleDex, battleLevel, battlePlayer.level, closeWin, (uint8_t)random(100));
-        battleCatchChance = pet.catchChanceForWild(battleDex, battleLevel, battlePlayer.level, closeWin);
+        if (battleRespectCatch) {
+          battleCatchSuccess = pet.tryRespectCatchWild(battleDex, battleLevel, battlePlayer.level, (uint8_t)random(100));
+          battleCatchChance = pet.respectCatchChanceForWild(battleDex, battleLevel, battlePlayer.level);
+        } else {
+          battleCatchSuccess = pet.tryCatchWild(battleDex, battleLevel, battlePlayer.level, closeWin, (uint8_t)random(100));
+          battleCatchChance = pet.catchChanceForWild(battleDex, battleLevel, battlePlayer.level, closeWin);
+        }
         sfxPlay(battleCatchSuccess ? SFX_CATCH_OK : SFX_CATCH_FAIL);
         galleryDirty = true;
         return;
@@ -2212,8 +2225,13 @@ void renderBattle() {
         gfx->setCursor(CX - strlen(reward) * 6, 378);
         gfx->print(reward);
       }
+    } else if (battleRespectCatch && battleCatchOffered && !battleCatchDone) {
+      gfx->setTextColor(UI_BAR_WARN);
+      gfx->setTextSize(2);
+      gfx->setCursor(CX - strlen(T(S_CLOSE_CHANCE)) * 6, 378);
+      gfx->print(T(S_CLOSE_CHANCE));
     }
-    if (battleTurn.playerWon && battleCatchOffered && !battleCatchDone) {
+    if (battleCatchOffered && !battleCatchDone) {
       gfx->fillRoundRect(76, 396, 148, 52, 14, UI_BAR_OK);
       gfx->fillRoundRect(242, 396, 148, 52, 14, UI_TRACK);
       gfx->setTextColor(UI_BG_DAY);

@@ -340,6 +340,25 @@ static void testCatchChanceAndRolls() {
   EXPECT_TRUE(!pet.isCaught(144));
 }
 
+static void testRespectCatchIsLimitedAndHasNoCareReward() {
+  Pet pet = hatchedPet(4);
+  pet.bond = 40;
+  pet.joy = 50;
+
+  uint8_t normal = pet.catchChanceForWild(66, 5, 5, true);
+  uint8_t respect = pet.respectCatchChanceForWild(66, 5, 5);
+
+  EXPECT_TRUE(respect < normal);
+  EXPECT_TRUE(respect >= 5);
+  EXPECT_TRUE(respect <= 25);
+  EXPECT_EQ(pet.respectCatchChanceForWild(144, 5, 5), 0);
+
+  EXPECT_TRUE(pet.tryRespectCatchWild(66, 5, 5, respect - 1));
+  EXPECT_TRUE(pet.isCaught(66));
+  EXPECT_EQ(pet.joy, 50);
+  EXPECT_EQ(pet.bond, 40);
+}
+
 static void testCareBonusCapsStreakContribution() {
   Pet pet;
   pet.streak = 99;
@@ -429,6 +448,7 @@ int main() {
   testDexRewardsApplyOnceAndCap();
   testPetInteractionCooldownAndPersonalityBonus();
   testCatchChanceAndRolls();
+  testRespectCatchIsLimitedAndHasNoCareReward();
   testCareBonusCapsStreakContribution();
   testFarewellAndRunawayReadiness();
   testBattleRewardsAndProgression();

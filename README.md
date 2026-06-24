@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://shadowenemyx.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.20.1--box--v2-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.21--fair--catch-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/ShadowEnemyx/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/ShadowEnemyx/TamaPoke/stargazers)
@@ -126,6 +126,9 @@ Battles are turn-based with quick/heavy attacks, dodge/counter and limited rest.
 Wins/losses/streaks are tracked and wins give small training rewards.
 After a win, you get one optional catch attempt; caught wild Pokémon are marked
 separately in the Pokédex and do not replace the active pet.
+Wild levels skew fairer now: most are near your level, some are a few levels
+below, and rare stronger fights still happen. If you lose but bring the wild
+Pokémon below 30% HP, a low-chance respect catch may appear.
 
 ## Hardware
 
