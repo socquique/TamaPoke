@@ -143,6 +143,38 @@ static void testMemoRewardTrainsDefenseAndRecord() {
   EXPECT_EQ(pet.memoHi, 9);
 }
 
+static void testCleanRewardImprovesHygieneAndRecord() {
+  Pet pet = hatchedPet(7);
+  pet.hygiene = 40;
+  pet.energy = 12;
+  pet.poops = 2;
+  pet.cleanHi = 5;
+
+  uint8_t gain = pet.applyCleanResult(9);
+
+  EXPECT_EQ(gain, 4);
+  EXPECT_EQ(pet.hygiene, 87);
+  EXPECT_EQ(pet.cleanHi, 9);
+  EXPECT_EQ(pet.poops, 1);
+  EXPECT_TRUE(pet.energy >= 8);
+}
+
+static void testTypeRewardTrainsAttackAndRecord() {
+  Pet pet = hatchedPet(4);
+  pet.trAtk = 99;
+  pet.energy = 12;
+  pet.fullness = 7;
+  pet.typeHi = 3;
+
+  uint8_t gain = pet.applyTypeResult(12);
+
+  EXPECT_EQ(gain, 3);
+  EXPECT_EQ(pet.trAtk, 100);
+  EXPECT_EQ(pet.typeHi, 12);
+  EXPECT_TRUE(pet.energy >= 8);
+  EXPECT_TRUE(pet.fullness >= 5);
+}
+
 static void testPetEventsRewardAndClamp() {
   Pet pet = hatchedPet(4);
   pet.fullness = 95;
@@ -456,6 +488,8 @@ int main() {
   testTrainingRewardsClampAndAffectNeeds();
   testCatchRewardTrainsSpeedAndRecord();
   testMemoRewardTrainsDefenseAndRecord();
+  testCleanRewardImprovesHygieneAndRecord();
+  testTypeRewardTrainsAttackAndRecord();
   testPetEventsRewardAndClamp();
   testPetEventsBlockedForEggAndCeremony();
   testPersonalityIsDerivedWithoutMutating();

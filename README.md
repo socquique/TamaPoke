@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://shadowenemyx.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.22.3--daily--catch-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.23--minigames--v2-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/ShadowEnemyx/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/ShadowEnemyx/TamaPoke/stargazers)
@@ -77,8 +77,8 @@ While **awake**, per minute:
 - 🍎 **Berry** (3 flavors): +25 FOOD. Each species has a **hidden favorite flavor**
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
 - 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
-- ⚽ **Play / minigames:** ball, catch and memo add variety; rewards are moderate
-  and train SPEED/DEFENSE while costing a little energy/food.
+- ⚽ **Play / minigames:** ball, catch, memo, clean and type add variety; rewards
+  are moderate and train SPEED/DEFENSE/ATTACK or improve care.
 - 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
 - 🫧 **Bath:** clears poops, HYG → 100.
 - 👆 **Pet it:** +5 JOY + bond.
@@ -96,6 +96,10 @@ Tap **Play** to open a small menu:
   and SPEED training, with small food/energy cost.
 - **MEMO**: watch the 4 pads flash, then repeat the sequence. Each cleared round
   adds one more step. Rewards DEFENSE training plus small joy/bond.
+- **CLEAN**: tap dirt spots before the timer ends. It improves hygiene, joy and
+  may clean one poop, while costing a little energy.
+- **TYPE**: pick the type that is strong against the shown enemy type. It trains
+  ATTACK and teaches the same lightweight type logic used in battles.
 
 All minigame records are saved and shown on the Personality/Records area.
 The daily **CATCH 5** goal counts Catch-minigame targets and successful wild
@@ -256,7 +260,7 @@ If one bottoms out it counts as a *slip-up*.
 **Buttons (bottom arc, icons):**
 - 🍎 **Feed** → food menu: 3 berries (each species has a hidden favourite that
   gives a bonus) and a candy (+happiness but it fattens; weight makes it sluggish).
-- ⚽ **Play** → game menu: ball, catch and memo.
+- ⚽ **Play** → game menu: ball, catch, memo, clean and type.
 - 🌙 **Light** → sleep/wake (recovers energy, dims the screen). While asleep,
   needs decay much slower (rest).
 - 🫧 **Bath** → a foam scene that cleans up the poops.
@@ -279,8 +283,8 @@ If one bottoms out it counts as a *slip-up*.
 Swipe up from the main screen, then swipe between cards:
 
 - **Profile**: nickname, age, bond/streak, favorite berry info and rename access.
-- **Personality**: play-style personality plus records for ball, catch, memo and
-  training bag.
+- **Personality**: play-style personality plus records for ball, catch, memo,
+  clean, type and training bag.
 - **Daily**: optional daily goals. Completing them gives small rewards; ignoring
   them has no penalty.
 - **Box**: caught Pokémon collection with paging and sorting by Dex, type or

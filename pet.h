@@ -103,6 +103,8 @@ public:
   uint16_t strHi = 0;      // record de golpes al saco
   uint16_t catchHi = 0;    // record de capturas del minijuego catch
   uint16_t memoHi = 0;     // record de rondas del minijuego memo
+  uint16_t cleanHi = 0;    // record del minijuego clean
+  uint16_t typeHi = 0;     // record del minijuego type match
   uint16_t battleWins = 0, battleLosses = 0;
   uint16_t battleStreak = 0, bestBattleStreak = 0;
   uint32_t lastPetInteractMinute = 0;
@@ -127,6 +129,8 @@ public:
   void playResult(uint8_t score);  // recompensa del minijuego (entrena VEL)
   uint8_t applyCatchResult(uint8_t score);
   uint8_t applyMemoResult(uint8_t rounds);
+  uint8_t applyCleanResult(uint8_t score);
+  uint8_t applyTypeResult(uint8_t score);
   bool applyPetEvent(uint8_t eventType);
   uint8_t interactPet(bool eveningBonus);
   PetPersonality personality() const;

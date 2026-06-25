@@ -6,12 +6,13 @@
 set -e
 cd "$(dirname "$0")/.."
 FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
-VERSION="1.22.3-daily-catch"
+VERSION="1.23-minigames-v2"
 
 echo "Compilando..."
-arduino-cli compile --fqbn "$FQBN" --export-binaries .
-
 B=build/esp32.esp32.esp32s3
+mkdir -p "$B"
+arduino-cli compile --fqbn "$FQBN" --build-path "$B" --export-binaries .
+
 echo "Copiando binarios separados..."
 cp "$B/TamaPoke.ino.bootloader.bin" "web/firmware/tamapoke-$VERSION-bootloader.bin"
 cp "$B/TamaPoke.ino.partitions.bin" "web/firmware/tamapoke-$VERSION-partitions.bin"

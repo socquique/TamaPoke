@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.22.3-daily-catch"
+#define FW_VERSION "1.23-minigames-v2"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -101,6 +101,14 @@ uint8_t memoSeq[14] = { 0 };
 uint8_t memoLen = 0, memoShow = 0, memoInput = 0, memoRounds = 0;
 uint32_t memoNextAt = 0;
 bool memoShowing = false;
+int16_t cleanX[4] = { 0 }, cleanY[4] = { 0 };
+bool cleanAlive[4] = { false };
+uint32_t cleanUntil = 0, cleanSpawnAt = 0;
+uint8_t cleanActive = 0;
+uint8_t typeEnemy = TYPE_GRASS;
+uint8_t typeChoice[3] = { TYPE_FIRE, TYPE_WATER, TYPE_GRASS };
+uint8_t typeCorrect = 0;
+uint32_t typeUntil = 0;
 
 // saco de entrenamiento (entrena la fuerza)
 bool sackOpen = false;
@@ -597,6 +605,10 @@ int16_t boxDexAt(uint16_t index);
 uint8_t boxPageCount();
 uint8_t currentDayPhase();
 StrId dayPhaseTextId(uint8_t phase);
+void startCleanGame();
+void startTypeGame();
+void cleanTap(int16_t x, int16_t y);
+void typeTap(int16_t x, int16_t y);
 
 void onSwipeV(int dir) {
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
@@ -745,9 +757,11 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
   if (gameMenuOpen) {
-    if (x >= 88 && x <= 378 && y >= 176 && y <= 224) startGame();
-    else if (x >= 88 && x <= 378 && y >= 236 && y <= 284) startCatchGame();
-    else if (x >= 88 && x <= 378 && y >= 296 && y <= 344) startMemoGame();
+    if (x >= 88 && x <= 378 && y >= 146 && y <= 184) startGame();
+    else if (x >= 88 && x <= 378 && y >= 190 && y <= 228) startCatchGame();
+    else if (x >= 88 && x <= 378 && y >= 234 && y <= 272) startMemoGame();
+    else if (x >= 88 && x <= 378 && y >= 278 && y <= 316) startCleanGame();
+    else if (x >= 88 && x <= 378 && y >= 322 && y <= 360) startTypeGame();
     else { gameMenuOpen = false; sfxPlay(SFX_TAP); }
     return;
   }
@@ -1163,21 +1177,21 @@ void render() {
 // ---------- minijuego: toques con la pokeball ----------
 
 void drawGameMenu() {
-  gfx->fillRoundRect(78, 144, 310, 218, 18, UI_WHITE);
-  gfx->drawRoundRect(78, 144, 310, 218, 18, UI_INK);
+  gfx->fillRoundRect(78, 112, 310, 284, 18, UI_WHITE);
+  gfx->drawRoundRect(78, 112, 310, 284, 18, UI_INK);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
   const char *title = "PLAY";
-  gfx->setCursor(CX - strlen(title) * 9, 160);
+  gfx->setCursor(CX - strlen(title) * 9, 124);
   gfx->print(title);
-  const char *labels[3] = { T(S_GAME_BALL), T(S_GAME_CATCH), T(S_GAME_MEMO) };
-  uint16_t cols[3] = { UI_BAR_BAD, UI_BAR_WARN, 0x4C98 };
-  for (int i = 0; i < 3; i++) {
-    int y = 176 + i * 60;
-    gfx->fillRoundRect(88, y, 290, 48, 12, cols[i]);
+  const char *labels[5] = { T(S_GAME_BALL), T(S_GAME_CATCH), T(S_GAME_MEMO), T(S_GAME_CLEAN), T(S_GAME_TYPE) };
+  uint16_t cols[5] = { UI_BAR_BAD, UI_BAR_WARN, 0x4C98, UI_BAR_OK, 0xF3B7 };
+  for (int i = 0; i < 5; i++) {
+    int y = 146 + i * 44;
+    gfx->fillRoundRect(88, y, 290, 38, 10, cols[i]);
     gfx->setTextColor(i == 1 ? UI_INK : UI_BG_DAY);
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(labels[i]) * 6, y + 16);
+    gfx->setCursor(CX - strlen(labels[i]) * 6, y + 12);
     gfx->print(labels[i]);
   }
 }
@@ -1248,6 +1262,82 @@ void startMemoGame() {
   sfxPlay(SFX_GAME_START);
 }
 
+void spawnCleanSpot() {
+  for (uint8_t i = 0; i < 4; i++) {
+    if (cleanAlive[i]) continue;
+    cleanX[i] = 88 + random(290);
+    cleanY[i] = 122 + random(224);
+    cleanAlive[i] = true;
+    cleanActive++;
+    return;
+  }
+}
+
+void startCleanGame() {
+  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+  gameMenuOpen = false;
+  gameOpen = true;
+  gameMode = 3;
+  gameOverUntil = 0;
+  gameScore = 0;
+  gameMisses = 0;
+  gameNewHi = false;
+  gameGain = 0;
+  cleanActive = 0;
+  for (uint8_t i = 0; i < 4; i++) cleanAlive[i] = false;
+  cleanUntil = millis() + 18000;
+  cleanSpawnAt = millis();
+  spawnCleanSpot();
+  sfxPlay(SFX_GAME_START);
+}
+
+static const uint8_t TYPE_DEF_POOL[] = {
+  TYPE_GRASS, TYPE_FIRE, TYPE_WATER, TYPE_ELECTRIC, TYPE_ROCK, TYPE_GROUND,
+  TYPE_FLYING, TYPE_POISON, TYPE_PSYCHIC, TYPE_GHOST, TYPE_DRAGON, TYPE_ICE
+};
+static const uint8_t TYPE_COUNTER_POOL[] = {
+  TYPE_FIRE, TYPE_WATER, TYPE_GRASS, TYPE_GROUND, TYPE_WATER, TYPE_WATER,
+  TYPE_ELECTRIC, TYPE_PSYCHIC, TYPE_BUG, TYPE_GHOST, TYPE_ICE, TYPE_FIRE
+};
+static const uint8_t TYPE_OPTION_POOL[] = {
+  TYPE_NORMAL, TYPE_FIRE, TYPE_WATER, TYPE_ELECTRIC, TYPE_GRASS, TYPE_ICE,
+  TYPE_FIGHTING, TYPE_POISON, TYPE_GROUND, TYPE_FLYING, TYPE_PSYCHIC, TYPE_BUG,
+  TYPE_ROCK, TYPE_GHOST, TYPE_DRAGON
+};
+
+void nextTypeQuestion() {
+  uint8_t q = (uint8_t)random(sizeof(TYPE_DEF_POOL));
+  typeEnemy = TYPE_DEF_POOL[q];
+  uint8_t correct = TYPE_COUNTER_POOL[q];
+  typeCorrect = (uint8_t)random(3);
+  for (uint8_t i = 0; i < 3; i++) typeChoice[i] = TYPE_NONE;
+  typeChoice[typeCorrect] = correct;
+  for (uint8_t i = 0; i < 3; i++) {
+    if (i == typeCorrect) continue;
+    uint8_t cand;
+    do {
+      cand = TYPE_OPTION_POOL[random(sizeof(TYPE_OPTION_POOL))];
+    } while (cand == correct || cand == typeChoice[0] || cand == typeChoice[1] || cand == typeChoice[2] ||
+             battleTypeEffectPct(cand, typeEnemy, TYPE_NONE) > 100);
+    typeChoice[i] = cand;
+  }
+  typeUntil = millis() + 4200;
+}
+
+void startTypeGame() {
+  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+  gameMenuOpen = false;
+  gameOpen = true;
+  gameMode = 4;
+  gameOverUntil = 0;
+  gameScore = 0;
+  gameMisses = 0;
+  gameNewHi = false;
+  gameGain = 0;
+  nextTypeQuestion();
+  sfxPlay(SFX_GAME_START);
+}
+
 void respawnBall() {
   ballX = 130 + random(206);
   ballY = 96;
@@ -1270,6 +1360,14 @@ void gameTap(int16_t x, int16_t y) {
   }
   if (gameMode == 2) {
     memoTap(x, y);
+    return;
+  }
+  if (gameMode == 3) {
+    cleanTap(x, y);
+    return;
+  }
+  if (gameMode == 4) {
+    typeTap(x, y);
     return;
   }
   if (gameOverUntil) return;
@@ -1362,6 +1460,60 @@ void memoTap(int16_t x, int16_t y) {
   }
 }
 
+void finishCleanGame() {
+  gameNewHi = (gameScore > pet.cleanHi);
+  gameGain = pet.applyCleanResult(gameScore);
+  sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
+  gameOverUntil = millis() + 4000;
+}
+
+void cleanTap(int16_t x, int16_t y) {
+  if (gameOverUntil) return;
+  if (y < 72) { gameOpen = false; sfxPlay(SFX_TAP); return; }
+  for (uint8_t i = 0; i < 4; i++) {
+    if (!cleanAlive[i]) continue;
+    int dx = x - cleanX[i], dy = y - cleanY[i];
+    if (dx * dx + dy * dy <= 38 * 38) {
+      cleanAlive[i] = false;
+      if (cleanActive) cleanActive--;
+      gameScore++;
+      hitX = cleanX[i];
+      hitY = cleanY[i];
+      hitTime = millis();
+      sfxPlay(SFX_PLAY);
+      return;
+    }
+  }
+  if (++gameMisses >= 3) finishCleanGame();
+  else sfxPlay(SFX_DENY);
+}
+
+void finishTypeGame() {
+  gameNewHi = (gameScore > pet.typeHi);
+  gameGain = pet.applyTypeResult(gameScore);
+  sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
+  gameOverUntil = millis() + 4000;
+}
+
+void typeTap(int16_t x, int16_t y) {
+  if (gameOverUntil) return;
+  if (y < 72) { gameOpen = false; sfxPlay(SFX_TAP); return; }
+  int idx = -1;
+  for (int i = 0; i < 3; i++) {
+    int bx = 58 + i * 120;
+    if (x >= bx && x <= bx + 104 && y >= 284 && y <= 338) idx = i;
+  }
+  if (idx < 0) return;
+  if ((uint8_t)idx == typeCorrect) {
+    gameScore++;
+    sfxPlay(SFX_PLAY);
+    nextTypeQuestion();
+  } else {
+    if (++gameMisses >= 3) finishTypeGame();
+    else sfxPlay(SFX_DENY);
+  }
+}
+
 void stepGame() {
   float grav = 0.82f + gameScore * 0.032f;  // cae exigente desde el inicio
   if (gameScore >= 8) grav += 0.10f;
@@ -1423,6 +1575,8 @@ void sackTap() {
 }
 
 void drawGameScene();  // prototipo (definida mas abajo)
+const char *battleTypeName(uint8_t type);
+uint16_t battleTypeColor(uint8_t type);
 
 void renderSack() {
   uint32_t now = millis();
@@ -1539,7 +1693,7 @@ void drawGameResult(const char *recordFmt, uint16_t record, StrId gainFmt) {
   gfx->print(buf);
   char gain[18];
   snprintf(gain, sizeof(gain), T(gainFmt), gameGain);
-  gfx->setTextColor(gainFmt == S_DEF_GAIN_FMT ? 0x4C98 : UI_BAR_WARN);
+  gfx->setTextColor(gainFmt == S_DEF_GAIN_FMT ? 0x4C98 : (gainFmt == S_HYG_GAIN_FMT ? UI_BAR_OK : UI_BAR_WARN));
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(gain) * 9, 204);
   gfx->print(gain);
@@ -1653,6 +1807,116 @@ void renderMemoGame() {
   gfx->flush();
 }
 
+void renderCleanGame() {
+  uint32_t now = millis();
+  if (gameOverUntil) {
+    drawGameResult(T(S_RECORD_FMT), pet.cleanHi, S_HYG_GAIN_FMT);
+    return;
+  }
+  if (now >= cleanUntil || gameMisses >= 3) {
+    finishCleanGame();
+    return;
+  }
+  if (now >= cleanSpawnAt) {
+    if (cleanActive < 4) spawnCleanSpot();
+    cleanSpawnAt = now + 720 - (gameScore > 12 ? 260 : gameScore * 20);
+  }
+  drawGameScene();
+  bool night = sceneHour() < 6 || sceneHour() >= 20;
+  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+  gfx->setTextColor(ink);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_CLEAN_TITLE)) * 9, 32);
+  gfx->print(T(S_CLEAN_TITLE));
+  char score[16], rec[16];
+  snprintf(score, sizeof(score), T(S_SCORE_FMT), gameScore);
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.cleanHi);
+  gfx->setTextSize(2);
+  gfx->setCursor(50, 78);
+  gfx->print(score);
+  gfx->setCursor(294, 78);
+  gfx->print(rec);
+  for (int i = 0; i < 3; i++) {
+    if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
+    else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
+  }
+  for (uint8_t i = 0; i < 4; i++) {
+    if (!cleanAlive[i]) continue;
+    gfx->fillCircle(cleanX[i], cleanY[i], 26, C565(0x8a, 0x66, 0x45));
+    gfx->drawCircle(cleanX[i], cleanY[i], 28, UI_INK);
+    gfx->fillCircle(cleanX[i] - 8, cleanY[i] - 8, 5, C565(0x62, 0x45, 0x2e));
+    gfx->fillCircle(cleanX[i] + 10, cleanY[i] + 4, 6, C565(0x62, 0x45, 0x2e));
+  }
+  int bw = 280;
+  int fw = (int)((uint32_t)bw * (cleanUntil - now) / 18000);
+  if (fw < 0) fw = 0;
+  gfx->fillRoundRect(CX - bw / 2, 362, bw, 16, 5, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 362, fw, 16, 5, UI_BAR_OK);
+  uint32_t ht = millis() - hitTime;
+  if (hitTime && ht < 220) gfx->drawCircle((int)hitX, (int)hitY, 42 + ht / 8, UI_BAR_OK);
+  gfx->flush();
+}
+
+void renderTypeGame() {
+  uint32_t now = millis();
+  if (gameOverUntil) {
+    drawGameResult(T(S_RECORD_FMT), pet.typeHi, S_ATK_GAIN_FMT);
+    return;
+  }
+  if (now >= typeUntil) {
+    if (++gameMisses >= 3) {
+      finishTypeGame();
+      return;
+    }
+    sfxPlay(SFX_DENY);
+    nextTypeQuestion();
+  }
+  drawGameScene();
+  bool night = sceneHour() < 6 || sceneHour() >= 20;
+  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+  gfx->setTextColor(ink);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(T(S_TYPE_TITLE)) * 9, 32);
+  gfx->print(T(S_TYPE_TITLE));
+  char score[16], rec[16];
+  snprintf(score, sizeof(score), T(S_SCORE_FMT), gameScore);
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.typeHi);
+  gfx->setTextSize(2);
+  gfx->setCursor(50, 78);
+  gfx->print(score);
+  gfx->setCursor(294, 78);
+  gfx->print(rec);
+  for (int i = 0; i < 3; i++) {
+    if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
+    else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
+  }
+
+  const char *enemy = battleTypeName(typeEnemy);
+  gfx->fillRoundRect(118, 138, 230, 58, 14, lerp565(battleTypeColor(typeEnemy), UI_WHITE, 4, 8));
+  gfx->drawRoundRect(118, 138, 230, 58, 14, ink);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  gfx->setCursor(CX - strlen(enemy) * 9, 156);
+  gfx->print(enemy);
+
+  for (int i = 0; i < 3; i++) {
+    int bx = 58 + i * 120;
+    const char *label = battleTypeName(typeChoice[i]);
+    gfx->fillRoundRect(bx, 284, 104, 54, 12, lerp565(battleTypeColor(typeChoice[i]), UI_WHITE, 5, 8));
+    gfx->drawRoundRect(bx, 284, 104, 54, 12, ink);
+    gfx->setTextColor(UI_INK);
+    gfx->setTextSize(1);
+    gfx->setCursor(bx + (104 - (int)strlen(label) * 6) / 2, 306);
+    gfx->print(label);
+  }
+  int bw = 280;
+  int fw = (int)((uint32_t)bw * (typeUntil - now) / 4200);
+  if (fw < 0) fw = 0;
+  gfx->fillRoundRect(CX - bw / 2, 362, bw, 16, 5, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 362, fw, 16, 5, UI_BAR_OK);
+  gfx->flush();
+}
+
 void renderGame() {
   // sin fillScreen(NEGRO): drawGameScene cubre los 466x466 completos. Si el
   // DMA del flush anterior aun lee el buffer, vera contenido valido (no negro
@@ -1666,6 +1930,14 @@ void renderGame() {
   }
   if (gameMode == 2) {
     renderMemoGame();
+    return;
+  }
+  if (gameMode == 3) {
+    renderCleanGame();
+    return;
+  }
+  if (gameMode == 4) {
+    renderTypeGame();
     return;
   }
 
@@ -2697,12 +2969,14 @@ void renderCardPersonality() {
 
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_RECORDS)) * 6, 286);
+  gfx->setCursor(CX - strlen(T(S_RECORDS)) * 6, 270);
   gfx->print(T(S_RECORDS));
-  drawPersonalityRecord(70, 310, T(S_GAME_BALL), pet.gameHi, UI_BAR_OK);
-  drawPersonalityRecord(198, 310, T(S_GAME_CATCH), pet.catchHi, UI_BAR_WARN);
-  drawPersonalityRecord(70, 350, T(S_GAME_MEMO), pet.memoHi, 0x4C98);
-  drawPersonalityRecord(198, 350, T(S_BATTLE), pet.bestBattleStreak, UI_BAR_BAD);
+  drawPersonalityRecord(52, 294, T(S_GAME_BALL), pet.gameHi, UI_BAR_OK);
+  drawPersonalityRecord(178, 294, T(S_GAME_CATCH), pet.catchHi, UI_BAR_WARN);
+  drawPersonalityRecord(304, 294, T(S_GAME_MEMO), pet.memoHi, 0x4C98);
+  drawPersonalityRecord(52, 334, T(S_GAME_CLEAN), pet.cleanHi, UI_BAR_OK);
+  drawPersonalityRecord(178, 334, T(S_GAME_TYPE), pet.typeHi, 0xF3B7);
+  drawPersonalityRecord(304, 334, T(S_BATTLE), pet.bestBattleStreak, UI_BAR_BAD);
 }
 
 StrId dailyGoalLabelId(uint8_t goalType) {

@@ -692,6 +692,41 @@ uint8_t Pet::applyMemoResult(uint8_t rounds) {
   return gain;
 }
 
+uint8_t Pet::applyCleanResult(uint8_t score) {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  uint8_t gain = score / 2;
+  if (gain > 18) gain = 18;
+  hygiene = clamp100((int)hygiene + 20 + score * 3);
+  joy = clamp100((int)joy + 3 + (score > 10 ? 12 : score));
+  energy = dropTo(energy, 4 + score / 4, 8);
+  if (poops && score >= 4) poops--;
+  if (score >= 6) heartUntil = millis() + HEART_MS;
+  if (score > cleanHi) cleanHi = score;
+  addBond(1);
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_CARE, 1);
+  save();
+  return gain;
+}
+
+uint8_t Pet::applyTypeResult(uint8_t score) {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  uint8_t gain = score / 4;
+  if (gain > 10) gain = 10;
+  uint8_t v = trAtk + gain;
+  trAtk = v > 100 ? 100 : v;
+  joy = clamp100((int)joy + 4 + (score > 12 ? 18 : score));
+  energy = dropTo(energy, 5 + score / 3, 8);
+  fullness = dropTo(fullness, 2, 5);
+  if (score >= 5) heartUntil = millis() + HEART_MS;
+  if (score > typeHi) typeHi = score;
+  addBond(1);
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_PLAY, 1);
+  save();
+  return gain;
+}
+
 bool Pet::applyPetEvent(uint8_t eventType) {
   if (ceremony != CER_NONE || isEgg()) return false;
   if (eventType == PET_EVENT_BERRY) {
@@ -906,6 +941,8 @@ void Pet::save() {
   prefs.putUShort("shi", strHi);
   prefs.putUShort("chi", catchHi);
   prefs.putUShort("mhi", memoHi);
+  prefs.putUShort("clhi", cleanHi);
+  prefs.putUShort("tyhi", typeHi);
   prefs.putUShort("bwin", battleWins);
   prefs.putUShort("bloss", battleLosses);
   prefs.putUShort("bstk", battleStreak);
@@ -971,6 +1008,8 @@ void Pet::load() {
   strHi = prefs.getUShort("shi", 0);
   catchHi = prefs.getUShort("chi", 0);
   memoHi = prefs.getUShort("mhi", 0);
+  cleanHi = prefs.getUShort("clhi", 0);
+  typeHi = prefs.getUShort("tyhi", 0);
   battleWins = prefs.getUShort("bwin", 0);
   battleLosses = prefs.getUShort("bloss", 0);
   battleStreak = prefs.getUShort("bstk", 0);
