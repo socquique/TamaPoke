@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://shadowenemyx.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.22.1--sound--full-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.22.2--more--sound-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/ShadowEnemyx/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/ShadowEnemyx/TamaPoke/stargazers)
@@ -291,8 +291,9 @@ Swipe up from the main screen, then swipe between cards:
 ### Sound modes
 Swipe down to settings and tap the sound button:
 
-- **TON VIEL / SND ALL**: all feedback, including taps, menu sounds, minigame
-  start, ball bounces/misses, memo sequence steps and battle/catch effects.
+- **TON VIEL / SND ALL**: all feedback, including taps, swipes, menu sounds,
+  card/gallery changes, minigame start, training hits, ball bounces/misses,
+  memo sequence steps, occasional main-screen pet chirps and battle/catch effects.
 - **TON MIT / SND MID**: keeps important care, battle, catch, event and result
   sounds, but removes many tiny repeated UI/minigame noises.
 - **TON WEN / SND LOW**: only major events such as hatch, evolution, medals,

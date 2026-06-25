@@ -91,9 +91,9 @@ struct Note {
 #define SL(f, ms, to, vol, w) {f, ms, (int16_t)((to) - (f)), vol, w}
 #define SIL(ms)              {0, ms, 0, 0, W_SQUARE}
 
-static const Note N_TAP[]    = {TRI(1175, 26, 62)};
+static const Note N_TAP[]    = {SQ(1175, 38, 78)};
 static const Note N_EAT[]    = {SOFT(523, 42, 64), SIL(12), SOFT(659, 50, 70)};
-static const Note N_PLAY[]   = {SL(760, 48, 980, 70, W_TRI), TRI(1175, 44, 62)};
+static const Note N_PLAY[]   = {SL(760, 55, 1020, 84, W_TRI), SQ(1319, 45, 76)};
 static const Note N_HEART[]  = {SOFT(1047, 70, 56), SIL(18), SOFT(1319, 105, 68)};
 static const Note N_HATCH[]  = {TRI(523, 70, 60), TRI(659, 70, 64), TRI(784, 95, 68), SL(880, 190, 1320, 72, W_TRI)};
 static const Note N_EVOLVE[] = {SL(392, 100, 560, 58, W_TRI), SL(523, 100, 740, 62, W_TRI), SL(659, 110, 960, 66, W_TRI), SL(880, 210, 1480, 76, W_SOFT)};
@@ -109,11 +109,11 @@ static const Note N_DAILY_GOAL[]   = {TRI(1175, 50, 68), SIL(22), TRI(1568, 70, 
 static const Note N_EVENT_SPARKLE[] = {NS(35, 36), TRI(1568, 42, 56), TRI(1976, 62, 60), SIL(18), TRI(1760, 56, 54)};
 static const Note N_REST[]         = {SL(523, 125, 392, 48, W_SOFT), SOFT(330, 170, 42)};
 static const Note N_COUNTER[]      = {SL(784, 75, 1175, 62, W_TRI), SIL(16), SQ(1568, 70, 74), NS(40, 42)};
-static const Note N_MENU[]         = {TRI(988, 28, 50), TRI(1319, 34, 56)};
-static const Note N_GAME_START[]   = {TRI(659, 42, 58), TRI(880, 48, 64), TRI(1175, 58, 66)};
-static const Note N_BALL_BOUNCE[]  = {SL(720, 28, 540, 46, W_TRI)};
-static const Note N_BALL_MISS[]    = {NS(38, 34), SL(330, 80, 220, 50, W_SOFT)};
-static const Note N_MEMO_STEP[]    = {TRI(1047, 36, 44)};
+static const Note N_MENU[]         = {TRI(988, 42, 74), SQ(1319, 50, 80)};
+static const Note N_GAME_START[]   = {TRI(659, 58, 72), TRI(880, 64, 78), SQ(1175, 74, 82)};
+static const Note N_BALL_BOUNCE[]  = {SL(820, 42, 520, 72, W_SQUARE)};
+static const Note N_BALL_MISS[]    = {NS(55, 56), SL(360, 110, 210, 68, W_SOFT)};
+static const Note N_MEMO_STEP[]    = {SQ(1047, 54, 68)};
 
 struct SfxDef { const Note *n; uint8_t len; };
 static const SfxDef SFX[SFX_COUNT] = {
@@ -183,7 +183,7 @@ static void playTone(const Note &note) {
   int total = SAMPLE_RATE * ms / 1000;
   int done = 0;
   int phase = 0;
-  const int16_t maxAmp = (int16_t)(5000L * note.vol / 100);
+  const int16_t maxAmp = (int16_t)(7600L * note.vol / 100);
   while (done < total) {
     int n = total - done; if (n > 256) n = 256;
     for (int i = 0; i < n; i++) {
@@ -249,7 +249,7 @@ void audioBegin() {
   if (gMode > SOUND_FULL) gMode = SOUND_FULL;
 
   gReady = true;
-  gQ = xQueueCreate(8, sizeof(uint8_t));
+  gQ = xQueueCreate(16, sizeof(uint8_t));
   xTaskCreatePinnedToCore(audioTask, "audio", 4096, nullptr, 1, nullptr, 0);
   sfxPlay(SFX_HATCH);  // jingle de arranque (confirma que suena)
 }

@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.22.1-sound-full"
+#define FW_VERSION "1.22.2-more-sound"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -80,6 +80,7 @@ uint32_t bathUntil = 0;
 bool bathPending = false;
 struct { int16_t x, y; uint8_t r, ph; } bubbles[14];
 uint32_t feedMenuUntil = 0;   // selector de comida abierto hasta este millis
+uint32_t nextAmbientSoundAt = 0;
 
 // minijuego "toques": mantener la pokeball en el aire
 bool gameOpen = false;
@@ -297,6 +298,27 @@ void ensureMon() {
   }
 }
 
+bool mainScreenReadyForAmbientSound() {
+  if (audioMode() != SOUND_FULL || screenOff || dimStage > 0) return false;
+  if (pet.awaitingStarter() || pet.isEgg() || pet.sleeping || pet.ceremony) return false;
+  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen) return false;
+  if (feedMenuUntil || confirmUntil || choiceKind || bathUntil || wildPromptUntil || petEventUntil) return false;
+  if (pet.evolving() || pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton()) return false;
+  return true;
+}
+
+void maybePlayAmbientSound(uint32_t now) {
+  if (!mainScreenReadyForAmbientSound()) {
+    nextAmbientSoundAt = now + 18000;
+    return;
+  }
+  if (nextAmbientSoundAt == 0) nextAmbientSoundAt = now + 22000 + random(18000);
+  if (now < nextAmbientSoundAt) return;
+  uint8_t r = (uint8_t)random(3);
+  sfxPlay(r == 0 ? SFX_HEART : (r == 1 ? SFX_EVENT_SPARKLE : SFX_MENU));
+  nextAmbientSoundAt = now + 28000 + random(26000);
+}
+
 void loop() {
   uint32_t now = millis();
   pet.update(now);
@@ -319,6 +341,7 @@ void loop() {
   pet.ensureDailyGoals();
   maybeOfferWildEncounter(now);
   maybeOfferPetEvent(now);
+  maybePlayAmbientSound(now);
 
   // pulsacion corta del PWR: pantalla on/off
   static uint32_t lastPwr = 0;
@@ -581,9 +604,9 @@ void onSwipeV(int dir) {
   if (wildPromptUntil) wildPromptUntil = 0;
   if (gameMenuOpen) return;
   if (gameOpen || galleryOpen || kbOpen || sackOpen || battleOpen || pet.ceremony) return;
-  if (clockOpen) { clockOpen = false; return; }
+  if (clockOpen) { clockOpen = false; sfxPlay(SFX_TAP); return; }
   if (cardOpen) {
-    if (dir < 0) cardOpen = false;  // arriba cierra la ficha
+    if (dir < 0) { cardOpen = false; sfxPlay(SFX_TAP); }  // arriba cierra la ficha
     return;
   }
   if (dir > 0) {                    // deslizar abajo: ajustar hora
@@ -591,6 +614,7 @@ void onSwipeV(int dir) {
   } else if (!pet.isEgg() && !confirmUntil && !feedMenuUntil) {
     cardOpen = true;                // deslizar arriba: ficha
     cardPage = 0;
+    sfxPlay(SFX_MENU);
   }
 }
 
@@ -603,7 +627,9 @@ void onSwipe(int dir) {
   if (gameOpen || kbOpen || clockOpen || battleOpen) return;
   if (cardOpen) {  // dentro de la ficha: cambiar paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
+    uint8_t old = cardPage;
     cardPage = p < 0 ? 0 : (p >= CARD_COUNT ? CARD_COUNT - 1 : p);
+    if (cardPage != old) sfxPlay(SFX_MENU);
     return;
   }
   if (!galleryOpen) {
@@ -612,6 +638,7 @@ void onSwipe(int dir) {
       galleryPage = 0;
       galleryDetail = 0;
       galleryDirty = true;
+      sfxPlay(SFX_MENU);
     }
     return;
   }
@@ -626,12 +653,14 @@ void onSwipe(int dir) {
   if (np < 0) {                // retroceder desde la primera = salir
     galleryOpen = false;
     galleryPmd.unload();
+    sfxPlay(SFX_TAP);
     return;
   }
   if (np > maxPage) np = maxPage;
   if (np != galleryPage) {
     galleryPage = np;
     galleryDirty = true;
+    sfxPlay(SFX_MENU);
   }
 }
 
@@ -699,6 +728,7 @@ void onTap(int16_t x, int16_t y) {
       startSack();
     } else if (y >= 400) {
       cardOpen = false;
+      sfxPlay(SFX_TAP);
     }
     return;
   }
@@ -790,7 +820,10 @@ void onTap(int16_t x, int16_t y) {
       Serial.printf("BTN %d\n", i);
       sfxPlay(SFX_TAP);
       if (i == 0) {
-        if (!pet.sleeping) feedMenuUntil = millis() + 6000;
+        if (!pet.sleeping) {
+          feedMenuUntil = millis() + 6000;
+          sfxPlay(SFX_MENU);
+        }
       } else if (i == 1) {
         if (!pet.sleeping) {
           gameMenuOpen = true;
@@ -1379,12 +1412,14 @@ void startSack() {
   sackHits = 0;
   sackShake = 0;
   sackNewHi = false;
+  sfxPlay(SFX_GAME_START);
 }
 
 void sackTap() {
   if (millis() >= sackUntil) return;  // ya termino el tiempo
   sackHits++;
   sackShake = 16;  // sacude el saco
+  if ((sackHits & 1) == 1) sfxPlay(SFX_PLAY);
 }
 
 void drawGameScene();  // prototipo (definida mas abajo)
@@ -1775,7 +1810,7 @@ void maybeOfferWildEncounter(uint32_t now) {
   wildPromptLevel = wildLevelFor(pet.level(), (uint8_t)random(100));
   wildPromptUntil = now + WILD_PROMPT_MS;
   scheduleNextWild(now);
-  sfxPlay(SFX_TAP);
+  sfxPlay(SFX_MENU);
 }
 
 void scheduleNextPetEvent(uint32_t now) {
@@ -1810,7 +1845,7 @@ void maybeOfferPetEvent(uint32_t now) {
   petEventType = (uint8_t)random(3);
   petEventUntil = now + PET_EVENT_PROMPT_MS;
   scheduleNextPetEvent(now);
-  sfxPlay(SFX_TAP);
+  sfxPlay(SFX_EVENT_SPARKLE);
 }
 
 bool inPetEventHit(int16_t x, int16_t y) {
@@ -2329,6 +2364,7 @@ void openClock() {
   clockH = (e / 3600) % 24;
   clockM = (e / 60) % 60;
   clockOpen = true;
+  sfxPlay(SFX_MENU);
 }
 
 void applyClock() {
@@ -3044,6 +3080,7 @@ void openKeyboard() {
   strncpy(nameBuf, pet.nick, sizeof(nameBuf) - 1);
   nameBuf[sizeof(nameBuf) - 1] = 0;
   nameLen = strlen(nameBuf);
+  sfxPlay(SFX_MENU);
 }
 
 void renderKeyboard() {
@@ -3084,6 +3121,7 @@ void keyboardTap(int16_t x, int16_t y) {
   if (col < 0 || col >= KB_COLS || row < 0 || row >= 5) return;
   int i = row * KB_COLS + col;
   if (i >= 30) return;
+  sfxPlay(SFX_TAP);
   if (i == 28) {  // borrar
     if (nameLen) nameBuf[--nameLen] = 0;
   } else if (i == 29) {  // OK
@@ -3278,11 +3316,13 @@ void galleryTap(int16_t x, int16_t y) {
     galleryDetail = 0;
     galleryPmd.unload();
     galleryDirty = true;
+    sfxPlay(SFX_TAP);
     return;
   }
   if (y < 46) {  // tocar la cabecera = salir
     galleryOpen = false;
     galleryPmd.unload();
+    sfxPlay(SFX_TAP);
     return;
   }
   if (y >= 68 && y < GAL_Y) {
@@ -3302,6 +3342,7 @@ void galleryTap(int16_t x, int16_t y) {
   if (dex <= 0) return;
   galleryDetail = dex;
   galleryPmd.load(dex, pet.isShinyRegistered(dex));
+  sfxPlay(SFX_MENU);
 }
 
 void drawBattery() {
@@ -3575,6 +3616,7 @@ void startBath() {
   if (pet.isEgg() || pet.sleeping || pet.ceremony || bathUntil) return;
   bathUntil = millis() + 3000;
   bathPending = true;
+  sfxPlay(SFX_EVENT_SPARKLE);
   int cx = (int)beh.x;
   for (auto &b : bubbles) {
     b.x = cx - 70 + random(140);
