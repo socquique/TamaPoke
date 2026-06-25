@@ -62,12 +62,13 @@ void pmuEnablePanel() {
 // el estado de energia (I2C) se cachea ~2 s: leerlo en cada frame del loop
 // metia trafico I2C inutil y podia oscilar (parpadeo de brillo)
 static uint32_t powerCacheT = 0;
+static uint32_t powerCacheMs = 2000;
 static int cachedPct = -1;
 static bool cachedCharging = false, cachedUsb = true;
 
 static void refreshPower() {
   uint32_t now = millis();
-  if (powerCacheT && now - powerCacheT < 2000) return;
+  if (powerCacheT && now - powerCacheT < powerCacheMs) return;
   powerCacheT = now ? now : 1;
   if (!pmuOk) { cachedPct = -1; cachedCharging = false; cachedUsb = true; return; }
   cachedPct = pmu.isBatteryConnect() ? pmu.getBatteryPercent() : -1;
@@ -78,6 +79,12 @@ static void refreshPower() {
 int batPercent() { refreshPower(); return cachedPct; }
 bool batCharging() { refreshPower(); return cachedCharging; }
 bool usbPresent() { refreshPower(); return cachedUsb; }
+
+void setPowerCacheInterval(uint32_t ms) {
+  if (ms < 500) ms = 500;
+  if (ms > 30000) ms = 30000;
+  powerCacheMs = ms;
+}
 
 void pwrSetup() {
   if (!pmuOk) return;

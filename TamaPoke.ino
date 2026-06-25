@@ -26,7 +26,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.24.1-type-i18n"
+#define FW_VERSION "1.24.2-sleep-power-fix"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -233,6 +233,7 @@ uint32_t lastRender = 0;
 uint32_t lastInteract = 0;
 uint8_t dimStage = 0;        // 0 despierto, 1 atenuado (90s), 2 casi apagado (5min)
 bool swallowGesture = false; // el toque que despierta no acciona nada
+uint32_t ignoreTouchUntil = 0;
 uint32_t holdStart = 0;     // pulsacion larga sobre el bicho
 uint32_t confirmUntil = 0;  // dialogo "soltar?" activo hasta este millis
 uint8_t choiceKind = 0;     // dialogo de decision: 0 ninguno, 1 evolucion, 2 despedida
@@ -349,7 +350,7 @@ void maybePlayAmbientSound(uint32_t now) {
 uint16_t renderIntervalMs() {
   if (gameOpen || sackOpen || battleOpen) return 85;
   if (!powerSave) return 100;
-  if (screenOff) return 1000;
+  if (screenOff) return 5000;
   if (dimStage >= 2) return 650;
   if (dimStage >= 1) return 350;
   if (galleryOpen || cardOpen || kbOpen || clockOpen || gameMenuOpen) return 160;
@@ -375,6 +376,7 @@ void loop() {
   handleTouch();
   handleSerial();
   ensureMon();
+  setPowerCacheInterval(powerSave ? 10000UL : 2000UL);
   pet.ensureDailyGoals();
   maybeOfferWildEncounter(now);
   maybeOfferPetEvent(now);
@@ -385,8 +387,16 @@ void loop() {
   if (now - lastPwr > 250) {
     lastPwr = now;
     if (pwrShortPressed()) {
+      bool wasOff = screenOff;
       screenOff = !screenOff;
-      if (!screenOff) lastInteract = now;
+      if (!screenOff) {
+        lastInteract = now;
+        if (wasOff) {
+          ignoreTouchUntil = now + 900;
+          swallowGesture = true;
+          wasPressed = false;
+        }
+      }
     }
   }
 
@@ -574,7 +584,13 @@ bool inPetZone(int16_t x, int16_t y) {
 // el toque se resuelve al LEVANTAR el dedo para distinguir tap de deslizar
 void handleTouch() {
   static uint32_t lastPoll = 0;
-  if (millis() - lastPoll < 20) return;  // 50 Hz le sobra a un dedo
+  uint32_t now = millis();
+  if (now < ignoreTouchUntil) {
+    gTouchIrq = false;
+    wasPressed = false;
+    return;
+  }
+  if (now - lastPoll < (powerSave && screenOff ? 80UL : 20UL)) return;  // 50 Hz activo; menos si pantalla apagada
   lastPoll = millis();
   // solo tocamos el bus si el chip aviso por INT o si el dedo sigue abajo (hay
   // que detectar el levantamiento). Leer el CST9217 dormido se colgaba ~1s y
