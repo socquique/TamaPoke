@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.23-minigames-v2"
+#define FW_VERSION "1.23.1-type-hitbox"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1500,8 +1500,8 @@ void typeTap(int16_t x, int16_t y) {
   if (y < 72) { gameOpen = false; sfxPlay(SFX_TAP); return; }
   int idx = -1;
   for (int i = 0; i < 3; i++) {
-    int bx = 58 + i * 120;
-    if (x >= bx && x <= bx + 104 && y >= 284 && y <= 338) idx = i;
+    int by = 210 + i * 60;
+    if (x >= 70 && x <= 396 && y >= by - 8 && y <= by + 56) idx = i;
   }
   if (idx < 0) return;
   if ((uint8_t)idx == typeCorrect) {
@@ -1892,28 +1892,29 @@ void renderTypeGame() {
   }
 
   const char *enemy = battleTypeName(typeEnemy);
-  gfx->fillRoundRect(118, 138, 230, 58, 14, lerp565(battleTypeColor(typeEnemy), UI_WHITE, 4, 8));
-  gfx->drawRoundRect(118, 138, 230, 58, 14, ink);
+  gfx->fillRoundRect(118, 126, 230, 54, 14, lerp565(battleTypeColor(typeEnemy), UI_WHITE, 4, 8));
+  gfx->drawRoundRect(118, 126, 230, 54, 14, ink);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(enemy) * 9, 156);
+  gfx->setCursor(CX - strlen(enemy) * 9, 143);
   gfx->print(enemy);
 
   for (int i = 0; i < 3; i++) {
-    int bx = 58 + i * 120;
+    int bx = 88;
+    int by = 210 + i * 60;
     const char *label = battleTypeName(typeChoice[i]);
-    gfx->fillRoundRect(bx, 284, 104, 54, 12, lerp565(battleTypeColor(typeChoice[i]), UI_WHITE, 5, 8));
-    gfx->drawRoundRect(bx, 284, 104, 54, 12, ink);
+    gfx->fillRoundRect(bx, by, 290, 48, 12, lerp565(battleTypeColor(typeChoice[i]), UI_WHITE, 5, 8));
+    gfx->drawRoundRect(bx, by, 290, 48, 12, ink);
     gfx->setTextColor(UI_INK);
-    gfx->setTextSize(1);
-    gfx->setCursor(bx + (104 - (int)strlen(label) * 6) / 2, 306);
+    gfx->setTextSize(2);
+    gfx->setCursor(bx + (290 - (int)strlen(label) * 12) / 2, by + 17);
     gfx->print(label);
   }
   int bw = 280;
   int fw = (int)((uint32_t)bw * (typeUntil - now) / 4200);
   if (fw < 0) fw = 0;
-  gfx->fillRoundRect(CX - bw / 2, 362, bw, 16, 5, UI_TRACK);
-  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 362, fw, 16, 5, UI_BAR_OK);
+  gfx->fillRoundRect(CX - bw / 2, 392, bw, 14, 5, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 392, fw, 14, 5, UI_BAR_OK);
   gfx->flush();
 }
 
