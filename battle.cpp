@@ -190,8 +190,8 @@ uint8_t attackPowerPct(BattleAction action) {
 
 uint8_t enemyDodgeChance(const BattleRuntime &battle, BattleAction action) {
   int chance = battle.enemy.spe > battle.player.spe ? 18 : 10;
-  if (action == BATTLE_ATTACK_QUICK) chance -= 5;
-  else if (action == BATTLE_ATTACK_HEAVY) chance += 18;
+  if (action == BATTLE_ATTACK_QUICK) chance -= 9;
+  else if (action == BATTLE_ATTACK_HEAVY) chance += 22;
   if (chance < 0) chance = 0;
   if (chance > 45) chance = 45;
   return (uint8_t)chance;
@@ -281,8 +281,8 @@ BattleTurnResult stepBattle(BattleRuntime &battle, BattleAction action, uint8_t 
   if (action == BATTLE_REST) {
     turn.playerRested = true;
     battle.restUsesLeft--;
-    uint16_t heal = battle.playerMaxHp / 5;
-    if (heal < 4) heal = 4;
+    uint16_t heal = (uint16_t)((uint32_t)battle.playerMaxHp * 28 / 100);
+    if (heal < 6) heal = 6;
     uint16_t missing = battle.playerMaxHp - battle.playerHp;
     turn.playerHeal = heal > missing ? missing : heal;
     battle.playerHp += turn.playerHeal;
@@ -298,7 +298,8 @@ BattleTurnResult stepBattle(BattleRuntime &battle, BattleAction action, uint8_t 
     }
   }
 
-  if (battle.enemyHp > 0 && !turn.enemyDodged) {
+  bool enemyActs = battle.enemyHp > 0 && (!turn.enemyDodged || action == BATTLE_ATTACK_HEAVY);
+  if (enemyActs) {
     uint16_t enemyHit = cappedTurnDamage(battle.enemy, battle.player, battle.playerMaxHp, 99 - luck, false, 100);
     if (action == BATTLE_DODGE) {
       if (luck < 85) {
@@ -309,6 +310,18 @@ BattleTurnResult stepBattle(BattleRuntime &battle, BattleAction action, uint8_t 
       } else {
         enemyHit = enemyHit > 2 ? enemyHit / 3 : 1;
       }
+    } else if (action == BATTLE_ATTACK_QUICK) {
+      turn.quickGuard = true;
+      enemyHit = (uint16_t)((uint32_t)enemyHit * 85 / 100);
+      if (enemyHit == 0) enemyHit = 1;
+    } else if (action == BATTLE_ATTACK_HEAVY) {
+      turn.heavyRisk = true;
+      enemyHit = (uint16_t)((uint32_t)enemyHit * 120 / 100);
+      if (enemyHit == 0) enemyHit = 1;
+    } else if (action == BATTLE_REST) {
+      turn.playerGuarded = true;
+      enemyHit = (uint16_t)((uint32_t)enemyHit * 70 / 100);
+      if (enemyHit == 0) enemyHit = 1;
     }
     if (enemyHit > 0) {
       turn.enemyDamage = enemyHit;

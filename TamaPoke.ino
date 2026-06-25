@@ -11,6 +11,7 @@
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <Preferences.h>
 #include "Arduino_GFX_Library.h"
 #include "TouchDrvCSTXXX.hpp"
 #include "pin_config.h"
@@ -25,7 +26,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.23.1-type-hitbox"
+#define FW_VERSION "1.24-sound-battle-power"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -74,6 +75,7 @@ uint8_t boxPage = 0;
 uint8_t boxSort = 0;          // 0 dex, 1 tipo, 2 criados primero
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
+bool powerSave = false;       // ahorro opcional: off por defecto
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
@@ -137,6 +139,7 @@ bool battleCatchDone = false;
 bool battleCatchSuccess = false;
 bool battleRespectCatch = false;
 uint8_t battleCatchChance = 0;
+bool battleLowHpWarned = false;
 
 #define WILD_COOLDOWN_MS (20UL * 60UL * 1000UL)
 #define WILD_PROMPT_MS 20000UL
@@ -168,6 +171,21 @@ int flashIdxForDex(int16_t dex) {
 #define PET_CY 202  // centro vertical del sprite
 
 static const uint16_t INK_K = 0x18C4;  // spriteColor('k')
+
+void loadPowerSave() {
+  Preferences p;
+  p.begin("tamapoke", true);
+  powerSave = p.getBool("psave", false);
+  p.end();
+}
+
+void setPowerSave(bool on) {
+  powerSave = on;
+  Preferences p;
+  p.begin("tamapoke", false);
+  p.putBool("psave", powerSave);
+  p.end();
+}
 
 // botones de icono siguiendo el arco inferior de la pantalla redonda
 // (los exteriores van mas altos para no salirse del circulo)
@@ -283,6 +301,7 @@ void setup() {
     Serial.println("RTC sin hora: sembrado, sin progresion offline esta vez");
   }
   pet.syncClock(e);
+  loadPowerSave();
 
   audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
 
@@ -317,14 +336,24 @@ bool mainScreenReadyForAmbientSound() {
 
 void maybePlayAmbientSound(uint32_t now) {
   if (!mainScreenReadyForAmbientSound()) {
-    nextAmbientSoundAt = now + 18000;
+    nextAmbientSoundAt = now + 9000;
     return;
   }
-  if (nextAmbientSoundAt == 0) nextAmbientSoundAt = now + 22000 + random(18000);
+  if (nextAmbientSoundAt == 0) nextAmbientSoundAt = now + 8000 + random(8000);
   if (now < nextAmbientSoundAt) return;
   uint8_t r = (uint8_t)random(3);
   sfxPlay(r == 0 ? SFX_HEART : (r == 1 ? SFX_EVENT_SPARKLE : SFX_MENU));
-  nextAmbientSoundAt = now + 28000 + random(26000);
+  nextAmbientSoundAt = now + 8000 + random(8000);
+}
+
+uint16_t renderIntervalMs() {
+  if (gameOpen || sackOpen || battleOpen) return 85;
+  if (!powerSave) return 100;
+  if (screenOff) return 1000;
+  if (dimStage >= 2) return 650;
+  if (dimStage >= 1) return 350;
+  if (galleryOpen || cardOpen || kbOpen || clockOpen || gameMenuOpen) return 160;
+  return 180;
 }
 
 void loop() {
@@ -374,7 +403,8 @@ void loop() {
 
   // anota la hora real cada 30 s (se persiste en cada save del juego)
   static uint32_t lastClock = 0;
-  if (now - lastClock > 30000) {
+  uint32_t clockPollMs = powerSave ? 60000UL : 30000UL;
+  if (now - lastClock > clockPollMs) {
     lastClock = now;
     uint32_t e = rtcEpoch();
     if (e) pet.lastSeenEpoch = e;
@@ -382,7 +412,8 @@ void loop() {
 
   // latido de salud cada 5 min (para el soak test; se descarta si no hay monitor)
   static uint32_t lastHealth = 0;
-  if (now - lastHealth > 300000) {
+  uint32_t healthMs = powerSave ? 600000UL : 300000UL;
+  if (now - lastHealth > healthMs) {
     lastHealth = now;
     Serial.printf("HEALTH up=%lus heap=%u min=%u\n", (unsigned long)(now / 1000),
                   ESP.getFreeHeap(), ESP.getMinFreeHeap());
@@ -391,7 +422,7 @@ void loop() {
   // 85 ms en juego/saco: margen seguro para que el redibujado no pise el envio
   // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
   // sprites grandes el dibujo tarda mas, asi que se deja colchon)
-  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen || battleOpen) ? 85 : 100)) {
+  if (now - lastRender >= renderIntervalMs()) {
     lastRender = now;
     render();
   }
@@ -1382,7 +1413,7 @@ void gameTap(int16_t x, int16_t y) {
     uint32_t now = millis();
     if (now - ballLastHitAt < 240 || ballVY < -0.8f) return;
     gameScore++;
-    sfxPlay(SFX_PLAY);
+    sfxPlay(SFX_MINIGAME_OK);
     // impulso moderado; el bloqueo evita encadenar rebotes al inicio
     float lift = 5.85f + (gameScore > 14 ? 3.0f : gameScore * 0.18f);
     ballVY = -lift;
@@ -1413,12 +1444,12 @@ void catchTap(int16_t x, int16_t y) {
     hitX = catchX;
     hitY = catchY;
     hitTime = millis();
-    sfxPlay(SFX_PLAY);
+    sfxPlay(SFX_MINIGAME_OK);
     spawnCatchTarget();
   } else if (++gameMisses >= 3) {
     finishCatchGame();
   } else {
-    sfxPlay(SFX_DENY);
+    sfxPlay(SFX_MINIGAME_BAD);
   }
 }
 
@@ -1447,11 +1478,11 @@ void memoTap(int16_t x, int16_t y) {
   int pad = memoPadAt(x, y);
   if (pad < 0) return;
   if (pad != memoSeq[memoInput]) {
-    sfxPlay(SFX_DENY);
+    sfxPlay(SFX_MINIGAME_BAD);
     finishMemoGame();
     return;
   }
-  sfxPlay(SFX_PLAY);
+  sfxPlay(SFX_MINIGAME_OK);
   memoInput++;
   if (memoInput >= memoLen) {
     memoRounds++;
@@ -1480,12 +1511,12 @@ void cleanTap(int16_t x, int16_t y) {
       hitX = cleanX[i];
       hitY = cleanY[i];
       hitTime = millis();
-      sfxPlay(SFX_PLAY);
+      sfxPlay(SFX_MINIGAME_OK);
       return;
     }
   }
   if (++gameMisses >= 3) finishCleanGame();
-  else sfxPlay(SFX_DENY);
+  else sfxPlay(SFX_MINIGAME_BAD);
 }
 
 void finishTypeGame() {
@@ -1506,11 +1537,11 @@ void typeTap(int16_t x, int16_t y) {
   if (idx < 0) return;
   if ((uint8_t)idx == typeCorrect) {
     gameScore++;
-    sfxPlay(SFX_PLAY);
+    sfxPlay(SFX_MINIGAME_OK);
     nextTypeQuestion();
   } else {
     if (++gameMisses >= 3) finishTypeGame();
-    else sfxPlay(SFX_DENY);
+    else sfxPlay(SFX_MINIGAME_BAD);
   }
 }
 
@@ -1868,7 +1899,7 @@ void renderTypeGame() {
       finishTypeGame();
       return;
     }
-    sfxPlay(SFX_DENY);
+    sfxPlay(SFX_MINIGAME_BAD);
     nextTypeQuestion();
   }
   drawGameScene();
@@ -2175,6 +2206,7 @@ void startBattleWith(int16_t forcedDex, uint8_t forcedLevel) {
   battleReward = {};
   battleMsg[0] = 0;
   battleAttackMenuUntil = 0;
+  battleLowHpWarned = false;
   battleCatchOffered = false;
   battleCatchTried = false;
   battleCatchDone = false;
@@ -2223,7 +2255,9 @@ void performBattleAction(BattleAction action) {
   } else if (battleTurn.counterReady) {
     snprintf(battleMsg, sizeof(battleMsg), T(S_COUNTER_READY));
   } else if (battleTurn.playerRested) {
-    snprintf(battleMsg, sizeof(battleMsg), T(S_RESTED_FMT), battleTurn.playerHeal);
+    char healMsg[18];
+    snprintf(healMsg, sizeof(healMsg), T(S_RESTED_FMT), battleTurn.playerHeal);
+    snprintf(battleMsg, sizeof(battleMsg), "%s %s", healMsg, T(S_GUARD));
   } else if (battleTurn.playerDamage > 0) {
     if (battleTurn.playerTypePct > 100) snprintf(battleMsg, sizeof(battleMsg), "%s %u", T(S_EFFECTIVE), battleTurn.playerDamage);
     else if (battleTurn.playerTypePct < 100) snprintf(battleMsg, sizeof(battleMsg), "%s %u", T(S_NOT_EFFECTIVE), battleTurn.playerDamage);
@@ -2239,9 +2273,18 @@ void performBattleAction(BattleAction action) {
     finishBattle();
     return;
   }
+  if (!battleLowHpWarned && battleRun.playerHp > 0 && battleRun.playerHp <= battleRun.playerMaxHp * 3 / 10) {
+    battleLowHpWarned = true;
+    sfxPlay(SFX_LOW_HP);
+  }
   if (battleTurn.restFailed) sfxPlay(SFX_DENY);
   else if (battleTurn.counterReady) sfxPlay(SFX_COUNTER);
   else if (battleTurn.playerRested) sfxPlay(SFX_REST);
+  else if (action == BATTLE_ATTACK_QUICK) sfxPlay(SFX_ATTACK_QUICK);
+  else if (action == BATTLE_ATTACK_HEAVY) sfxPlay(SFX_ATTACK_HEAVY);
+  else if (battleTurn.playerDamage > 0 && battleTurn.playerTypePct > 100) sfxPlay(SFX_EFFECTIVE);
+  else if (battleTurn.playerDamage > 0 && battleTurn.playerTypePct < 100) sfxPlay(SFX_WEAK_HIT);
+  else if (battleTurn.enemyDamage > 0) sfxPlay(SFX_ENEMY_HIT);
   else sfxPlay(battleTurn.playerDamage > 0 ? SFX_PLAY : SFX_TAP);
 }
 
@@ -2664,6 +2707,8 @@ void drawClockBtn(int x, int y, const char *l) {
 #define LANG_PILL_W 96
 #define SOUND_PILL_X 24
 #define SOUND_PILL_W 116
+#define PSAVE_PILL_X 150
+#define PSAVE_PILL_W 176
 
 const char *soundModeLabel() {
   switch (audioMode()) {
@@ -2683,6 +2728,10 @@ uint8_t nextSoundMode() {
   }
 }
 static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT" };
+
+const char *powerSaveLabel() {
+  return powerSave ? T(S_PSAVE_ON) : T(S_PSAVE_OFF);
+}
 
 void drawStatusLine(int y, const char *label, const char *value, uint16_t valueColor) {
   gfx->setTextSize(1);
@@ -2729,6 +2778,15 @@ void renderClock() {
   gfx->setCursor(SOUND_PILL_X + (SOUND_PILL_W - (int)strlen(sl) * 12) / 2, LANG_PILL_Y + 8);
   gfx->print(sl);
 
+  // selector de ahorro opcional: apagado por defecto, persistente
+  const char *pl = powerSaveLabel();
+  gfx->fillRoundRect(PSAVE_PILL_X, LANG_PILL_Y, PSAVE_PILL_W, LANG_PILL_H, 8, powerSave ? UI_BAR_WARN : UI_WHITE);
+  gfx->drawRoundRect(PSAVE_PILL_X, LANG_PILL_Y, PSAVE_PILL_W, LANG_PILL_H, 8, UI_INK);
+  gfx->setTextColor(powerSave ? UI_BG_DAY : UI_INK);
+  gfx->setTextSize(2);
+  gfx->setCursor(PSAVE_PILL_X + (PSAVE_PILL_W - (int)strlen(pl) * 12) / 2, LANG_PILL_Y + 8);
+  gfx->print(pl);
+
   // selector de idioma: una pildora que cicla los 6 idiomas al tocar
   gfx->fillRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_WHITE);
   gfx->drawRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_INK);
@@ -2770,6 +2828,11 @@ void clockTap(int16_t x, int16_t y) {
     if (x >= SOUND_PILL_X && x < SOUND_PILL_X + SOUND_PILL_W) {
       audioSetMode(nextSoundMode());
       if (audioEnabled()) sfxPlay(SFX_LEVEL);  // confirma el nuevo modo si no esta apagado
+      return;
+    }
+    if (x >= PSAVE_PILL_X && x < PSAVE_PILL_X + PSAVE_PILL_W) {
+      setPowerSave(!powerSave);
+      sfxPlay(powerSave ? SFX_MENU : SFX_TAP);
       return;
     }
     if (x >= LANG_PILL_X && x < LANG_PILL_X + LANG_PILL_W) {  // cicla idioma

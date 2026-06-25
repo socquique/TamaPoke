@@ -91,9 +91,9 @@ struct Note {
 #define SL(f, ms, to, vol, w) {f, ms, (int16_t)((to) - (f)), vol, w}
 #define SIL(ms)              {0, ms, 0, 0, W_SQUARE}
 
-static const Note N_TAP[]    = {SQ(1175, 38, 78)};
+static const Note N_TAP[]    = {SQ(1175, 52, 88)};
 static const Note N_EAT[]    = {SOFT(523, 42, 64), SIL(12), SOFT(659, 50, 70)};
-static const Note N_PLAY[]   = {SL(760, 55, 1020, 84, W_TRI), SQ(1319, 45, 76)};
+static const Note N_PLAY[]   = {SL(760, 65, 1080, 92, W_TRI), SQ(1397, 55, 86)};
 static const Note N_HEART[]  = {SOFT(1047, 70, 56), SIL(18), SOFT(1319, 105, 68)};
 static const Note N_HATCH[]  = {TRI(523, 70, 60), TRI(659, 70, 64), TRI(784, 95, 68), SL(880, 190, 1320, 72, W_TRI)};
 static const Note N_EVOLVE[] = {SL(392, 100, 560, 58, W_TRI), SL(523, 100, 740, 62, W_TRI), SL(659, 110, 960, 66, W_TRI), SL(880, 210, 1480, 76, W_SOFT)};
@@ -109,11 +109,19 @@ static const Note N_DAILY_GOAL[]   = {TRI(1175, 50, 68), SIL(22), TRI(1568, 70, 
 static const Note N_EVENT_SPARKLE[] = {NS(35, 36), TRI(1568, 42, 56), TRI(1976, 62, 60), SIL(18), TRI(1760, 56, 54)};
 static const Note N_REST[]         = {SL(523, 125, 392, 48, W_SOFT), SOFT(330, 170, 42)};
 static const Note N_COUNTER[]      = {SL(784, 75, 1175, 62, W_TRI), SIL(16), SQ(1568, 70, 74), NS(40, 42)};
-static const Note N_MENU[]         = {TRI(988, 42, 74), SQ(1319, 50, 80)};
+static const Note N_MENU[]         = {TRI(988, 56, 84), SQ(1319, 62, 90)};
 static const Note N_GAME_START[]   = {TRI(659, 58, 72), TRI(880, 64, 78), SQ(1175, 74, 82)};
 static const Note N_BALL_BOUNCE[]  = {SL(820, 42, 520, 72, W_SQUARE)};
 static const Note N_BALL_MISS[]    = {NS(55, 56), SL(360, 110, 210, 68, W_SOFT)};
 static const Note N_MEMO_STEP[]    = {SQ(1047, 54, 68)};
+static const Note N_ATTACK_QUICK[] = {SL(980, 42, 1320, 90, W_TRI), SQ(1760, 38, 82)};
+static const Note N_ATTACK_HEAVY[] = {NS(36, 46), SL(330, 74, 700, 92, W_SQUARE), SQ(880, 52, 86)};
+static const Note N_ENEMY_HIT[]    = {SL(300, 70, 190, 82, W_SQUARE), NS(38, 44)};
+static const Note N_EFFECTIVE[]    = {TRI(988, 48, 82), TRI(1319, 54, 90), SQ(1760, 64, 86)};
+static const Note N_WEAK_HIT[]     = {SOFT(420, 70, 58), SOFT(360, 90, 50)};
+static const Note N_MINIGAME_OK[]  = {SL(1047, 46, 1568, 88, W_TRI), TRI(1760, 42, 78)};
+static const Note N_MINIGAME_BAD[] = {NS(42, 52), SL(300, 95, 180, 70, W_SOFT)};
+static const Note N_LOW_HP[]       = {SQ(740, 70, 74), SIL(38), SQ(740, 70, 74)};
 
 struct SfxDef { const Note *n; uint8_t len; };
 static const SfxDef SFX[SFX_COUNT] = {
@@ -122,6 +130,8 @@ static const SfxDef SFX[SFX_COUNT] = {
   {N_BATTLE_WIN, 4}, {N_BATTLE_LOSS, 3}, {N_CATCH_OK, 3}, {N_CATCH_FAIL, 4},
   {N_DAILY_GOAL, 4}, {N_EVENT_SPARKLE, 5}, {N_REST, 2}, {N_COUNTER, 4},
   {N_MENU, 2}, {N_GAME_START, 3}, {N_BALL_BOUNCE, 1}, {N_BALL_MISS, 2}, {N_MEMO_STEP, 1},
+  {N_ATTACK_QUICK, 2}, {N_ATTACK_HEAVY, 3}, {N_ENEMY_HIT, 2}, {N_EFFECTIVE, 3},
+  {N_WEAK_HIT, 2}, {N_MINIGAME_OK, 2}, {N_MINIGAME_BAD, 2}, {N_LOW_HP, 3},
 };
 
 static const uint8_t SFX_MIN_MODE[SFX_COUNT] = {
@@ -148,6 +158,14 @@ static const uint8_t SFX_MIN_MODE[SFX_COUNT] = {
   SOUND_FULL, // BALL_BOUNCE
   SOUND_FULL, // BALL_MISS
   SOUND_FULL, // MEMO_STEP
+  SOUND_FULL, // ATTACK_QUICK
+  SOUND_FULL, // ATTACK_HEAVY
+  SOUND_FULL, // ENEMY_HIT
+  SOUND_MED,  // EFFECTIVE
+  SOUND_FULL, // WEAK_HIT
+  SOUND_FULL, // MINIGAME_OK
+  SOUND_FULL, // MINIGAME_BAD
+  SOUND_MED,  // LOW_HP
 };
 
 static int16_t buf[256 * 2];  // estéreo intercalado (L=R)
@@ -219,8 +237,8 @@ static void audioTask(void *) {
       delay(8);                // deja que arranque
       const SfxDef &d = SFX[id];
       for (uint8_t i = 0; i < d.len; i++) playTone(d.n[i]);
-      delay(60);               // deja salir la cola del DMA antes de cortar
-      digitalWrite(PA, LOW);   // apaga el amp entre sonidos (evita siseo)
+      delay(gMode == SOUND_FULL ? 90 : 60);  // deja salir la cola del DMA antes de cortar
+      digitalWrite(PA, LOW);                 // apaga el amp entre sonidos (evita siseo)
     }
   }
 }
@@ -249,14 +267,14 @@ void audioBegin() {
   if (gMode > SOUND_FULL) gMode = SOUND_FULL;
 
   gReady = true;
-  gQ = xQueueCreate(16, sizeof(uint8_t));
+  gQ = xQueueCreate(32, sizeof(uint8_t));
   xTaskCreatePinnedToCore(audioTask, "audio", 4096, nullptr, 1, nullptr, 0);
   sfxPlay(SFX_HATCH);  // jingle de arranque (confirma que suena)
 }
 
 void sfxPlay(uint8_t id) {
   if (gReady && gMode != SOUND_OFF && gQ && id < SFX_COUNT && gMode >= SFX_MIN_MODE[id])
-    xQueueSend(gQ, &id, 0);  // descarta si la cola esta llena
+    xQueueSend(gQ, &id, gMode == SOUND_FULL ? pdMS_TO_TICKS(18) : 0);
 }
 
 void audioSetEnabled(bool on) {

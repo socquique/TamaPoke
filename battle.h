@@ -55,6 +55,9 @@ struct BattleTurnResult {
   bool playerDodged;
   bool enemyDodged;
   bool playerRested;
+  bool playerGuarded;
+  bool quickGuard;
+  bool heavyRisk;
   bool counterReady;
   bool counterUsed;
   bool restFailed;

@@ -209,6 +209,22 @@ static void testRestHealsOnlyToMaxHpAndConsumesUse() {
   EXPECT_TRUE(battle.playerHp >= battle.playerMaxHp - 1);
 }
 
+static void testRestHealsMoreAndGuardsIncomingDamage() {
+  BattleStats player = { 0, 50, 60, 50, 10 };
+  BattleStats enemy = { 0, 120, 40, 40, 10 };
+  BattleRuntime normal = beginBattleRuntime(player, enemy);
+  BattleRuntime resting = beginBattleRuntime(player, enemy);
+  resting.playerHp = resting.playerMaxHp / 2;
+
+  BattleTurnResult normalTurn = stepBattle(normal, BATTLE_ATTACK, 50);
+  BattleTurnResult restTurn = stepBattle(resting, BATTLE_REST, 50);
+
+  EXPECT_TRUE(restTurn.playerRested);
+  EXPECT_TRUE(restTurn.playerGuarded);
+  EXPECT_TRUE(restTurn.playerHeal >= resting.playerMaxHp / 4);
+  EXPECT_TRUE(restTurn.enemyDamage < normalTurn.enemyDamage);
+}
+
 static void testRestIsLimitedToTwoUses() {
   BattleRuntime battle = beginBattleRuntime({ 0, 50, 60, 50, 10 },
                                             { 0, 1, 40, 40, 10 });
@@ -273,6 +289,21 @@ static void testHeavyAttackCanBeDodgedWhenQuickWouldHit() {
   EXPECT_TRUE(heavyTurn.enemyDodged);
   EXPECT_TRUE(quickTurn.playerDamage > 0);
   EXPECT_EQ(heavyTurn.playerDamage, 0);
+  EXPECT_TRUE(heavyTurn.enemyDamage > 0);
+  EXPECT_TRUE(heavyTurn.heavyRisk);
+}
+
+static void testQuickAttackReducesIncomingDamageRisk() {
+  BattleStats player = { 0, 90, 45, 70, 20 };
+  BattleStats enemy = { 0, 100, 35, 40, 20 };
+  BattleRuntime normal = beginBattleRuntime(player, enemy);
+  BattleRuntime quick = beginBattleRuntime(player, enemy);
+
+  BattleTurnResult normalTurn = stepBattle(normal, BATTLE_ATTACK, 50);
+  BattleTurnResult quickTurn = stepBattle(quick, BATTLE_ATTACK_QUICK, 50);
+
+  EXPECT_TRUE(quickTurn.quickGuard);
+  EXPECT_TRUE(quickTurn.enemyDamage < normalTurn.enemyDamage);
 }
 
 static void testTypeAdvantageLightlyChangesDamage() {
@@ -343,10 +374,12 @@ int main() {
   testDodgePreventsEnemyDamageDeterministically();
   testDodgePartialFailureStillMitigatesDamage();
   testRestHealsOnlyToMaxHpAndConsumesUse();
+  testRestHealsMoreAndGuardsIncomingDamage();
   testRestIsLimitedToTwoUses();
   testCounterBoostsNextAttackDamage();
   testQuickAndHeavyAttackDamageTradeoff();
   testHeavyAttackCanBeDodgedWhenQuickWouldHit();
+  testQuickAttackReducesIncomingDamageRisk();
   testTypeAdvantageLightlyChangesDamage();
   testTypeEffectHelperHandlesDualTypes();
   testCounterDamageStillUsesTurnCap();
