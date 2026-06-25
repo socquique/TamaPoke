@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.22-sound-v3"
+#define FW_VERSION "1.22.1-sound-full"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -718,7 +718,7 @@ void onTap(int16_t x, int16_t y) {
     if (x >= 88 && x <= 378 && y >= 176 && y <= 224) startGame();
     else if (x >= 88 && x <= 378 && y >= 236 && y <= 284) startCatchGame();
     else if (x >= 88 && x <= 378 && y >= 296 && y <= 344) startMemoGame();
-    else gameMenuOpen = false;
+    else { gameMenuOpen = false; sfxPlay(SFX_TAP); }
     return;
   }
   if (wildPromptUntil) {
@@ -792,7 +792,10 @@ void onTap(int16_t x, int16_t y) {
       if (i == 0) {
         if (!pet.sleeping) feedMenuUntil = millis() + 6000;
       } else if (i == 1) {
-        if (!pet.sleeping) gameMenuOpen = true;
+        if (!pet.sleeping) {
+          gameMenuOpen = true;
+          sfxPlay(SFX_MENU);
+        }
       } else if (i == 2) {
         pet.toggleLight();
       } else {
@@ -1160,6 +1163,7 @@ void startGame() {
   ballLastHitAt = 0;
   gamePetX = 233;
   respawnBall();
+  sfxPlay(SFX_GAME_START);
 }
 
 void spawnCatchTarget() {
@@ -1185,6 +1189,7 @@ void startCatchGame() {
   gameGain = 0;
   catchUntil = millis() + 20000;
   spawnCatchTarget();
+  sfxPlay(SFX_GAME_START);
 }
 
 void startMemoRound() {
@@ -1207,6 +1212,7 @@ void startMemoGame() {
   memoLen = 0;
   memoRounds = 0;
   startMemoRound();
+  sfxPlay(SFX_GAME_START);
 }
 
 void respawnBall() {
@@ -1236,6 +1242,7 @@ void gameTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
   if (y < 72) {  // tocar la cabecera = abandonar sin premio
     gameOpen = false;
+    sfxPlay(SFX_TAP);
     return;
   }
   float dx = ballX - x, dy = ballY - y;
@@ -1268,7 +1275,7 @@ void finishCatchGame() {
 
 void catchTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
-  if (y < 72) { gameOpen = false; return; }
+  if (y < 72) { gameOpen = false; sfxPlay(SFX_TAP); return; }
   int dx = x - catchX, dy = y - catchY;
   if (dx * dx + dy * dy <= 52 * 52) {
     gameScore++;
@@ -1304,7 +1311,7 @@ int memoPadAt(int16_t x, int16_t y) {
 
 void memoTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
-  if (y < 72) { gameOpen = false; return; }
+  if (y < 72) { gameOpen = false; sfxPlay(SFX_TAP); return; }
   if (memoShowing) return;
   int pad = memoPadAt(x, y);
   if (pad < 0) return;
@@ -1339,6 +1346,7 @@ void stepGame() {
     if (dot > 0) {
       ballVX = (ballVX - 2 * dot * nx) * 0.94f;
       ballVY = (ballVY - 2 * dot * ny) * 0.94f;
+      sfxPlay(SFX_BALL_BOUNCE);
     }
     ballX = CX + nx * 205;
     ballY = CY + ny * 205;
@@ -1351,6 +1359,7 @@ void stepGame() {
       gameOverUntil = millis() + 4000;
     } else {
       respawnBall();
+      sfxPlay(SFX_BALL_MISS);
     }
   }
   // el bicho la sigue por abajo
@@ -1566,6 +1575,7 @@ void renderCatchGame() {
 
 void stepMemoGame() {
   if (!memoShowing || millis() < memoNextAt) return;
+  sfxPlay(SFX_MEMO_STEP);
   memoShow++;
   if (memoShow >= memoLen) {
     memoShowing = false;

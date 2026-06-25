@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://shadowenemyx.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.22--sound--v3-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.22.1--sound--full-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/ShadowEnemyx/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/ShadowEnemyx/TamaPoke/stargazers)
@@ -85,6 +85,20 @@ While **awake**, per minute:
 - 🌙 **Sleep:** rest — ENE **+6/min**, needs drain ~**4× slower** with floors
   (FOOD 30 / JOY 35 / HYG 45). No poops, no slip-ups, can't run away while asleep.
 
+### Play menu and minigames
+Tap **Play** to open a small menu:
+
+- **BALL**: keep the Pokéball in the air by tapping it. It starts fast, gravity
+  rises with score, wall bounces matter, and missed drops end the run after 3
+  misses. Rewards joy and SPEED training.
+- **CATCH**: tap the appearing berry/icon before it disappears. Targets vanish
+  faster as your score rises; 3 mistakes or the timer ends the run. Rewards joy
+  and SPEED training, with small food/energy cost.
+- **MEMO**: watch the 4 pads flash, then repeat the sequence. Each cleared round
+  adds one more step. Rewards DEFENSE training plus small joy/bond.
+
+All minigame records are saved and shown on the Personality/Records area.
+
 ### Eggs & who you get (spawn odds)
 - **First ever pet:** you pick a starter — **Bulbasaur / Charmander / Squirtle**.
 - Hatch the egg: tap it **3×** (or wait — it hatches on its own).
@@ -130,7 +144,9 @@ After any ending, a **new egg** appears.
   neglect. Both streak & bond improve egg/shiny odds.
 - **8 medals** (Lv10/25/50, favorite berry found, 7-day streak, max bond, final form,
   "fit" = weight 0 & no slip-ups), per-pet + a global counter.
-- **Pokédex:** raising a species registers it; **151 + shinies** to complete.
+- **Pokédex:** raising a species registers it; caught wild Pokémon get a separate
+  caught marker. The gallery can show known, raised and caught entries, with
+  localized Pokémon names in all supported languages.
 
 ### Battle stats
 ATK / DEF / SPD = real **Gen-1 base** × genes + level + training (STRENGTH ← bag,
@@ -143,6 +159,27 @@ separately in the Pokédex and do not replace the active pet.
 Wild levels skew fairer now: most are near your level, some are a few levels
 below, and rare stronger fights still happen. If you lose but bring the wild
 Pokémon below 30% HP, a low-chance respect catch may appear.
+
+Battle actions:
+
+- **Attack** opens quick/heavy attack choices. Quick is safer; heavy is stronger
+  but less reliable.
+- **Dodge** can avoid damage and prepares a counter. The next attack gets a
+  moderate damage boost, still capped to avoid cheap one-hit fights.
+- **Rest** heals during battle but only has 2 uses per fight.
+- **Run** leaves the fight with no reward or catch chance.
+
+Types matter in both directions: effective and weak matchups adjust damage, and
+type labels are visible in battle.
+
+Catch rules:
+
+- After a **win**, you get exactly one optional catch attempt: **CATCH** or
+  **LEAVE**.
+- After a **close loss** with the enemy under 30% HP, a low "respect catch" may
+  appear. It can register the Pokémon, but gives no win, no streak and no reward.
+- Caught Pokémon go into the Pokédex/Box collection only; they do not replace your
+  active pet.
 
 ## Hardware
 
@@ -235,6 +272,32 @@ If one bottoms out it counts as a *slip-up*.
 
 **Physical PWR button:** short = screen on/off · long (4 s) = full power-off
 (the RTC stays alive, so time passes even while it's off).
+
+### Card view
+Swipe up from the main screen, then swipe between cards:
+
+- **Profile**: nickname, age, bond/streak, favorite berry info and rename access.
+- **Personality**: play-style personality plus records for ball, catch, memo and
+  training bag.
+- **Daily**: optional daily goals. Completing them gives small rewards; ignoring
+  them has no penalty.
+- **Box**: caught Pokémon collection with paging and sorting by Dex, type or
+  raised status.
+- **Battle**: ATK/DEF/SPD/weight, W/L/streak/best, **Wild Battle** and
+  **Strength Training**.
+- **Medals**: individual medals and progress.
+- **Progress**: level, next level, evolution readiness and care slip-ups.
+
+### Sound modes
+Swipe down to settings and tap the sound button:
+
+- **TON VIEL / SND ALL**: all feedback, including taps, menu sounds, minigame
+  start, ball bounces/misses, memo sequence steps and battle/catch effects.
+- **TON MIT / SND MID**: keeps important care, battle, catch, event and result
+  sounds, but removes many tiny repeated UI/minigame noises.
+- **TON WEN / SND LOW**: only major events such as hatch, evolution, medals,
+  level, win/loss and catch result.
+- **TON AUS / SND OFF**: silent.
 
 ## Decisions: you choose, and you watch
 

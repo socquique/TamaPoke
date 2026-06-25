@@ -109,6 +109,11 @@ static const Note N_DAILY_GOAL[]   = {TRI(1175, 50, 68), SIL(22), TRI(1568, 70, 
 static const Note N_EVENT_SPARKLE[] = {NS(35, 36), TRI(1568, 42, 56), TRI(1976, 62, 60), SIL(18), TRI(1760, 56, 54)};
 static const Note N_REST[]         = {SL(523, 125, 392, 48, W_SOFT), SOFT(330, 170, 42)};
 static const Note N_COUNTER[]      = {SL(784, 75, 1175, 62, W_TRI), SIL(16), SQ(1568, 70, 74), NS(40, 42)};
+static const Note N_MENU[]         = {TRI(988, 28, 50), TRI(1319, 34, 56)};
+static const Note N_GAME_START[]   = {TRI(659, 42, 58), TRI(880, 48, 64), TRI(1175, 58, 66)};
+static const Note N_BALL_BOUNCE[]  = {SL(720, 28, 540, 46, W_TRI)};
+static const Note N_BALL_MISS[]    = {NS(38, 34), SL(330, 80, 220, 50, W_SOFT)};
+static const Note N_MEMO_STEP[]    = {TRI(1047, 36, 44)};
 
 struct SfxDef { const Note *n; uint8_t len; };
 static const SfxDef SFX[SFX_COUNT] = {
@@ -116,6 +121,7 @@ static const SfxDef SFX[SFX_COUNT] = {
   {N_EVOLVE, 4}, {N_MEDAL, 5}, {N_DENY, 2}, {N_BYE, 3}, {N_LEVEL, 3},
   {N_BATTLE_WIN, 4}, {N_BATTLE_LOSS, 3}, {N_CATCH_OK, 3}, {N_CATCH_FAIL, 4},
   {N_DAILY_GOAL, 4}, {N_EVENT_SPARKLE, 5}, {N_REST, 2}, {N_COUNTER, 4},
+  {N_MENU, 2}, {N_GAME_START, 3}, {N_BALL_BOUNCE, 1}, {N_BALL_MISS, 2}, {N_MEMO_STEP, 1},
 };
 
 static const uint8_t SFX_MIN_MODE[SFX_COUNT] = {
@@ -137,6 +143,11 @@ static const uint8_t SFX_MIN_MODE[SFX_COUNT] = {
   SOUND_MED,  // EVENT_SPARKLE
   SOUND_MED,  // REST
   SOUND_MED,  // COUNTER
+  SOUND_FULL, // MENU
+  SOUND_MED,  // GAME_START
+  SOUND_FULL, // BALL_BOUNCE
+  SOUND_FULL, // BALL_MISS
+  SOUND_FULL, // MEMO_STEP
 };
 
 static int16_t buf[256 * 2];  // estéreo intercalado (L=R)
