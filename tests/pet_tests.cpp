@@ -272,6 +272,23 @@ static void testCaughtDexIsSeparateFromRaisedDex() {
   EXPECT_EQ(pet.knownDexCount(), 2);
 }
 
+static void testCaughtPokemonAdvanceDailyCatchGoal() {
+  Pet pet = hatchedPet(4);
+  pet.setClock(86400);
+  pet.ensureDailyGoals();
+
+  EXPECT_EQ(pet.dailyGoalType[2], DAILY_GOAL_CATCH);
+  EXPECT_EQ(pet.dailyGoalProgress[2], 0);
+
+  pet.registerCaught(66);
+  EXPECT_EQ(pet.dailyGoalProgress[2], 1);
+  EXPECT_TRUE(!pet.dailyGoalComplete(2));
+
+  pet.registerCaught(67);
+  EXPECT_EQ(pet.dailyGoalProgress[2], 2);
+  EXPECT_TRUE(!pet.dailyGoalComplete(2));
+}
+
 static void testDexRewardsApplyOnceAndCap() {
   Pet pet = hatchedPet(4);
   pet.joy = 98;
@@ -445,6 +462,7 @@ int main() {
   testDailyGoalsProgressAndReset();
   testDailyBattleGoalCompletesOnWinOnly();
   testCaughtDexIsSeparateFromRaisedDex();
+  testCaughtPokemonAdvanceDailyCatchGoal();
   testDexRewardsApplyOnceAndCap();
   testPetInteractionCooldownAndPersonalityBonus();
   testCatchChanceAndRolls();

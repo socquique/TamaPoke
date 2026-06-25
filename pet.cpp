@@ -456,6 +456,7 @@ void Pet::registerCaught(int16_t dex) {
   if (dex < 1 || dex > 151) return;
   bool wasKnown = isRegistered(dex) || isCaught(dex);
   dexCaught[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+  noteDailyGoal(DAILY_GOAL_CATCH, 1);
   if (!wasKnown) applyDexRewards();
   save();
 }
