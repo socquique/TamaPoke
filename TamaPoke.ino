@@ -12,6 +12,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Preferences.h>
+#include <esp_sleep.h>
 #include "Arduino_GFX_Library.h"
 #include "TouchDrvCSTXXX.hpp"
 #include "pin_config.h"
@@ -26,7 +27,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.24.2-sleep-power-fix"
+#define FW_VERSION "1.25-light-sleep"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -357,6 +358,43 @@ uint16_t renderIntervalMs() {
   return 180;
 }
 
+bool lightSleepAllowed(uint32_t now) {
+  if (!powerSave || usbPresent() || audioBusy() || Serial.available()) return false;
+  if (wasPressed || gTouchIrq || now < ignoreTouchUntil) return false;
+  if (gameOpen || sackOpen || battleOpen || bathUntil) return false;
+  if (pet.awaitingStarter() || feedMenuUntil || confirmUntil || choiceKind || wildPromptUntil || petEventUntil) return false;
+  if (pet.evolving() || pet.ceremony || pet.eating() || pet.showHeart()) return false;
+  if (galleryOpen || cardOpen || kbOpen || clockOpen || gameMenuOpen) return false;
+  return true;
+}
+
+uint16_t lightSleepMs(uint32_t now) {
+  if (!lightSleepAllowed(now)) return 0;
+  uint16_t maxMs = screenOff ? 750 : (dimStage >= 2 ? 300 : (dimStage >= 1 ? 180 : 70));
+  uint16_t ri = renderIntervalMs();
+  uint32_t sinceRender = now - lastRender;
+  if (sinceRender < ri) {
+    uint32_t untilRender = ri - sinceRender;
+    if (untilRender < maxMs) maxMs = untilRender;
+  }
+  if (maxMs < 40) return 0;
+  return maxMs;
+}
+
+void maybeLightSleep(uint32_t now) {
+  uint16_t ms = lightSleepMs(now);
+  if (!ms) return;
+
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+  esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000ULL);
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)TP_INT, 0);
+  esp_light_sleep_start();
+
+  if (digitalRead(TP_INT) == LOW || esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {
+    gTouchIrq = true;
+  }
+}
+
 void loop() {
   uint32_t now = millis();
   pet.update(now);
@@ -436,6 +474,8 @@ void loop() {
     lastRender = now;
     render();
   }
+
+  maybeLightSleep(millis());
 }
 
 // brillo segun sueno + inactividad (proteccion del AMOLED)

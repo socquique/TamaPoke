@@ -51,3 +51,4 @@ void audioSetEnabled(bool on);
 bool audioEnabled();
 void audioSetMode(uint8_t mode);
 uint8_t audioMode();
+bool audioBusy();

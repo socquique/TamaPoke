@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://shadowenemyx.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.24.2--sleep--power--fix-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.25--light--sleep-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/ShadowEnemyx/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/ShadowEnemyx/TamaPoke/stargazers)
@@ -273,7 +273,10 @@ If one bottoms out it counts as a *slip-up*.
   rename; on Battle you can start wild battles or open the training bag).
   The Box card can page through caught Pokémon and cycle sorting by Dex, type,
   or raised status.
-- Swipe down = **set the clock** and pick the **language** + sound level.
+- Swipe down = **set the clock** and pick the **language**, sound level and
+  optional **Power Save**. Power Save keeps normal play unchanged, but reduces
+  idle work and uses short ESP32 light-sleep pauses on battery while idle or
+  screen-off.
 - Long press (3 s) on the creature = **release** dialog.
 
 **Physical PWR button:** short = screen on/off · long (4 s) = full power-off

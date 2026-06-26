@@ -20,6 +20,7 @@ static I2SClass i2s;
 static bool gReady = false;
 static uint8_t gMode = SOUND_FULL;
 static QueueHandle_t gQ = nullptr;
+static volatile bool gBusy = false;
 
 // ---- I2C del códec ----
 static bool esW(uint8_t reg, uint8_t val) {
@@ -233,12 +234,14 @@ static void audioTask(void *) {
   uint8_t id;
   for (;;) {
     if (xQueueReceive(gQ, &id, portMAX_DELAY) && gReady && id < SFX_COUNT && gMode >= SFX_MIN_MODE[id]) {
+      gBusy = true;
       digitalWrite(PA, HIGH);  // enciende el amplificador
       delay(8);                // deja que arranque
       const SfxDef &d = SFX[id];
       for (uint8_t i = 0; i < d.len; i++) playTone(d.n[i]);
       delay(gMode == SOUND_FULL ? 90 : 60);  // deja salir la cola del DMA antes de cortar
       digitalWrite(PA, LOW);                 // apaga el amp entre sonidos (evita siseo)
+      gBusy = false;
     }
   }
 }
@@ -294,3 +297,7 @@ void audioSetMode(uint8_t mode) {
 }
 
 uint8_t audioMode() { return gMode; }
+
+bool audioBusy() {
+  return gBusy || (gQ && uxQueueMessagesWaiting(gQ) > 0);
+}
