@@ -27,7 +27,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.25.3-hard-ball"
+#define FW_VERSION "1.26-help-guide"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -77,6 +77,8 @@ uint8_t boxSort = 0;          // 0 dex, 1 tipo, 2 criados primero
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 bool powerSave = false;       // ahorro opcional: off por defecto
+bool helpOpen = false;
+uint8_t helpPage = 0;
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
@@ -330,7 +332,7 @@ void ensureMon() {
 bool mainScreenReadyForAmbientSound() {
   if (audioMode() != SOUND_FULL || screenOff || dimStage > 0) return false;
   if (pet.awaitingStarter() || pet.isEgg() || pet.sleeping || pet.ceremony) return false;
-  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen) return false;
+  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen || helpOpen) return false;
   if (feedMenuUntil || confirmUntil || choiceKind || bathUntil || wildPromptUntil || petEventUntil) return false;
   if (pet.evolving() || pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton()) return false;
   return true;
@@ -354,7 +356,7 @@ uint16_t renderIntervalMs() {
   if (screenOff) return 5000;
   if (dimStage >= 2) return 650;
   if (dimStage >= 1) return 350;
-  if (galleryOpen || cardOpen || kbOpen || clockOpen || gameMenuOpen) return 160;
+  if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return 160;
   return 180;
 }
 
@@ -366,7 +368,7 @@ bool lightSleepAllowed(uint32_t now) {
   if (gameOpen || sackOpen || battleOpen || bathUntil) return false;
   if (pet.awaitingStarter() || feedMenuUntil || confirmUntil || choiceKind || wildPromptUntil || petEventUntil) return false;
   if (pet.evolving() || pet.ceremony || pet.eating() || pet.showHeart()) return false;
-  if (galleryOpen || cardOpen || kbOpen || clockOpen || gameMenuOpen) return false;
+  if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return false;
   return true;
 }
 
@@ -669,7 +671,7 @@ void handleTouch() {
     tXl = x;
     tYl = y;
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
-    if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && millis() - tStart > 3000 &&
+    if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && !helpOpen && millis() - tStart > 3000 &&
         abs(tXl - tX0) < 30 && abs(tYl - tY0) < 30 && inPetZone(tX0, tY0) &&
         !pet.isEgg() && !confirmUntil && !pet.ceremony) {
       confirmUntil = millis() + 10000;
@@ -700,6 +702,7 @@ void cleanTap(int16_t x, int16_t y);
 void typeTap(int16_t x, int16_t y);
 
 void onSwipeV(int dir) {
+  if (helpOpen) { helpOpen = false; sfxPlay(SFX_TAP); return; }
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (wildPromptUntil && millis() < wildPromptUntil) return;
   if (wildPromptUntil) wildPromptUntil = 0;
@@ -721,6 +724,12 @@ void onSwipeV(int dir) {
 
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
+  if (helpOpen) {
+    if (dir < 0 && helpPage + 1 < 7) helpPage++;
+    else if (dir > 0 && helpPage > 0) helpPage--;
+    sfxPlay(SFX_MENU);
+    return;
+  }
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (wildPromptUntil && millis() < wildPromptUntil) return;
   if (wildPromptUntil) wildPromptUntil = 0;
@@ -815,6 +824,10 @@ void onTap(int16_t x, int16_t y) {
   }
   if (kbOpen) {
     keyboardTap(x, y);
+    return;
+  }
+  if (helpOpen) {
+    helpTap(x, y);
     return;
   }
   if (clockOpen) {
@@ -1162,6 +1175,10 @@ void render() {
   }
   if (kbOpen) {
     renderKeyboard();
+    return;
+  }
+  if (helpOpen) {
+    renderHelp();
     return;
   }
   if (clockOpen) {
@@ -2176,7 +2193,7 @@ void scheduleNextWild(uint32_t now) {
 
 bool mainScreenReadyForWild() {
   if (screenOff || pet.awaitingStarter() || pet.isEgg() || pet.sleeping || pet.ceremony) return false;
-  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen) return false;
+  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen || helpOpen) return false;
   if (feedMenuUntil || confirmUntil || choiceKind || bathUntil || petEventUntil) return false;
   if (pet.evolving() || pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton()) return false;
   return true;
@@ -2215,7 +2232,7 @@ void scheduleNextPetEvent(uint32_t now) {
 
 bool mainScreenReadyForPetEvent() {
   if (screenOff || pet.awaitingStarter() || pet.isEgg() || pet.sleeping || pet.ceremony) return false;
-  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen) return false;
+  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen || helpOpen) return false;
   if (feedMenuUntil || confirmUntil || choiceKind || bathUntil || wildPromptUntil) return false;
   if (pet.evolving() || pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton()) return false;
   return true;
@@ -2844,6 +2861,163 @@ void drawStatusLine(int y, const char *label, const char *value, uint16_t valueC
   gfx->print(value);
 }
 
+#define HELP_PAGE_COUNT 7
+#define HELP_LINE_COUNT 6
+
+static const char *const HELP_WORD[LANG_COUNT] = { "AYUDA", "HELP", "AIDE", "HILFE", "AIUTO", "AJUDA" };
+static const char *const HELP_OK[LANG_COUNT] = { "OK", "OK", "OK", "OK", "OK", "OK" };
+
+static const char *const HELP_TITLES[LANG_COUNT][HELP_PAGE_COUNT] = {
+  { "CUIDADO", "SUENO/ENERGIA", "MINIJUEGOS", "COMBATE 1", "COMBATE 2", "COLECCION", "EXTRAS" },
+  { "CARE", "SLEEP/ENERGY", "MINIGAMES", "BATTLE 1", "BATTLE 2", "COLLECTION", "EXTRAS" },
+  { "SOIN", "SOMMEIL/ENE", "MINI-JEUX", "COMBAT 1", "COMBAT 2", "COLLECTION", "EXTRAS" },
+  { "PFLEGE", "SCHLAF/ENERGIE", "MINISPIELE", "KAMPF 1", "KAMPF 2", "SAMMLUNG", "EXTRAS" },
+  { "CURA", "SONNO/ENERGIA", "MINIGIOCHI", "LOTTA 1", "LOTTA 2", "COLLEZIONE", "EXTRA" },
+  { "CUIDADO", "SONO/ENERGIA", "MINIJOGOS", "BATALHA 1", "BATALHA 2", "COLECAO", "EXTRAS" },
+};
+
+static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT] = {
+  {
+    { "Comida baja = descuido.", "Jugar sube alegria.", "Bano limpia suciedad.", "Tocar da alegria/vinc.", "Peso alto te frena.", "Dulce alegra, engorda." },
+    { "Dormir recupera energia.", "Durmiendo todo baja lento.", "Luz despierta o duerme.", "PWR corto apaga pantalla.", "Ahorro usa light sleep.", "Sin borrar conserva save." },
+    { "Bola: toca la bola.", "Atrapa: toca iconos.", "Memo: repite secuencia.", "Limpia: toca manchas.", "Tipo: elige ventaja.", "Dan records y entreno." },
+    { "Rapido: menos dano.", "Rival esquiva poco.", "Recibes algo menos dano.", "Fuerte: mas dano.", "Riesgo y contra mayor.", "No siempre conviene." },
+    { "Esquivar evita dano.", "Si sale: Contra listo.", "Prox ataque pega mas.", "Ruhe/Descanso cura 2x.", "Tambien da Guardia.", "Tipos suben/bajan dano." },
+    { "Pokedex: desliza lado.", "Criado y atrapado cuentan.", "Box muestra capturas.", "Cartas: desliza arriba.", "Perfil cambia nombre.", "Progreso muestra evo." },
+    { "Diario da metas diarias.", "Eventos salen raros.", "Batallas salvajes opc.", "Captura tras ganar.", "Rachas y medallas quedan.", "Sonido se ajusta abajo." },
+  },
+  {
+    { "Low food = slip-up.", "Play raises joy.", "Bath cleans dirt.", "Petting gives joy/bond.", "High weight slows you.", "Candy cheers but fattens." },
+    { "Sleep restores energy.", "Needs decay slower asleep.", "Light toggles sleep.", "Short PWR screen off.", "Power Save light-sleeps.", "No erase keeps saves." },
+    { "Ball: tap the ball.", "Catch: tap icons.", "Memo: repeat sequence.", "Clean: tap stains.", "Type: pick advantage.", "Records and training." },
+    { "Quick: lower damage.", "Enemy dodges less.", "You take less damage.", "Heavy: more damage.", "More risk/counterplay.", "Not always best." },
+    { "Dodge avoids damage.", "Success: Counter ready.", "Next attack hits harder.", "Rest heals only 2x.", "Rest also gives Guard.", "Types change damage." },
+    { "Pokedex: side swipe.", "Raised and caught differ.", "Box shows catches.", "Cards: swipe up.", "Profile renames pet.", "Progress shows evolution." },
+    { "Daily gives small goals.", "Events appear rarely.", "Wild battles are optional.", "Catch after winning.", "Streaks/medals persist.", "Sound is in settings." },
+  },
+  {
+    { "Faim basse = erreur.", "Jouer monte la joie.", "Bain nettoie.", "Caresse donne lien/joie.", "Poids haut ralentit.", "Bonbon rend gros." },
+    { "Sommeil rend energie.", "Besoins baissent moins.", "Lumiere dort/reveille.", "PWR court eteint ecran.", "Eco utilise light sleep.", "Sans erase garde save." },
+    { "Balle: touche la balle.", "Attrape: touche icones.", "Memo: repete sequence.", "Nettoie: touche taches.", "Type: choisis avantage.", "Records et entrainement." },
+    { "Rapide: degats bas.", "Ennemi esquive moins.", "Tu subis moins.", "Fort: degats hauts.", "Risque plus grand.", "Pas toujours meilleur." },
+    { "Esquive evite degats.", "Succes: Contre pret.", "Prochaine attaque plus.", "Repos soigne 2 fois.", "Repos donne Garde.", "Types changent degats." },
+    { "Pokedex: glisse cote.", "Eleve et capture separent.", "Boite montre captures.", "Cartes: glisse haut.", "Profil renomme.", "Progres montre evo." },
+    { "Quotidien donne buts.", "Events rares.", "Combats sauvages option.", "Capture apres victoire.", "Series/medailles restent.", "Son dans reglages." },
+  },
+  {
+    { "Food 0 = Patzer.", "Spielen hebt Freude.", "Bad reinigt Hygiene.", "Streicheln gibt Bond.", "Hohes Gewicht bremst.", "Candy freut, macht dick." },
+    { "Schlaf gibt Energie.", "Needs sinken langsamer.", "Licht: schlafen/wach.", "PWR kurz: Screen aus.", "Sparen nutzt Light Sleep.", "Ohne Erase bleibt Save." },
+    { "Ball: Ball antippen.", "Fangen: Icons treffen.", "Memo: Folge merken.", "Putzen: Flecken tippen.", "Typ: Vorteil waehlen.", "Gibt Rekorde/Training." },
+    { "Schnell: weniger Schaden.", "Gegner weicht selten aus.", "Du kassierst weniger.", "Stark: mehr Schaden.", "Mehr Risiko/Gegendruck.", "Nicht immer beste Wahl." },
+    { "Ausweichen meidet Schaden.", "Klappt es: Konter bereit.", "Naechster Angriff staerker.", "Ruhen heilt nur 2x.", "Ruhen gibt auch Schutz.", "Typen aendern Schaden." },
+    { "Pokedex: seitlich wischen.", "Aufgezogen != gefangen.", "Box zeigt Gefangene.", "Karten: hoch wischen.", "Profil benennt um.", "Fortschritt zeigt Evo." },
+    { "Taeglich gibt Ziele.", "Events sind selten.", "Wildkampf ist optional.", "Fangen nach Sieg.", "Serien/Medaillen bleiben.", "Ton unten einstellen." },
+  },
+  {
+    { "Cibo 0 = errore.", "Gioca aumenta gioia.", "Bagno pulisce.", "Carezza da legame.", "Peso alto rallenta.", "Dolce rallegra, ingrassa." },
+    { "Sonno da energia.", "Bisogni calano meno.", "Luce dorme/sveglia.", "PWR corto spegne schermo.", "Risparmio usa light sleep.", "Senza erase salva." },
+    { "Palla: tocca palla.", "Prendi: tocca icone.", "Memo: ripeti sequenza.", "Pulisci: tocca macchie.", "Tipo: scegli vantaggio.", "Record e allenamento." },
+    { "Rapido: meno danni.", "Nemico schiva meno.", "Subisci meno danni.", "Forte: piu danni.", "Piu rischio.", "Non sempre migliore." },
+    { "Schiva evita danni.", "Successo: contro pronto.", "Prox attacco piu forte.", "Riposo cura solo 2x.", "Riposo da Guardia.", "Tipi cambiano danni." },
+    { "Pokedex: scorri lato.", "Allevato != preso.", "Box mostra presi.", "Carte: scorri su.", "Profilo rinomina.", "Progresso mostra evo." },
+    { "Quotidiano da obiettivi.", "Eventi rari.", "Lotte selvatiche opz.", "Cattura dopo vittoria.", "Serie/medaglie restano.", "Audio nei settaggi." },
+  },
+  {
+    { "Comida 0 = falha.", "Jogar sobe alegria.", "Banho limpa.", "Carinho da vinculo.", "Peso alto atrasa.", "Doce alegra, engorda." },
+    { "Sono da energia.", "Necessidades caem menos.", "Luz dorme/acorda.", "PWR curto apaga tela.", "Poupanca usa light sleep.", "Sem erase guarda save." },
+    { "Bola: toque na bola.", "Pegar: toque icones.", "Memo: repita sequencia.", "Limpa: toque manchas.", "Tipo: escolha vantagem.", "Recordes e treino." },
+    { "Rapido: dano menor.", "Rival desvia menos.", "Voce recebe menos.", "Forte: dano maior.", "Mais risco.", "Nem sempre melhor." },
+    { "Desviar evita dano.", "Sucesso: contra pronto.", "Prox ataque mais forte.", "Descanso cura so 2x.", "Descanso da Guarda.", "Tipos mudam dano." },
+    { "Pokedex: deslize lado.", "Criado != capturado.", "Box mostra capturas.", "Cartas: deslize cima.", "Perfil renomeia.", "Progresso mostra evo." },
+    { "Diario da metas.", "Eventos sao raros.", "Batalha selvagem opc.", "Captura apos vitoria.", "Series/medalhas ficam.", "Som nos ajustes." },
+  },
+};
+
+void renderHelp() {
+  gfx->fillScreen(RGB565_BLACK);
+  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  uint8_t lang = (gLang < LANG_COUNT) ? (uint8_t)gLang : (uint8_t)LANG_EN;
+  if (helpPage >= HELP_PAGE_COUNT) helpPage = 0;
+
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(3);
+  const char *h = HELP_WORD[lang];
+  gfx->setCursor(CX - strlen(h) * 9, 36);
+  gfx->print(h);
+
+  gfx->setTextSize(2);
+  gfx->setTextColor(UI_BAR_BAD);
+  const char *title = HELP_TITLES[lang][helpPage];
+  gfx->setCursor(CX - strlen(title) * 6, 76);
+  gfx->print(title);
+
+  gfx->setTextColor(UI_INK);
+  for (uint8_t i = 0; i < HELP_LINE_COUNT; i++) {
+    const char *line = HELP_LINES[lang][helpPage][i];
+    gfx->setCursor(CX - strlen(line) * 6, 116 + i * 34);
+    gfx->print(line);
+  }
+
+  char pg[12];
+  snprintf(pg, sizeof(pg), "%u/%u", helpPage + 1, HELP_PAGE_COUNT);
+  gfx->setTextColor(UI_TRACK);
+  gfx->setCursor(CX - strlen(pg) * 6, 340);
+  gfx->print(pg);
+
+  if (helpPage > 0) {
+    gfx->fillRoundRect(48, 398, 82, 42, 12, UI_WHITE);
+    gfx->drawRoundRect(48, 398, 82, 42, 12, UI_INK);
+    gfx->setTextColor(UI_INK);
+    gfx->setTextSize(2);
+    gfx->setCursor(72, 412);
+    gfx->print("<<");
+  }
+  gfx->fillRoundRect(154, 398, 158, 42, 12, UI_BAR_OK);
+  gfx->setTextColor(UI_BG_DAY);
+  gfx->setTextSize(2);
+  const char *ok = HELP_OK[lang];
+  gfx->setCursor(154 + (158 - (int)strlen(ok) * 12) / 2, 412);
+  gfx->print(ok);
+  if (helpPage + 1 < HELP_PAGE_COUNT) {
+    gfx->fillRoundRect(336, 398, 82, 42, 12, UI_WHITE);
+    gfx->drawRoundRect(336, 398, 82, 42, 12, UI_INK);
+    gfx->setTextColor(UI_INK);
+    gfx->setCursor(360, 412);
+    gfx->print(">>");
+  }
+  gfx->flush();
+}
+
+void openHelp() {
+  helpPage = 0;
+  helpOpen = true;
+  clockOpen = false;
+  sfxPlay(SFX_MENU);
+}
+
+void helpTap(int16_t x, int16_t y) {
+  if (y >= 392 && y <= 448) {
+    if (x >= 48 && x <= 130 && helpPage > 0) {
+      helpPage--;
+      sfxPlay(SFX_MENU);
+      return;
+    }
+    if (x >= 336 && x <= 418 && helpPage + 1 < HELP_PAGE_COUNT) {
+      helpPage++;
+      sfxPlay(SFX_MENU);
+      return;
+    }
+    if (x >= 154 && x <= 312) {
+      helpOpen = false;
+      clockOpen = true;
+      sfxPlay(SFX_TAP);
+      return;
+    }
+  }
+  if (x > CX && helpPage + 1 < HELP_PAGE_COUNT) { helpPage++; sfxPlay(SFX_MENU); return; }
+  if (x < CX && helpPage > 0) { helpPage--; sfxPlay(SFX_MENU); return; }
+}
+
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
@@ -2909,10 +3083,18 @@ void renderClock() {
   else snprintf(petLine, sizeof(petLine), "#%d LV%u", pet.speciesId, pet.level());
   drawStatusLine(390, "PET", petLine, UI_INK);
 
-  gfx->fillRoundRect(133, 404, 200, 40, 13, UI_BAR_OK);
+  gfx->fillRoundRect(46, 404, 110, 40, 13, UI_WHITE);
+  gfx->drawRoundRect(46, 404, 110, 40, 13, UI_INK);
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(2);
+  const char *hw = HELP_WORD[gLang];
+  gfx->setCursor(46 + (110 - (int)strlen(hw) * 12) / 2, 417);
+  gfx->print(hw);
+
+  gfx->fillRoundRect(178, 404, 156, 40, 13, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   gfx->setTextSize(3);
-  gfx->setCursor(CX - 18, 414);
+  gfx->setCursor(178 + (156 - 36) / 2, 414);
   gfx->print("OK");
   gfx->flush();
 }
@@ -2942,7 +3124,8 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
   }
-  if (y >= 404 && y <= 444 && x >= 133 && x <= 333) { applyClock(); return; }
+  if (y >= 404 && y <= 444 && x >= 46 && x <= 156) { openHelp(); return; }
+  if (y >= 404 && y <= 444 && x >= 178 && x <= 334) { applyClock(); return; }
 }
 
 // llama + numero de racha arriba a la izquierda
