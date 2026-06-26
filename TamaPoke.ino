@@ -27,7 +27,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.27-performance-stability"
+#define FW_VERSION "1.27.1-help-button"
 #define HELP_PAGE_COUNT 7
 #define HELP_LINE_COUNT 6
 
@@ -3203,18 +3203,18 @@ void renderClock() {
   else snprintf(petLine, sizeof(petLine), "#%d LV%u", pet.speciesId, pet.level());
   drawStatusLine(390, "PET", petLine, UI_INK);
 
-  gfx->fillRoundRect(46, 404, 110, 40, 13, UI_WHITE);
-  gfx->drawRoundRect(46, 404, 110, 40, 13, UI_INK);
+  gfx->fillRoundRect(96, 404, 110, 40, 13, UI_WHITE);
+  gfx->drawRoundRect(96, 404, 110, 40, 13, UI_INK);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
   const char *hw = HELP_WORD[gLang];
-  gfx->setCursor(46 + (110 - (int)strlen(hw) * 12) / 2, 417);
+  gfx->setCursor(96 + (110 - (int)strlen(hw) * 12) / 2, 417);
   gfx->print(hw);
 
-  gfx->fillRoundRect(178, 404, 156, 40, 13, UI_BAR_OK);
+  gfx->fillRoundRect(230, 404, 156, 40, 13, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   gfx->setTextSize(3);
-  gfx->setCursor(178 + (156 - 36) / 2, 414);
+  gfx->setCursor(230 + (156 - 36) / 2, 414);
   gfx->print("OK");
   gfx->flush();
 }
@@ -3248,8 +3248,8 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
   }
-  if (y >= 404 && y <= 444 && x >= 46 && x <= 156) { openHelp(); return; }
-  if (y >= 404 && y <= 444 && x >= 178 && x <= 334) { applyClock(); return; }
+  if (y >= 404 && y <= 444 && x >= 96 && x <= 206) { openHelp(); return; }
+  if (y >= 404 && y <= 444 && x >= 230 && x <= 386) { applyClock(); return; }
 }
 
 // llama + numero de racha arriba a la izquierda
