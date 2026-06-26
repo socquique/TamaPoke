@@ -10,7 +10,7 @@
 
 ## Install / Flash
 
-**Use only the web installer:**
+**For normal use, use only the web installer. Do not download anything manually.**
 
 ### [Open the TamaPoke web installer](https://shadowenemyx.github.io/TamaPoke/web/)
 
@@ -21,6 +21,16 @@ and loads the sprites from the browser.
 Use desktop **Chrome or Edge**, connect the Waveshare ESP32-S3 board by USB, and
 follow the buttons on the installer page. If you are updating an existing pet,
 install **without erase** to keep your save.
+
+Short version:
+1. Open the web installer link above.
+2. Connect the Waveshare ESP32-S3 board by USB.
+3. Click install.
+4. Leave **erase device** unchecked when updating.
+5. Use the installer page to load sprites if needed.
+
+Everything else in this repository is only for developers who want to build or
+modify the firmware themselves.
 
 A gen-1-Pokémon-inspired tamagotchi for the
 **Waveshare ESP32-S3-Touch-AMOLED-1.75** (round 466×466 AMOLED, CO5300 driver
@@ -197,7 +207,12 @@ Catch rules:
   MX1.25 connector)
 - Pins taken from the [official Waveshare repo](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75) (see `pin_config.h`)
 
-## Libraries (Arduino IDE / arduino-cli)
+## Developer build info
+
+You can ignore this section if you only want to play TamaPoke. The public install
+path is the browser-based web installer above.
+
+### Libraries (Arduino IDE / arduino-cli)
 
 | Library | Author | Use |
 |---|---|---|
@@ -206,7 +221,7 @@ Catch rules:
 | XPowersLib | Lewis He | AXP2101 PMU (battery, brightness, PWR button) |
 | ESP_I2S (bundled in the ESP32 core) | Espressif | I2S to the ES8311 codec |
 
-## IDE setup / build
+### IDE setup / build
 
 - Board: **ESP32S3 Dev Module** · Flash **16MB** · PSRAM **OPI PSRAM**
   (required: the 466×466×16-bit framebuffer ≈ 434 KB lives in PSRAM) ·
@@ -219,13 +234,19 @@ arduino-cli compile --fqbn "$FQBN" .
 arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn "$FQBN" .
 ```
 
-### Easiest install: the web installer
+### Local web installer
 
-`web/index.html` flashes the firmware (ESP Web Tools) and pushes the sprites to
-the SD over Web Serial, no Arduino needed. Serve it over HTTPS or `localhost`
+The hosted installer is the recommended path:
+[`https://shadowenemyx.github.io/TamaPoke/web/`](https://shadowenemyx.github.io/TamaPoke/web/)
+
+For local development, `web/index.html` flashes the firmware (ESP Web Tools) and
+pushes the sprites to the SD over Web Serial. Serve it over HTTPS or `localhost`
 (secure context) and open it in **Chrome/Edge**. See [`web/README.md`](web/README.md).
 
 ### Generate and load the sprites yourself
+
+Normal users should use the web installer instead. This is only needed if you are
+rebuilding the sprite bundle yourself.
 
 All sprites come from **[PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)**
 (CC BY-NC). You can regenerate the whole set and load it onto your board with the
