@@ -27,7 +27,9 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.26.1-flicker-fix"
+#define FW_VERSION "1.27-performance-stability"
+#define HELP_PAGE_COUNT 7
+#define HELP_LINE_COUNT 6
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -79,6 +81,14 @@ int clockH = 12, clockM = 0;  // hora en edicion
 bool powerSave = false;       // ahorro opcional: off por defecto
 bool helpOpen = false;
 uint8_t helpPage = 0;
+bool uiDirty = true;
+bool cardDirty = true;
+bool clockDirty = true;
+bool helpDirty = true;
+bool keyboardDirty = true;
+bool gameMenuDirty = true;
+bool battleDirty = true;
+bool starterDirty = true;
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
@@ -232,6 +242,10 @@ static const int16_t STARTER_DEX[3] = { 1, 4, 7 };
 volatile bool gTouchIrq = false;
 void IRAM_ATTR touchIsr() { gTouchIrq = true; }
 uint32_t lastRender = 0;
+uint32_t lastLoopStart = 0;
+uint32_t perfRenderLastMs = 0, perfRenderMaxMs = 0;
+uint32_t perfLoopLastMs = 0, perfLoopMaxMs = 0;
+uint32_t perfRenderCount = 0, perfRenderSkipCount = 0;
 // proteccion del AMOLED: atenuado por inactividad
 uint32_t lastInteract = 0;
 uint8_t dimStage = 0;        // 0 despierto, 1 atenuado (90s), 2 casi apagado (5min)
@@ -244,6 +258,51 @@ uint32_t choiceUntil = 0;   // se cierra solo a este millis
 int16_t tX0, tY0, tXl, tYl; // gesto en curso (inicio y ultima posicion)
 uint32_t tStart = 0;
 bool holdFired = false;
+
+void markUiDirty() {
+  uiDirty = true;
+  starterDirty = true;
+  cardDirty = true;
+  clockDirty = true;
+  helpDirty = true;
+  keyboardDirty = true;
+  gameMenuDirty = true;
+  battleDirty = true;
+  galleryDirty = true;
+}
+
+void lockTouchBrief(uint16_t ms = 160) {
+  uint32_t until = millis() + ms;
+  if (until > ignoreTouchUntil) ignoreTouchUntil = until;
+  wasPressed = false;
+  swallowGesture = true;
+}
+
+const char *screenName() {
+  if (pet.awaitingStarter()) return "starter";
+  if (galleryOpen) return galleryDetail ? "gallery-detail" : "gallery-grid";
+  if (gameOpen) return "game";
+  if (sackOpen) return "sack";
+  if (battleOpen) return battleResolved ? "battle-result" : "battle";
+  if (kbOpen) return "keyboard";
+  if (helpOpen) return "help";
+  if (clockOpen) return "settings";
+  if (cardOpen) return "card";
+  if (gameMenuOpen) return "game-menu";
+  return screenOff ? "screen-off" : "main";
+}
+
+bool staticScreenClean() {
+  if (pet.awaitingStarter()) return !starterDirty;
+  if (galleryOpen && !galleryDetail) return !galleryDirty;
+  if (battleOpen && battleResolved) return !battleDirty;
+  if (kbOpen) return !keyboardDirty;
+  if (helpOpen) return !helpDirty;
+  if (clockOpen) return !clockDirty;
+  if (cardOpen) return !cardDirty;
+  if (gameMenuOpen) return !gameMenuDirty;
+  return false;
+}
 
 void setup() {
   Serial.setRxBufferSize(8192);  // la transferencia a SD llega en bloques de 2 KB
@@ -351,13 +410,13 @@ void maybePlayAmbientSound(uint32_t now) {
 }
 
 uint16_t renderIntervalMs() {
+  if (screenOff) return 5000;
   if (battleOpen) return 125;
   if (gameOpen || sackOpen) return 115;
+  if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
   if (!powerSave) return 100;
-  if (screenOff) return 5000;
   if (dimStage >= 2) return 650;
   if (dimStage >= 1) return 350;
-  if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return 160;
   return 180;
 }
 
@@ -402,6 +461,7 @@ void maybeLightSleep(uint32_t now) {
 
 void loop() {
   uint32_t now = millis();
+  uint32_t loopStart = now;
   pet.update(now);
 
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
@@ -468,19 +528,29 @@ void loop() {
   uint32_t healthMs = powerSave ? 600000UL : 300000UL;
   if (now - lastHealth > healthMs) {
     lastHealth = now;
-    Serial.printf("HEALTH up=%lus heap=%u min=%u\n", (unsigned long)(now / 1000),
-                  ESP.getFreeHeap(), ESP.getMinFreeHeap());
+    Serial.printf("HEALTH up=%lus heap=%u min=%u rMax=%lums lMax=%lums screen=%s\n",
+                  (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
+                  (unsigned long)perfRenderMaxMs, (unsigned long)perfLoopMaxMs, screenName());
+    perfRenderMaxMs = 0;
+    perfLoopMaxMs = 0;
   }
 
-  // 85 ms en juego/saco: margen seguro para que el redibujado no pise el envio
-  // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
-  // sprites grandes el dibujo tarda mas, asi que se deja colchon)
+  // Juego/combate usan intervalos conservadores para que el redibujado no pise
+  // el envio DMA del frame anterior; las pantallas estaticas se saltan si no
+  // estan "dirty".
   if (now - lastRender >= renderIntervalMs()) {
     lastRender = now;
+    uint32_t rt0 = millis();
     render();
+    perfRenderLastMs = millis() - rt0;
+    if (perfRenderLastMs > perfRenderMaxMs) perfRenderMaxMs = perfRenderLastMs;
+    perfRenderCount++;
   }
 
   maybeLightSleep(millis());
+  perfLoopLastMs = millis() - loopStart;
+  if (perfLoopLastMs > perfLoopMaxMs) perfLoopMaxMs = perfLoopLastMs;
+  lastLoopStart = loopStart;
 }
 
 // brillo segun sueno + inactividad (proteccion del AMOLED)
@@ -511,7 +581,18 @@ void handleSerial() {
   if (line.length() == 0) return;
   if (sdSerialCommand(line)) return;
 
-  if (line == "HATCH") {
+  if (line == "PERF") {
+    Serial.printf("screen=%s render=%lums max=%lums count=%lu skip=%lu loop=%lums loopMax=%lums interval=%u dirty ui=%d card=%d clock=%d help=%d kb=%d menu=%d battle=%d gallery=%d\n",
+                  screenName(),
+                  (unsigned long)perfRenderLastMs, (unsigned long)perfRenderMaxMs,
+                  (unsigned long)perfRenderCount, (unsigned long)perfRenderSkipCount,
+                  (unsigned long)perfLoopLastMs, (unsigned long)perfLoopMaxMs,
+                  renderIntervalMs(), uiDirty, cardDirty, clockDirty, helpDirty,
+                  keyboardDirty, gameMenuDirty, battleDirty, galleryDirty);
+    perfRenderMaxMs = 0;
+    perfLoopMaxMs = 0;
+    Serial.println("DONE");
+  } else if (line == "HATCH") {
     pet.eggTap(); pet.eggTap(); pet.eggTap();
     Serial.println("DONE");
   } else if (line.startsWith("SPEC ")) {
@@ -703,15 +784,15 @@ void cleanTap(int16_t x, int16_t y);
 void typeTap(int16_t x, int16_t y);
 
 void onSwipeV(int dir) {
-  if (helpOpen) { helpOpen = false; sfxPlay(SFX_TAP); return; }
+  if (helpOpen) { helpOpen = false; clockOpen = true; clockDirty = true; lockTouchBrief(); sfxPlay(SFX_TAP); return; }
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (wildPromptUntil && millis() < wildPromptUntil) return;
   if (wildPromptUntil) wildPromptUntil = 0;
   if (gameMenuOpen) return;
   if (gameOpen || galleryOpen || kbOpen || sackOpen || battleOpen || pet.ceremony) return;
-  if (clockOpen) { clockOpen = false; sfxPlay(SFX_TAP); return; }
+  if (clockOpen) { clockOpen = false; markUiDirty(); lockTouchBrief(); sfxPlay(SFX_TAP); return; }
   if (cardOpen) {
-    if (dir < 0) { cardOpen = false; sfxPlay(SFX_TAP); }  // arriba cierra la ficha
+    if (dir < 0) { cardOpen = false; markUiDirty(); lockTouchBrief(); sfxPlay(SFX_TAP); }  // arriba cierra la ficha
     return;
   }
   if (dir > 0) {                    // deslizar abajo: ajustar hora
@@ -719,6 +800,8 @@ void onSwipeV(int dir) {
   } else if (!pet.isEgg() && !confirmUntil && !feedMenuUntil) {
     cardOpen = true;                // deslizar arriba: ficha
     cardPage = 0;
+    cardDirty = true;
+    lockTouchBrief();
     sfxPlay(SFX_MENU);
   }
 }
@@ -726,8 +809,8 @@ void onSwipeV(int dir) {
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
   if (helpOpen) {
-    if (dir < 0 && helpPage + 1 < 7) helpPage++;
-    else if (dir > 0 && helpPage > 0) helpPage--;
+    if (dir < 0 && helpPage + 1 < HELP_PAGE_COUNT) { helpPage++; helpDirty = true; }
+    else if (dir > 0 && helpPage > 0) { helpPage--; helpDirty = true; }
     sfxPlay(SFX_MENU);
     return;
   }
@@ -740,7 +823,7 @@ void onSwipe(int dir) {
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
     uint8_t old = cardPage;
     cardPage = p < 0 ? 0 : (p >= CARD_COUNT ? CARD_COUNT - 1 : p);
-    if (cardPage != old) sfxPlay(SFX_MENU);
+    if (cardPage != old) { cardDirty = true; sfxPlay(SFX_MENU); }
     return;
   }
   if (!galleryOpen) {
@@ -749,6 +832,7 @@ void onSwipe(int dir) {
       galleryPage = 0;
       galleryDetail = 0;
       galleryDirty = true;
+      lockTouchBrief();
       sfxPlay(SFX_MENU);
     }
     return;
@@ -757,6 +841,7 @@ void onSwipe(int dir) {
     galleryDetail = 0;
     galleryPmd.unload();
     galleryDirty = true;
+    lockTouchBrief();
     return;
   }
   int np = galleryPage - dir;  // deslizar a la izquierda avanza pagina
@@ -764,6 +849,8 @@ void onSwipe(int dir) {
   if (np < 0) {                // retroceder desde la primera = salir
     galleryOpen = false;
     galleryPmd.unload();
+    markUiDirty();
+    lockTouchBrief();
     sfxPlay(SFX_TAP);
     return;
   }
@@ -813,6 +900,8 @@ void onTap(int16_t x, int16_t y) {
       int ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP);
       if (x >= 70 && x <= 396 && y >= ry && y <= ry + STARTER_ROW_H) {
         pet.chooseStarter(STARTER_DEX[i]);
+        markUiDirty();
+        lockTouchBrief();
         sfxPlay(SFX_TAP);
         break;
       }
@@ -842,13 +931,14 @@ void onTap(int16_t x, int16_t y) {
       if (x >= 302 && x <= 408 && y >= 62 && y <= 92) {
         boxSort = (boxSort + 1) % 3;
         boxPage = 0;
+        cardDirty = true;
         sfxPlay(SFX_TAP);
       } else if (x >= 76 && x <= 170 && y >= 348 && y <= 386) {
-        if (boxPage > 0) boxPage--;
+        if (boxPage > 0) { boxPage--; cardDirty = true; }
         sfxPlay(SFX_TAP);
       } else if (x >= 296 && x <= 390 && y >= 348 && y <= 386) {
         uint8_t pages = boxPageCount();
-        if (boxPage + 1 < pages) boxPage++;
+        if (boxPage + 1 < pages) { boxPage++; cardDirty = true; }
         sfxPlay(SFX_TAP);
       } else {
         int row = (y - 122) / 42;
@@ -859,21 +949,30 @@ void onTap(int16_t x, int16_t y) {
             galleryOpen = true;
             galleryDetail = dex;
             galleryDirty = true;
+            lockTouchBrief();
             galleryPmd.load(dex, pet.isShinyRegistered(dex));
             sfxPlay(SFX_TAP);
           }
         } else if (y >= 400) {
           cardOpen = false;
+          markUiDirty();
+          lockTouchBrief();
         }
       }
     } else if (cardPage == 4 && y >= 286 && y <= 336 && x >= 82 && x <= 384) {
       cardOpen = false;
+      markUiDirty();
+      lockTouchBrief();
       startBattle();
     } else if (cardPage == 4 && y >= 330 && y <= 388 && x >= 82 && x <= 384) {
       cardOpen = false;            // boton ENTRENAR FUERZA
+      markUiDirty();
+      lockTouchBrief();
       startSack();
     } else if (y >= 400) {
       cardOpen = false;
+      markUiDirty();
+      lockTouchBrief();
       sfxPlay(SFX_TAP);
     }
     return;
@@ -892,8 +991,8 @@ void onTap(int16_t x, int16_t y) {
   }
   if (gameMenuOpen) {
     int8_t hit = gameMenuHit(x, y);
-    if (hit >= 0) startGameMenuChoice((uint8_t)hit);
-    else { gameMenuOpen = false; sfxPlay(SFX_TAP); }
+    if (hit >= 0) { lockTouchBrief(140); startGameMenuChoice((uint8_t)hit); }
+    else { gameMenuOpen = false; markUiDirty(); lockTouchBrief(); sfxPlay(SFX_TAP); }
     return;
   }
   if (wildPromptUntil) {
@@ -972,6 +1071,8 @@ void onTap(int16_t x, int16_t y) {
       } else if (i == 1) {
         if (!pet.sleeping) {
           gameMenuOpen = true;
+          gameMenuDirty = true;
+          lockTouchBrief();
           sfxPlay(SFX_MENU);
         }
       } else if (i == 2) {
@@ -1130,6 +1231,8 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
 
 // primera partida: elige inicial entre Bulbasaur / Charmander / Squirtle
 void renderStarterSelect() {
+  if (!starterDirty) { perfRenderSkipCount++; return; }
+  starterDirty = false;
   gfx->fillScreen(UI_BG_DAY);
   const char *t = T(S_CHOOSE_STARTER);
   gfx->setTextColor(UI_INK);
@@ -1153,6 +1256,7 @@ void renderStarterSelect() {
 }
 
 void render() {
+  if (staticScreenClean()) { perfRenderSkipCount++; return; }
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial (prioridad total)
     renderStarterSelect();
     return;
@@ -1311,6 +1415,7 @@ void render() {
 // ---------- minijuego: toques con la pokeball ----------
 
 void drawGameMenu() {
+  gameMenuDirty = false;
   gfx->fillRoundRect(78, 112, 310, 266, 18, UI_WHITE);
   gfx->drawRoundRect(78, 112, 310, 266, 18, UI_INK);
   gfx->setTextColor(UI_INK);
@@ -2291,6 +2396,8 @@ void closeBattle() {
   battleRespectCatch = false;
   battleCatchChance = 0;
   wildPmd.unload();
+  markUiDirty();
+  lockTouchBrief();
 }
 
 void startBattleWith(int16_t forcedDex, uint8_t forcedLevel) {
@@ -2324,6 +2431,7 @@ void startBattleWith(int16_t forcedDex, uint8_t forcedLevel) {
   battleCatchChance = 0;
   battleResolved = false;
   battleOpen = true;
+  battleDirty = true;
   wildPmd.unload();
   wildPmd.load(battleDex, false);
   sfxPlay(SFX_TAP);
@@ -2336,6 +2444,7 @@ void startBattle() {
 void finishBattle() {
   if (battleResolved) return;
   battleResolved = true;
+  battleDirty = true;
   if (battleTurn.playerWon) {
     bool closeWin = battleRun.playerHp <= battleRun.playerMaxHp / 3;
     battleReward = pet.applyBattleWin(battleDex, closeWin);
@@ -2413,11 +2522,13 @@ void battleTap(int16_t x, int16_t y) {
         }
         sfxPlay(battleCatchSuccess ? SFX_CATCH_OK : SFX_CATCH_FAIL);
         galleryDirty = true;
+        battleDirty = true;
         return;
       }
       if (x >= 242 && x <= 390 && y >= 392 && y <= 448) {
         battleCatchDone = true;
         battleCatchTried = false;
+        battleDirty = true;
         sfxPlay(SFX_TAP);
         return;
       }
@@ -2436,6 +2547,7 @@ void battleTap(int16_t x, int16_t y) {
       return;
     }
     battleAttackMenuUntil = 0;
+    battleDirty = true;
     sfxPlay(SFX_TAP);
     return;
   }
@@ -2626,6 +2738,7 @@ void drawPetEvent() {
 }
 
 void renderBattle() {
+  if (battleResolved) battleDirty = false;
   drawGameScene();
   bool night = sceneHour() < 6 || sceneHour() >= 20;
   uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
@@ -2798,6 +2911,8 @@ void openClock() {
   clockH = (e / 3600) % 24;
   clockM = (e / 60) % 60;
   clockOpen = true;
+  clockDirty = true;
+  lockTouchBrief();
   sfxPlay(SFX_MENU);
 }
 
@@ -2807,6 +2922,8 @@ void applyClock() {
   rtcSetEpoch(e);
   pet.setClock(e);
   clockOpen = false;
+  markUiDirty();
+  lockTouchBrief();
 }
 
 void drawClockBtn(int x, int y, const char *l) {
@@ -2860,9 +2977,6 @@ void drawStatusLine(int y, const char *label, const char *value, uint16_t valueC
   gfx->setCursor(172, y);
   gfx->print(value);
 }
-
-#define HELP_PAGE_COUNT 7
-#define HELP_LINE_COUNT 6
 
 static const char *const HELP_WORD[LANG_COUNT] = { "AYUDA", "HELP", "AIDE", "HILFE", "AIUTO", "AJUDA" };
 static const char *const HELP_OK[LANG_COUNT] = { "OK", "OK", "OK", "OK", "OK", "OK" };
@@ -2934,6 +3048,7 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
 };
 
 void renderHelp() {
+  helpDirty = false;
   gfx->fillScreen(UI_BG_DAY);
   uint8_t lang = (gLang < LANG_COUNT) ? (uint8_t)gLang : (uint8_t)LANG_EN;
   if (helpPage >= HELP_PAGE_COUNT) helpPage = 0;
@@ -2991,6 +3106,8 @@ void openHelp() {
   helpPage = 0;
   helpOpen = true;
   clockOpen = false;
+  helpDirty = true;
+  lockTouchBrief();
   sfxPlay(SFX_MENU);
 }
 
@@ -2998,26 +3115,31 @@ void helpTap(int16_t x, int16_t y) {
   if (y >= 392 && y <= 448) {
     if (x >= 48 && x <= 130 && helpPage > 0) {
       helpPage--;
+      helpDirty = true;
       sfxPlay(SFX_MENU);
       return;
     }
     if (x >= 336 && x <= 418 && helpPage + 1 < HELP_PAGE_COUNT) {
       helpPage++;
+      helpDirty = true;
       sfxPlay(SFX_MENU);
       return;
     }
     if (x >= 154 && x <= 312) {
       helpOpen = false;
       clockOpen = true;
+      clockDirty = true;
+      lockTouchBrief();
       sfxPlay(SFX_TAP);
       return;
     }
   }
-  if (x > CX && helpPage + 1 < HELP_PAGE_COUNT) { helpPage++; sfxPlay(SFX_MENU); return; }
-  if (x < CX && helpPage > 0) { helpPage--; sfxPlay(SFX_MENU); return; }
+  if (x > CX && helpPage + 1 < HELP_PAGE_COUNT) { helpPage++; helpDirty = true; sfxPlay(SFX_MENU); return; }
+  if (x < CX && helpPage > 0) { helpPage--; helpDirty = true; sfxPlay(SFX_MENU); return; }
 }
 
 void renderClock() {
+  clockDirty = false;
   gfx->fillScreen(UI_BG_DAY);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
@@ -3103,21 +3225,25 @@ void clockTap(int16_t x, int16_t y) {
     else if (x >= 170 && x < 228) clockH = (clockH + 1) % 24;
     else if (x >= 252 && x < 310) clockM = (clockM + 59) % 60;
     else if (x >= 318 && x < 376) clockM = (clockM + 1) % 60;
+    clockDirty = true;
     return;
   }
   if (y >= LANG_PILL_Y && y <= LANG_PILL_Y + LANG_PILL_H) {
     if (x >= SOUND_PILL_X && x < SOUND_PILL_X + SOUND_PILL_W) {
       audioSetMode(nextSoundMode());
+      clockDirty = true;
       if (audioEnabled()) sfxPlay(SFX_LEVEL);  // confirma el nuevo modo si no esta apagado
       return;
     }
     if (x >= PSAVE_PILL_X && x < PSAVE_PILL_X + PSAVE_PILL_W) {
       setPowerSave(!powerSave);
+      clockDirty = true;
       sfxPlay(powerSave ? SFX_MENU : SFX_TAP);
       return;
     }
     if (x >= LANG_PILL_X && x < LANG_PILL_X + LANG_PILL_W) {  // cicla idioma
       setLang((Lang)((gLang + 1) % LANG_COUNT));
+      clockDirty = true;
       sfxPlay(SFX_TAP);
       return;
     }
@@ -3663,6 +3789,7 @@ void renderCardProgress() {
 }
 
 void renderCard() {
+  cardDirty = false;
   gfx->fillScreen(UI_BG_DAY);
   if (cardPage == 0) renderCardProfile();
   else if (cardPage == 1) renderCardPersonality();
@@ -3696,6 +3823,8 @@ static const char KB_KEYS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-";  // 28 + DEL + OK 
 
 void openKeyboard() {
   kbOpen = true;
+  keyboardDirty = true;
+  lockTouchBrief();
   strncpy(nameBuf, pet.nick, sizeof(nameBuf) - 1);
   nameBuf[sizeof(nameBuf) - 1] = 0;
   nameLen = strlen(nameBuf);
@@ -3703,6 +3832,7 @@ void openKeyboard() {
 }
 
 void renderKeyboard() {
+  keyboardDirty = false;
   gfx->fillScreen(UI_BG_DAY);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
@@ -3742,12 +3872,16 @@ void keyboardTap(int16_t x, int16_t y) {
   sfxPlay(SFX_TAP);
   if (i == 28) {  // borrar
     if (nameLen) nameBuf[--nameLen] = 0;
+    keyboardDirty = true;
   } else if (i == 29) {  // OK
     pet.rename(nameBuf);
     kbOpen = false;
+    cardDirty = true;
+    lockTouchBrief();
   } else if (nameLen < sizeof(nameBuf) - 1) {
     nameBuf[nameLen++] = KB_KEYS[i];
     nameBuf[nameLen] = 0;
+    keyboardDirty = true;
   }
 }
 

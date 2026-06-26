@@ -1,15 +1,15 @@
 {
   "name": "TamaPoke",
-  "version": "1.26.1-flicker-fix",
+  "version": "1.27-performance-stability",
   "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "firmware/tamapoke-1.26.1-flicker-fix-bootloader.bin", "offset": 0 },
-        { "path": "firmware/tamapoke-1.26.1-flicker-fix-partitions.bin", "offset": 32768 },
-        { "path": "firmware/tamapoke-1.26.1-flicker-fix-boot_app0.bin", "offset": 57344 },
-        { "path": "firmware/tamapoke-1.26.1-flicker-fix-app.bin", "offset": 65536 }
+        { "path": "firmware/tamapoke-1.27-performance-stability-bootloader.bin", "offset": 0 },
+        { "path": "firmware/tamapoke-1.27-performance-stability-partitions.bin", "offset": 32768 },
+        { "path": "firmware/tamapoke-1.27-performance-stability-boot_app0.bin", "offset": 57344 },
+        { "path": "firmware/tamapoke-1.27-performance-stability-app.bin", "offset": 65536 }
       ]
     }
   ]
