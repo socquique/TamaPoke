@@ -27,7 +27,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.25-light-sleep"
+#define FW_VERSION "1.25.1-light-sleep-fix"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -360,6 +360,8 @@ uint16_t renderIntervalMs() {
 
 bool lightSleepAllowed(uint32_t now) {
   if (!powerSave || usbPresent() || audioBusy() || Serial.available()) return false;
+  if (!screenOff && dimStage == 0) return false;
+  if (!screenOff && now - lastInteract < 1500UL) return false;
   if (wasPressed || gTouchIrq || now < ignoreTouchUntil) return false;
   if (gameOpen || sackOpen || battleOpen || bathUntil) return false;
   if (pet.awaitingStarter() || feedMenuUntil || confirmUntil || choiceKind || wildPromptUntil || petEventUntil) return false;
@@ -370,7 +372,7 @@ bool lightSleepAllowed(uint32_t now) {
 
 uint16_t lightSleepMs(uint32_t now) {
   if (!lightSleepAllowed(now)) return 0;
-  uint16_t maxMs = screenOff ? 750 : (dimStage >= 2 ? 300 : (dimStage >= 1 ? 180 : 70));
+  uint16_t maxMs = screenOff ? 750 : (dimStage >= 2 ? 300 : 180);
   uint16_t ri = renderIntervalMs();
   uint32_t sinceRender = now - lastRender;
   if (sinceRender < ri) {
