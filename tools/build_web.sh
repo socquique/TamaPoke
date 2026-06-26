@@ -6,7 +6,7 @@
 set -e
 cd "$(dirname "$0")/.."
 FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
-VERSION="1.25.1-light-sleep-fix"
+VERSION="1.25.2-game-menu-grid"
 
 echo "Compilando..."
 B=build/esp32.esp32.esp32s3

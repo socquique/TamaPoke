@@ -27,7 +27,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.25.1-light-sleep-fix"
+#define FW_VERSION "1.25.2-game-menu-grid"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -765,6 +765,37 @@ void onSwipe(int dir) {
   }
 }
 
+struct GameMenuTile {
+  int16_t x, y, w, h;
+  uint8_t game;
+};
+
+static const GameMenuTile GAME_MENU_TILES[5] = {
+  { 88, 156, 138, 58, 0 },
+  { 240, 156, 138, 58, 1 },
+  { 88, 226, 138, 58, 2 },
+  { 240, 226, 138, 58, 3 },
+  { 94, 296, 278, 62, 4 },
+};
+
+int8_t gameMenuHit(int16_t x, int16_t y) {
+  for (uint8_t i = 0; i < 5; i++) {
+    const GameMenuTile &t = GAME_MENU_TILES[i];
+    if (x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h) return i;
+  }
+  return -1;
+}
+
+void startGameMenuChoice(uint8_t idx) {
+  switch (GAME_MENU_TILES[idx].game) {
+    case 0: startGame(); break;
+    case 1: startCatchGame(); break;
+    case 2: startMemoGame(); break;
+    case 3: startCleanGame(); break;
+    case 4: startTypeGame(); break;
+  }
+}
+
 void onTap(int16_t x, int16_t y) {
   // Serial.printf("TOUCH %d %d\n", x, y);  // diagnostico (silenciado: satura el log)
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial
@@ -846,11 +877,8 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
   if (gameMenuOpen) {
-    if (x >= 88 && x <= 378 && y >= 146 && y <= 184) startGame();
-    else if (x >= 88 && x <= 378 && y >= 190 && y <= 228) startCatchGame();
-    else if (x >= 88 && x <= 378 && y >= 234 && y <= 272) startMemoGame();
-    else if (x >= 88 && x <= 378 && y >= 278 && y <= 316) startCleanGame();
-    else if (x >= 88 && x <= 378 && y >= 322 && y <= 360) startTypeGame();
+    int8_t hit = gameMenuHit(x, y);
+    if (hit >= 0) startGameMenuChoice((uint8_t)hit);
     else { gameMenuOpen = false; sfxPlay(SFX_TAP); }
     return;
   }
@@ -1266,8 +1294,8 @@ void render() {
 // ---------- minijuego: toques con la pokeball ----------
 
 void drawGameMenu() {
-  gfx->fillRoundRect(78, 112, 310, 284, 18, UI_WHITE);
-  gfx->drawRoundRect(78, 112, 310, 284, 18, UI_INK);
+  gfx->fillRoundRect(78, 112, 310, 266, 18, UI_WHITE);
+  gfx->drawRoundRect(78, 112, 310, 266, 18, UI_INK);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
   const char *title = "PLAY";
@@ -1276,11 +1304,12 @@ void drawGameMenu() {
   const char *labels[5] = { T(S_GAME_BALL), T(S_GAME_CATCH), T(S_GAME_MEMO), T(S_GAME_CLEAN), T(S_GAME_TYPE) };
   uint16_t cols[5] = { UI_BAR_BAD, UI_BAR_WARN, 0x4C98, UI_BAR_OK, 0xF3B7 };
   for (int i = 0; i < 5; i++) {
-    int y = 146 + i * 44;
-    gfx->fillRoundRect(88, y, 290, 38, 10, cols[i]);
+    const GameMenuTile &t = GAME_MENU_TILES[i];
+    gfx->fillRoundRect(t.x, t.y, t.w, t.h, 14, cols[i]);
+    gfx->drawRoundRect(t.x, t.y, t.w, t.h, 14, UI_INK);
     gfx->setTextColor(i == 1 ? UI_INK : UI_BG_DAY);
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(labels[i]) * 6, y + 12);
+    gfx->setCursor(t.x + (t.w - (int)strlen(labels[i]) * 12) / 2, t.y + (t.h - 16) / 2);
     gfx->print(labels[i]);
   }
 }
