@@ -27,7 +27,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.25.2-game-menu-grid"
+#define FW_VERSION "1.25.3-hard-ball"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -1457,18 +1457,19 @@ void startTypeGame() {
 }
 
 void respawnBall() {
-  ballX = 130 + random(206);
-  ballY = 96;
-  float sp = 2.35f + gameScore * 0.105f;  // exigente desde el inicio
-  if (sp > 6.4f) sp = 6.4f;
+  ballX = 112 + random(242);
+  ballY = 82;
+  float sp = 3.35f + gameScore * 0.14f;
+  if (sp > 8.4f) sp = 8.4f;
   ballVX = random(2) ? sp : -sp;
-  ballVY = 1.15f;             // empieza cayendo: menos margen para taps gratis
+  ballVX += ((int)random(9) - 4) * 0.28f;
+  ballVY = 2.05f;
 }
 
 int ballHitRadius() {
-  if (gameScore >= 20) return 44;
-  if (gameScore >= 8) return 50;
-  return 58;
+  if (gameScore >= 20) return 34;
+  if (gameScore >= 8) return 40;
+  return 46;
 }
 
 void gameTap(int16_t x, int16_t y) {
@@ -1498,16 +1499,17 @@ void gameTap(int16_t x, int16_t y) {
   int hitRadius = ballHitRadius();
   if (dx * dx + dy * dy < hitRadius * hitRadius) {  // toque a la bola!
     uint32_t now = millis();
-    if (now - ballLastHitAt < 240 || ballVY < -0.8f) return;
+    if (now - ballLastHitAt < 420 || ballVY < 0.55f) return;
     gameScore++;
     sfxPlay(SFX_MINIGAME_OK);
-    // impulso moderado; el bloqueo evita encadenar rebotes al inicio
-    float lift = 5.85f + (gameScore > 14 ? 3.0f : gameScore * 0.18f);
+    float lift = 4.65f + (gameScore > 16 ? 1.7f : gameScore * 0.11f);
     ballVY = -lift;
-    float drift = 0.22f + (gameScore >= 8 ? 0.04f : 0.0f) + (gameScore >= 18 ? 0.04f : 0.0f);
-    ballVX += dx * drift;
-    if (ballVX > 9.0f) ballVX = 9.0f;
-    if (ballVX < -9.0f) ballVX = -9.0f;
+    float drift = 0.38f + (gameScore >= 6 ? 0.08f : 0.0f) + (gameScore >= 14 ? 0.10f : 0.0f);
+    float chaos = ((int)random(17) - 8) * 0.26f;
+    ballVX += dx * drift + chaos;
+    if (random(100) < 28) ballVX = -ballVX * (0.72f + random(45) * 0.01f);
+    if (ballVX > 11.5f) ballVX = 11.5f;
+    if (ballVX < -11.5f) ballVX = -11.5f;
     hitX = ballX;
     hitY = ballY;
     hitTime = now;
@@ -1633,10 +1635,12 @@ void typeTap(int16_t x, int16_t y) {
 }
 
 void stepGame() {
-  float grav = 0.82f + gameScore * 0.032f;  // cae exigente desde el inicio
-  if (gameScore >= 8) grav += 0.10f;
-  if (gameScore >= 18) grav += 0.12f;
-  if (grav > 1.65f) grav = 1.65f;
+  float grav = 1.22f + gameScore * 0.048f;
+  if (gameScore >= 5) grav += 0.14f;
+  if (gameScore >= 12) grav += 0.18f;
+  if (grav > 2.25f) grav = 2.25f;
+  ballVX += sinf((millis() + gameScore * 97) * 0.018f) * 0.11f;
+  if (random(100) < 7) ballVX += ((int)random(7) - 3) * 0.22f;
   ballVY += grav;
   ballX += ballVX;
   ballY += ballVY;
@@ -1647,8 +1651,9 @@ void stepGame() {
     float nx = dx / d, ny = dy / d;
     float dot = ballVX * nx + ballVY * ny;
     if (dot > 0) {
-      ballVX = (ballVX - 2 * dot * nx) * 0.94f;
-      ballVY = (ballVY - 2 * dot * ny) * 0.94f;
+      ballVX = (ballVX - 2 * dot * nx) * 1.05f;
+      ballVY = (ballVY - 2 * dot * ny) * 0.88f;
+      ballVX += ((int)random(9) - 4) * 0.18f;
       sfxPlay(SFX_BALL_BOUNCE);
     }
     ballX = CX + nx * 205;
