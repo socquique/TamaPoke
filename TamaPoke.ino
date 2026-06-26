@@ -27,7 +27,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.27.1-help-button"
+#define FW_VERSION "1.27.2-sound-flicker"
 #define HELP_PAGE_COUNT 7
 #define HELP_LINE_COUNT 6
 
@@ -411,7 +411,7 @@ void maybePlayAmbientSound(uint32_t now) {
 
 uint16_t renderIntervalMs() {
   if (screenOff) return 5000;
-  if (battleOpen) return 125;
+  if (battleOpen) return battleResolved ? 320 : 190;
   if (gameOpen || sackOpen) return 115;
   if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
   if (!powerSave) return 100;

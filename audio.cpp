@@ -21,6 +21,7 @@ static bool gReady = false;
 static uint8_t gMode = SOUND_FULL;
 static QueueHandle_t gQ = nullptr;
 static volatile bool gBusy = false;
+static uint32_t gLastQueuedAt[4] = {0, 0, 0, 0};
 
 // ---- I2C del códec ----
 static bool esW(uint8_t reg, uint8_t val) {
@@ -136,14 +137,14 @@ static const SfxDef SFX[SFX_COUNT] = {
 };
 
 static const uint8_t SFX_MIN_MODE[SFX_COUNT] = {
-  SOUND_FULL, // TAP
+  SOUND_FULL, // TAP: nur "viel"
   SOUND_MED,  // EAT
-  SOUND_FULL, // PLAY
+  SOUND_FULL, // PLAY: kleine Punkte/Klicks nur "viel"
   SOUND_MED,  // HEART
-  SOUND_LOW,  // HATCH
+  SOUND_LOW,  // HATCH: grosses Ereignis
   SOUND_LOW,  // EVOLVE
   SOUND_LOW,  // MEDAL
-  SOUND_MED,  // DENY
+  SOUND_LOW,  // DENY: wichtiges Feedback auch bei wenig
   SOUND_LOW,  // BYE
   SOUND_LOW,  // LEVEL
   SOUND_LOW,  // BATTLE_WIN
@@ -164,9 +165,9 @@ static const uint8_t SFX_MIN_MODE[SFX_COUNT] = {
   SOUND_FULL, // ENEMY_HIT
   SOUND_MED,  // EFFECTIVE
   SOUND_FULL, // WEAK_HIT
-  SOUND_FULL, // MINIGAME_OK
-  SOUND_FULL, // MINIGAME_BAD
-  SOUND_MED,  // LOW_HP
+  SOUND_MED,  // MINIGAME_OK
+  SOUND_MED,  // MINIGAME_BAD
+  SOUND_LOW,  // LOW_HP
 };
 
 static int16_t buf[256 * 2];  // estéreo intercalado (L=R)
@@ -195,6 +196,19 @@ static int16_t oscSample(uint8_t wave, int phase, int period, int16_t amp) {
   return (p < period / 2) ? amp : -amp;
 }
 
+static uint8_t modeGainPct() {
+  switch (gMode) {
+    case SOUND_LOW: return 58;
+    case SOUND_MED: return 82;
+    case SOUND_FULL: return 118;
+    default: return 0;
+  }
+}
+
+static bool criticalSfx(uint8_t id) {
+  return id < SFX_COUNT && SFX_MIN_MODE[id] == SOUND_LOW;
+}
+
 // reproduce una nota con rampa anti-click; f==0 es silencio salvo W_NOISE.
 static void playTone(const Note &note) {
   uint16_t f = note.f;
@@ -202,7 +216,7 @@ static void playTone(const Note &note) {
   int total = SAMPLE_RATE * ms / 1000;
   int done = 0;
   int phase = 0;
-  const int16_t maxAmp = (int16_t)(7600L * note.vol / 100);
+  const int16_t maxAmp = (int16_t)(7600L * note.vol * modeGainPct() / 10000);
   while (done < total) {
     int n = total - done; if (n > 256) n = 256;
     for (int i = 0; i < n; i++) {
@@ -276,8 +290,19 @@ void audioBegin() {
 }
 
 void sfxPlay(uint8_t id) {
-  if (gReady && gMode != SOUND_OFF && gQ && id < SFX_COUNT && gMode >= SFX_MIN_MODE[id])
-    xQueueSend(gQ, &id, gMode == SOUND_FULL ? pdMS_TO_TICKS(18) : 0);
+  if (!gReady || gMode == SOUND_OFF || !gQ || id >= SFX_COUNT || gMode < SFX_MIN_MODE[id]) return;
+
+  // Die Modi sollen sich spuerbar anfuehlen: "viel" spielt alles, "mittel"
+  // laesst schnelle Wiederholungen etwas aus, "wenig" bleibt bei grossen
+  // Ereignissen und klaren Warnungen.
+  uint32_t now = millis();
+  if (gMode == SOUND_MED && !criticalSfx(id)) {
+    if (now - gLastQueuedAt[gMode] < 180UL) return;
+  } else if (gMode == SOUND_LOW) {
+    if (now - gLastQueuedAt[gMode] < 650UL && !criticalSfx(id)) return;
+  }
+  gLastQueuedAt[gMode] = now;
+  xQueueSend(gQ, &id, gMode == SOUND_FULL ? pdMS_TO_TICKS(28) : 0);
 }
 
 void audioSetEnabled(bool on) {
