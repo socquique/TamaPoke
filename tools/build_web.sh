@@ -6,7 +6,7 @@
 set -e
 cd "$(dirname "$0")/.."
 FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
-VERSION="1.26-help-guide"
+VERSION="1.26.1-flicker-fix"
 
 echo "Compilando..."
 B=build/esp32.esp32.esp32s3
