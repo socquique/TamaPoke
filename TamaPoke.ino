@@ -27,7 +27,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.27.2-sound-flicker"
+#define FW_VERSION "1.27.3-ball-touch"
 #define HELP_PAGE_COUNT 7
 #define HELP_LINE_COUNT 6
 
@@ -745,7 +745,10 @@ void handleTouch() {
     swallowGesture = (dimStage > 0) || screenOff;  // si estaba a oscuras, solo despierta
     screenOff = false;
     lastInteract = millis();
-    if (!swallowGesture && gameOpen && gameMode == 1) {
+    if (!swallowGesture && gameOpen && gameMode == 0) {
+      gameTap(x, y);         // ball: cuenta al tocar, no al soltar
+      swallowGesture = true; // evita doble tap al levantar el dedo
+    } else if (!swallowGesture && gameOpen && gameMode == 1) {
       catchTap(x, y);        // juego de reflejos: cuenta al tocar, no al soltar
       swallowGesture = true; // evita doble tap al levantar el dedo
     }
@@ -1589,9 +1592,9 @@ void respawnBall() {
 }
 
 int ballHitRadius() {
-  if (gameScore >= 20) return 34;
-  if (gameScore >= 8) return 40;
-  return 46;
+  if (gameScore >= 20) return 38;
+  if (gameScore >= 8) return 44;
+  return 50;
 }
 
 void gameTap(int16_t x, int16_t y) {
@@ -1621,7 +1624,7 @@ void gameTap(int16_t x, int16_t y) {
   int hitRadius = ballHitRadius();
   if (dx * dx + dy * dy < hitRadius * hitRadius) {  // toque a la bola!
     uint32_t now = millis();
-    if (now - ballLastHitAt < 420 || ballVY < 0.55f) return;
+    if (now - ballLastHitAt < 260 || ballVY < -0.25f) return;
     gameScore++;
     sfxPlay(SFX_MINIGAME_OK);
     float lift = 4.65f + (gameScore > 16 ? 1.7f : gameScore * 0.11f);
@@ -1757,10 +1760,10 @@ void typeTap(int16_t x, int16_t y) {
 }
 
 void stepGame() {
-  float grav = 1.22f + gameScore * 0.048f;
+  float grav = 1.14f + gameScore * 0.046f;
   if (gameScore >= 5) grav += 0.14f;
   if (gameScore >= 12) grav += 0.18f;
-  if (grav > 2.25f) grav = 2.25f;
+  if (grav > 2.10f) grav = 2.10f;
   ballVX += sinf((millis() + gameScore * 97) * 0.018f) * 0.11f;
   if (random(100) < 7) ballVX += ((int)random(7) - 3) * 0.22f;
   ballVY += grav;
