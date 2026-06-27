@@ -27,7 +27,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.27.3-ball-touch"
+#define FW_VERSION "1.27.4-wake-touch"
 #define HELP_PAGE_COUNT 7
 #define HELP_LINE_COUNT 6
 
@@ -725,6 +725,36 @@ void handleTouch() {
   gTouchIrq = false;
   int16_t x, y;
   bool pressed = touch.getPoint(&x, &y, 1) > 0;
+
+  // Pantalla apagada por PWR: no despertar por cualquier roce accidental.
+  // PWR corto sigue despertando al instante; touch requiere mantener pulsado.
+  if (screenOff) {
+    if (pressed && !wasPressed) {
+      tX0 = tXl = x;
+      tY0 = tYl = y;
+      tStart = now;
+      holdFired = false;
+      wasPressed = true;
+    } else if (pressed) {
+      tXl = x;
+      tYl = y;
+      if (!holdFired && now - tStart >= 700UL &&
+          abs(tXl - tX0) < 42 && abs(tYl - tY0) < 42) {
+        screenOff = false;
+        dimStage = 0;
+        lastInteract = now;
+        holdFired = true;
+        swallowGesture = true;
+        markUiDirty();
+        lockTouchBrief(320);
+        sfxPlay(SFX_TAP);
+      }
+    } else {
+      wasPressed = false;
+      holdFired = false;
+    }
+    return;
+  }
 
   // saco de entrenamiento: cada toque cuenta al instante (aporrear rapido)
   if (sackOpen) {
