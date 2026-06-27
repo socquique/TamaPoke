@@ -37,7 +37,8 @@
 <div class="wrap">
   <h1>🐢 TamaPoke</h1>
   <p class="sub">A 151-Pokémon tamagotchi for the Waveshare ESP32-S3-Touch-AMOLED-1.75.
-     Install it from your browser — no Arduino, no drivers.</p>
+     Install it from your browser — no ZIP download, no release files, no Arduino,
+     no manual firmware files.</p>
 
   <p class="unsupported" id="unsupported">
     ⚠️ Your browser doesn't support Web Serial. Use <b>Chrome</b> or <b>Edge</b> on a computer.
@@ -46,15 +47,15 @@
   <h2><span class="num">1</span>Flash the firmware</h2>
   <div class="step">
     <p>Plug the board in via USB and press install. Pick the port and wait.</p>
-    <esp-web-install-button manifest="manifest.json">
+    <esp-web-install-button manifest="manifest.json?v=1.27.4-wake-touch">
       <button slot="activate">⚡ Install TamaPoke</button>
       <span slot="unsupported">Browser not supported (use Chrome/Edge).</span>
       <span slot="not-allowed">Needs HTTPS.</span>
     </esp-web-install-button>
     <p class="note">🔄 <b>Updating to a new version? Install <u>without</u> erasing</b> to keep
-       your Pokémon — the save lives in flash and the sprites on the microSD, so a normal
-       install keeps both. Only a full <b>Erase</b> wipes your saved pet (the SD sprites
-       survive even that). First time on a fresh board? You can erase, no problem.</p>
+       your Pokémon — updates flash only the firmware parts and leave the save area untouched.
+       Only a full <b>Erase</b> wipes your saved pet. First time on a fresh board? You can erase,
+       no problem.</p>
   </div>
 
   <h2><span class="num">2</span>Load the sprites onto the microSD</h2>
@@ -69,7 +70,7 @@
       <button id="auto" disabled>⬇️ Load sprites</button>
     </div>
     <p class="note">Have your own <code>.bin</code> files? <label style="cursor:pointer;text-decoration:underline">pick them manually<input id="files" type="file" accept=".bin" multiple disabled hidden></label></p>
-    <p class="note">🎨 Want to make your own sprites? See <a href="https://github.com/socquique/TamaPoke#generate-and-load-the-sprites-yourself" target="_blank">how to generate &amp; load them</a> in the repo.</p>
+    <p class="note">🎨 Want to make your own sprites? See <a href="https://github.com/ShadowEnemyx/TamaPoke#generate-and-load-the-sprites-yourself" target="_blank">how to generate &amp; load them</a> in the repo.</p>
     <div class="bar" id="bar"><div></div></div>
     <pre id="log"></pre>
   </div>
@@ -79,7 +80,7 @@
      all. Tap the creature to pet it; swipe to open the Pokédex (sideways), the
      stat card (up) or set the clock (down); the physical PWR button turns the
      screen off (short press) or everything off (long press).
-     More in the <a href="https://github.com/socquique/TamaPoke" target="_blank">repository</a>.</p>
+     More in the <a href="https://github.com/ShadowEnemyx/TamaPoke" target="_blank">repository</a>.</p>
 
   <p class="note">Sprites from <a href="https://github.com/PMDCollab/SpriteCollab" target="_blank">PMD SpriteCollab</a> (CC BY-NC).
      Pokémon is a ™ of Nintendo / Game Freak. Non-commercial project.</p>

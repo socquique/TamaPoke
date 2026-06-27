@@ -45,8 +45,8 @@ enum StrId : uint8_t {
   // ficha: pagina de progreso
   S_PROGRESS, S_LVL_FMT, S_NEXT_LVL_FMT, S_EVO_LABEL, S_FINAL_FORM,
   S_EVO_READY, S_EVO_BLOCKED, S_EVO_IN_FMT, S_MISTAKES_FMT,
-  // interruptor de sonido (ajustes)
-  S_SND_ON, S_SND_OFF,
+  // modo de sonido (ajustes)
+  S_SND_FULL, S_SND_MED, S_SND_LOW, S_SND_OFF, S_PSAVE_ON, S_PSAVE_OFF,
   S_EVO_TAP,        // texto del boton de evolucion
   S_FAREWELL_BTN,   // texto del boton de despedida (lleva el nombre: "%s ...")
   S_RUNAWAY_BTN,    // texto del boton de escapada por abandono (final triste)
@@ -54,10 +54,32 @@ enum StrId : uint8_t {
   S_EVO_Q, S_EVO_KEEP, S_FAR_Q, S_FAR_GO, S_FAR_STAY,
   S_CHOOSE_STARTER,  // titulo de la eleccion del inicial (primera vez)
   S_NO_SPRITES, S_LOAD_SPRITES,  // aviso cuando falta el sprite en la SD
+  S_WILD_BATTLE, S_FIGHT, S_RUN_BATTLE, S_WIN, S_LOSS, S_ROUNDS_FMT, S_DAMAGE_FMT, S_OK,
+  S_ATTACK, S_DODGE, S_REST, S_HIT_FMT, S_MISSED, S_DODGED, S_RESTED_FMT, S_RAN,
+  S_WL_FMT, S_BSTREAK_FMT, S_BBEST_FMT, S_ATK_GAIN_FMT, S_DEF_GAIN_FMT, S_SPD_GAIN_FMT, S_HYG_GAIN_FMT,
+  S_COUNTER_READY, S_NO_REST, S_WILD_Q, S_LATER,
+  S_QUICK_ATTACK, S_HEAVY_ATTACK,
+  S_ENEMY_DODGED, S_GUARD,
+  S_GAME_BALL, S_GAME_CATCH, S_GAME_MEMO, S_GAME_CLEAN, S_GAME_TYPE, S_CATCH_TITLE, S_CLEAN_TITLE, S_TYPE_TITLE, S_ROUND_FMT,
+  S_EVENT_FOUND, S_EVENT_PET, S_EVENT_LUCKY,
+  S_PERSONALITY, S_PERS_BALANCED, S_PERS_PLAYFUL, S_PERS_BRAVE, S_PERS_CALM, S_PERS_LAZY,
+  S_PERS_BALANCED_HINT, S_PERS_PLAYFUL_HINT, S_PERS_BRAVE_HINT, S_PERS_CALM_HINT, S_PERS_LAZY_HINT,
+  S_RECORDS, S_AGE_DAYS_FMT,
+  S_DAILY, S_DONE, S_REWARD, S_GOAL_CARE, S_GOAL_PLAY, S_GOAL_BATTLE, S_GOAL_CATCH, S_GOAL_MEMO,
+  S_CATCH_WILD, S_LEAVE_WILD, S_CAUGHT_OK, S_ESCAPED, S_CAUGHT_MARK, S_RAISED_MARK,
+  S_FILTER_ALL,
+  S_EFFECTIVE, S_NOT_EFFECTIVE,
+  S_BOX, S_NO_CATCHES, S_CAUGHT_COUNT_FMT,
+  S_HAPPY_FB, S_BOND_GAIN, S_WAIT,
+  S_MORNING, S_DAY, S_EVENING, S_NIGHT,
+  S_DEX_GOAL_FMT, S_DEX_REWARD, S_KNOWN_FMT,
+  S_SORT_DEX, S_SORT_TYPE, S_SORT_RAISED, S_PAGE_FMT,
+  S_CLOSE_CHANCE,
   STR_COUNT
 };
 
 const char *T(StrId id);       // texto en el idioma activo
+const char *dexName(int16_t dex); // nombre de Pokemon en el idioma activo
 const char *medalName(int i);  // banner de medalla (MED_COUNT)
 const char *medalLabel(int i); // etiqueta corta de medalla
 const char *medalDesc(int i);  // descripcion larga de medalla

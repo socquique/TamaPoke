@@ -1,12 +1,36 @@
 # TamaPoke
 
-[![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://socquique.github.io/TamaPoke/web/)
+[![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://shadowenemyx.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.2-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.27.4--wake--touch-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
-[![Stars](https://img.shields.io/github/stars/socquique/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/socquique/TamaPoke/stargazers)
+[![Stars](https://img.shields.io/github/stars/ShadowEnemyx/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/ShadowEnemyx/TamaPoke/stargazers)
+
+## Install / Flash
+
+**For normal use, use only the web installer. Do not download anything manually.**
+
+### [Open the TamaPoke web installer](https://shadowenemyx.github.io/TamaPoke/web/)
+
+You do **not** need to download the ZIP, release files, Arduino project, firmware
+`.bin` files or `sprites.pak` manually. The web installer flashes the firmware
+and loads the sprites from the browser.
+
+Use desktop **Chrome or Edge**, connect the Waveshare ESP32-S3 board by USB, and
+follow the buttons on the installer page. If you are updating an existing pet,
+install **without erase** to keep your save.
+
+Short version:
+1. Open the web installer link above.
+2. Connect the Waveshare ESP32-S3 board by USB.
+3. Click install.
+4. Leave **erase device** unchecked when updating.
+5. Use the installer page to load sprites if needed.
+
+Everything else in this repository is only for developers who want to build or
+modify the firmware themselves.
 
 A gen-1-Pokémon-inspired tamagotchi for the
 **Waveshare ESP32-S3-Touch-AMOLED-1.75** (round 466×466 AMOLED, CO5300 driver
@@ -17,7 +41,7 @@ and complete them all (shinies included).
 > PMD SpriteCollab (CC BY-NC, Pokémon © Nintendo/Game Freak), and the 3D case is
 > CC BY-NC-SA. See **[License](#license)** and **Credits**.
 
-🔴 **3D-printed Pokéball case + print profiles → [on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)** · flash it in your browser → **[web installer](https://socquique.github.io/TamaPoke/web/)**
+🔴 **3D-printed Pokéball case + print profiles → [on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)** · install TamaPoke here → **[web installer](https://shadowenemyx.github.io/TamaPoke/web/)**
 
 ## Status
 
@@ -28,10 +52,11 @@ training), retention hooks (streak / bond / medals / name), biome + real-time
 backgrounds, ball minigame, training bag, animated bath, RTC with offline
 progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
 **sound (ES8311)**, **6 UI languages (English default)**, **starter choice on
-first run**, and a one-click **web installer**.
+first run**, a one-click **web installer**, manual and rare optional wild
+battles, one-shot catch attempts after wins, extra minigames, pet events,
+personality/profile cards, daily goals and richer synthesized sound effects.
 
-Pending: wild encounters / battle (designed, not implemented), 3D case, soak
-test. See **Roadmap**.
+Pending: longer hardware soak testing and polish. See **Roadmap**.
 
 ## Game manual (the actual numbers)
 
@@ -62,12 +87,33 @@ While **awake**, per minute:
 - 🍎 **Berry** (3 flavors): +25 FOOD. Each species has a **hidden favorite flavor**
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
 - 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
-- ⚽ **Play / minigame:** +JOY, −ENE; the minigame trains **SPEED** and burns weight.
+- ⚽ **Play / minigames:** ball, catch, memo, clean and type add variety; rewards
+  are moderate and train SPEED/DEFENSE/ATTACK or improve care.
 - 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
 - 🫧 **Bath:** clears poops, HYG → 100.
 - 👆 **Pet it:** +5 JOY + bond.
 - 🌙 **Sleep:** rest — ENE **+6/min**, needs drain ~**4× slower** with floors
   (FOOD 30 / JOY 35 / HYG 45). No poops, no slip-ups, can't run away while asleep.
+
+### Play menu and minigames
+Tap **Play** to open a small menu:
+
+- **BALL**: keep the Pokéball in the air by tapping it. It starts fast, gravity
+  rises with score, wall bounces matter, and missed drops end the run after 3
+  misses. Rewards joy and SPEED training.
+- **CATCH**: tap the appearing berry/icon before it disappears. Targets vanish
+  faster as your score rises; 3 mistakes or the timer ends the run. Rewards joy
+  and SPEED training, with small food/energy cost.
+- **MEMO**: watch the 4 pads flash, then repeat the sequence. Each cleared round
+  adds one more step. Rewards DEFENSE training plus small joy/bond.
+- **CLEAN**: tap dirt spots before the timer ends. It improves hygiene, joy and
+  may clean one poop, while costing a little energy.
+- **TYPE**: pick the type that is strong against the shown enemy type. It trains
+  ATTACK and teaches the same lightweight type logic used in battles.
+
+All minigame records are saved and shown on the Personality/Records area.
+The daily **CATCH 5** goal counts Catch-minigame targets and successful wild
+Pokémon catches.
 
 ### Eggs & who you get (spawn odds)
 - **First ever pet:** you pick a starter — **Bulbasaur / Charmander / Squirtle**.
@@ -114,11 +160,42 @@ After any ending, a **new egg** appears.
   neglect. Both streak & bond improve egg/shiny odds.
 - **8 medals** (Lv10/25/50, favorite berry found, 7-day streak, max bond, final form,
   "fit" = weight 0 & no slip-ups), per-pet + a global counter.
-- **Pokédex:** raising a species registers it; **151 + shinies** to complete.
+- **Pokédex:** raising a species registers it; caught wild Pokémon get a separate
+  caught marker. The gallery can show known, raised and caught entries, with
+  localized Pokémon names in all supported languages.
 
 ### Battle stats
 ATK / DEF / SPD = real **Gen-1 base** × genes + level + training (STRENGTH ← bag,
-SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the roadmap.)*
+SPEED ← minigames, DEFENSE ← memo/good care). Wild battles can be started from
+the Battle card, and rare optional wild prompts can appear on the main screen.
+Battles are turn-based with quick/heavy attacks, dodge/counter and limited rest.
+Wins/losses/streaks are tracked and wins give small training rewards.
+After a win, you get one optional catch attempt; caught wild Pokémon are marked
+separately in the Pokédex and do not replace the active pet.
+Wild levels skew fairer now: most are near your level, some are a few levels
+below, and rare stronger fights still happen. If you lose but bring the wild
+Pokémon below 30% HP, a low-chance respect catch may appear.
+
+Battle actions:
+
+- **Attack** opens quick/heavy attack choices. Quick is safer; heavy is stronger
+  but less reliable.
+- **Dodge** can avoid damage and prepares a counter. The next attack gets a
+  moderate damage boost, still capped to avoid cheap one-hit fights.
+- **Rest** heals during battle but only has 2 uses per fight.
+- **Run** leaves the fight with no reward or catch chance.
+
+Types matter in both directions: effective and weak matchups adjust damage, and
+type labels are visible in battle.
+
+Catch rules:
+
+- After a **win**, you get exactly one optional catch attempt: **CATCH** or
+  **LEAVE**.
+- After a **close loss** with the enemy under 30% HP, a low "respect catch" may
+  appear. It can register the Pokémon, but gives no win, no streak and no reward.
+- Caught Pokémon go into the Pokédex/Box collection only; they do not replace your
+  active pet.
 
 ## Hardware
 
@@ -132,7 +209,12 @@ SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the r
   MX1.25 connector)
 - Pins taken from the [official Waveshare repo](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75) (see `pin_config.h`)
 
-## Libraries (Arduino IDE / arduino-cli)
+## Developer build info
+
+You can ignore this section if you only want to play TamaPoke. The public install
+path is the browser-based web installer above.
+
+### Libraries (Arduino IDE / arduino-cli)
 
 | Library | Author | Use |
 |---|---|---|
@@ -141,7 +223,7 @@ SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the r
 | XPowersLib | Lewis He | AXP2101 PMU (battery, brightness, PWR button) |
 | ESP_I2S (bundled in the ESP32 core) | Espressif | I2S to the ES8311 codec |
 
-## IDE setup / build
+### IDE setup / build
 
 - Board: **ESP32S3 Dev Module** · Flash **16MB** · PSRAM **OPI PSRAM**
   (required: the 466×466×16-bit framebuffer ≈ 434 KB lives in PSRAM) ·
@@ -154,13 +236,19 @@ arduino-cli compile --fqbn "$FQBN" .
 arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn "$FQBN" .
 ```
 
-### Easiest install: the web installer
+### Local web installer
 
-`web/index.html` flashes the firmware (ESP Web Tools) and pushes the sprites to
-the SD over Web Serial, no Arduino needed. Serve it over HTTPS or `localhost`
+The hosted installer is the recommended path:
+[`https://shadowenemyx.github.io/TamaPoke/web/`](https://shadowenemyx.github.io/TamaPoke/web/)
+
+For local development, `web/index.html` flashes the firmware (ESP Web Tools) and
+pushes the sprites to the SD over Web Serial. Serve it over HTTPS or `localhost`
 (secure context) and open it in **Chrome/Edge**. See [`web/README.md`](web/README.md).
 
 ### Generate and load the sprites yourself
+
+Normal users should use the web installer instead. This is only needed if you are
+rebuilding the sprite bundle yourself.
 
 All sprites come from **[PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)**
 (CC BY-NC). You can regenerate the whole set and load it onto your board with the
@@ -195,7 +283,7 @@ If one bottoms out it counts as a *slip-up*.
 **Buttons (bottom arc, icons):**
 - 🍎 **Feed** → food menu: 3 berries (each species has a hidden favourite that
   gives a bonus) and a candy (+happiness but it fattens; weight makes it sluggish).
-- ⚽ **Play** → the pokeball minigame (trains SPEED).
+- ⚽ **Play** → game menu: ball, catch, memo, clean and type.
 - 🌙 **Light** → sleep/wake (recovers energy, dims the screen). While asleep,
   needs decay much slower (rest).
 - 🫧 **Bath** → a foam scene that cleans up the poops.
@@ -203,14 +291,46 @@ If one bottoms out it counts as a *slip-up*.
 **Touch gestures:**
 - Tap the creature = pet it (+happiness, bond).
 - Horizontal swipe = open the **Pokédex / gallery**.
-- Vertical swipe up = open the **stat card** (4 pages: Profile / Battle / Medals /
-  Progress; swipe between them; tap the name on Profile to rename; on Battle the
-  "Train strength" button opens the bag).
-- Swipe down = **set the clock** and pick the **language** + sound on/off.
+- Vertical swipe up = open the **card view** (Profile / Personality / Daily /
+  Box / Battle / Medals / Progress; swipe between them; tap the name on Profile to
+  rename; on Battle you can start wild battles or open the training bag).
+  The Box card can page through caught Pokémon and cycle sorting by Dex, type,
+  or raised status.
+- Swipe down = **set the clock** and pick the **language**, sound level and
+  optional **Power Save**, or open the built-in **Help** pages. Power Save keeps
+  normal play unchanged, but reduces idle work and uses short ESP32 light-sleep
+  pauses on battery while idle or screen-off.
 - Long press (3 s) on the creature = **release** dialog.
 
 **Physical PWR button:** short = screen on/off · long (4 s) = full power-off
 (the RTC stays alive, so time passes even while it's off).
+
+### Card view
+Swipe up from the main screen, then swipe between cards:
+
+- **Profile**: nickname, age, bond/streak, favorite berry info and rename access.
+- **Personality**: play-style personality plus records for ball, catch, memo,
+  clean, type and training bag.
+- **Daily**: optional daily goals. Completing them gives small rewards; ignoring
+  them has no penalty.
+- **Box**: caught Pokémon collection with paging and sorting by Dex, type or
+  raised status.
+- **Battle**: ATK/DEF/SPD/weight, W/L/streak/best, **Wild Battle** and
+  **Strength Training**.
+- **Medals**: individual medals and progress.
+- **Progress**: level, next level, evolution readiness and care slip-ups.
+
+### Sound modes
+Swipe down to settings and tap the sound button:
+
+- **TON VIEL / SND ALL**: all feedback, including taps, swipes, menu sounds,
+  card/gallery changes, minigame start, training hits, ball bounces/misses,
+  memo sequence steps, occasional main-screen pet chirps and battle/catch effects.
+- **TON MIT / SND MID**: keeps important care, battle, catch, event and result
+  sounds, but removes many tiny repeated UI/minigame noises.
+- **TON WEN / SND LOW**: only major events such as hatch, evolution, medals,
+  level, win/loss and catch result.
+- **TON AUS / SND OFF**: silent.
 
 ## Decisions: you choose, and you watch
 
@@ -264,6 +384,15 @@ hatch) + level + **training**:
 
 Shown on the Battle page of the stat card. The (hidden) weight goes up with candy
 and burns off with training.
+
+## Daily goals, events and personality
+
+- **Daily goals**: three small optional tasks per day, shown on the Daily card.
+  Completing one gives a small joy/bond bonus; ignoring them has no penalty.
+- **Pet events**: rare positive bubbles on the main screen (berry, heart,
+  sparkle) that can be tapped for tiny rewards.
+- **Personality**: derived from play style and shown on the Personality card
+  without changing balance yet.
 
 ## Retention: streak, bond, medals, name
 
@@ -327,12 +456,22 @@ runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio tes
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
 
+## Native logic tests
+
+The core pet rules in `pet.cpp` can be checked on a desktop without ESP32
+hardware. The tests use small Arduino/Preferences stubs and cover hatching,
+evolution gates, battle stat calculation, training rewards and lifecycle
+readiness.
+
+```bash
+cd tests
+make test
+```
+
 ## Roadmap
 
-- **Wild encounters / battle** — designed (see project memory): resolution by
-  ATK/DEF/SPD with PMD Attack/Hurt animations, trainer rank as endgame. Style
-  still to pick (auto / timing / turn-based).
 - **Soak test** 24–48 h (instrumentation ready: `HEALTH` command/heartbeat).
+- **Polish** daily goals, personality reactions and long-term progression.
 
 *(Done: 3D-printed case [published on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi); repo public with the browser installer + one-click sprite bundle.)*
 

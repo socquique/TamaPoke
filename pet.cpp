@@ -4,7 +4,10 @@
 
 void Pet::begin() {
   prefs.begin("tamapoke", false);
-  if (!prefs.getBool("init", false)) {
+  bool hadSave = prefs.getBool("init", false);
+  saveLoadedFromNvs = hadSave;
+  saveCreatedThisBoot = !hadSave;
+  if (!hadSave) {
     prefs.putBool("init", true);
     newEgg();
   } else {
@@ -247,14 +250,74 @@ int16_t Pet::pickEggSpecies() {
 
 void Pet::registerSpecies(int16_t dex) {
   if (dex < 1 || dex > 151) return;
+  bool wasKnown = isRegistered(dex) || isCaught(dex);
   dexReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
   if (shiny) dexShinyReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+  if (!wasKnown) applyDexRewards();
 }
 
 // la racha y el vinculo mejoran el sorteo del huevo (0..~14)
 int Pet::careBonus() const {
   int s = streak > 30 ? 30 : streak;
   return s / 3 + bond / 25;
+}
+
+uint8_t Pet::dailyGoalTarget(uint8_t goalType) const {
+  switch (goalType) {
+    case DAILY_GOAL_CARE: return 1;
+    case DAILY_GOAL_PLAY: return 1;
+    case DAILY_GOAL_BATTLE: return 1;
+    case DAILY_GOAL_CATCH: return 5;
+    case DAILY_GOAL_MEMO: return 3;
+    default: return 1;
+  }
+}
+
+bool Pet::dailyGoalComplete(uint8_t index) const {
+  return index < DAILY_GOAL_COUNT && (dailyGoalDone & (1 << index));
+}
+
+void Pet::ensureDailyGoals() {
+  if (isEgg() || ceremony != CER_NONE) return;
+  uint32_t d = today();
+  if (d == 0 || d == dailyGoalDay) return;
+  static const uint8_t POOL[] = {
+    DAILY_GOAL_CARE, DAILY_GOAL_PLAY, DAILY_GOAL_CATCH, DAILY_GOAL_MEMO, DAILY_GOAL_BATTLE
+  };
+  uint8_t seed = (uint8_t)((d + (speciesId > 0 ? speciesId : 0)) % 5);
+  for (uint8_t i = 0; i < DAILY_GOAL_COUNT; i++) {
+    dailyGoalType[i] = POOL[(seed + i) % 5];
+    dailyGoalProgress[i] = 0;
+  }
+  dailyGoalDone = 0;
+  dailyGoalDay = d;
+  save();
+}
+
+void Pet::applyDailyReward() {
+  joy = clamp100((int)joy + 4);
+  addBond(1);
+}
+
+void Pet::noteDailyGoal(uint8_t goalType, uint8_t amount) {
+  if (isEgg() || ceremony != CER_NONE || amount == 0) return;
+  ensureDailyGoals();
+  if (dailyGoalDay == 0) return;
+  bool changed = false;
+  for (uint8_t i = 0; i < DAILY_GOAL_COUNT; i++) {
+    if (dailyGoalType[i] != goalType || dailyGoalComplete(i)) continue;
+    uint8_t target = dailyGoalTarget(goalType);
+    uint16_t next = (uint16_t)dailyGoalProgress[i] + amount;
+    dailyGoalProgress[i] = next > target ? target : next;
+    changed = true;
+    if (dailyGoalProgress[i] >= target) {
+      dailyGoalDone |= (1 << i);
+      applyDailyReward();
+      heartUntil = millis() + HEART_MS;
+      sfxPlay(SFX_DAILY_GOAL);
+    }
+  }
+  if (changed) save();
 }
 
 // primer cuidado del dia: avanza la racha y afianza el vinculo
@@ -334,6 +397,117 @@ uint16_t Pet::registeredCount() const {
   for (int i = 1; i <= 151; i++)
     if (isRegistered(i)) n++;
   return n;
+}
+
+uint16_t Pet::caughtCount() const {
+  uint16_t n = 0;
+  for (int i = 1; i <= 151; i++)
+    if (isCaught(i)) n++;
+  return n;
+}
+
+uint16_t Pet::knownDexCount() const {
+  uint16_t n = 0;
+  for (int i = 1; i <= 151; i++)
+    if (isRegistered(i) || isCaught(i)) n++;
+  return n;
+}
+
+uint8_t Pet::nextDexGoal() const {
+  static const uint8_t GOALS[] = { 10, 25, 50, 100, 151 };
+  uint16_t known = knownDexCount();
+  for (uint8_t i = 0; i < sizeof(GOALS); i++)
+    if (known < GOALS[i]) return GOALS[i];
+  return 151;
+}
+
+uint8_t Pet::applyDexRewards() {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  static const uint8_t GOALS[] = { 10, 25, 50, 100, 151 };
+  uint16_t known = knownDexCount();
+  uint8_t reached = 0;
+  for (uint8_t i = 0; i < sizeof(GOALS); i++) {
+    uint8_t bit = 1 << i;
+    if (known < GOALS[i] || (dexRewardMask & bit)) continue;
+    dexRewardMask |= bit;
+    reached = GOALS[i];
+    if (GOALS[i] == 10) joy = clamp100((int)joy + 5);
+    else if (GOALS[i] == 25) addBond(2);
+    else if (GOALS[i] == 50) {
+      if (trAtk <= trDef && trAtk <= trSpe) trAtk = clamp100((int)trAtk + 1);
+      else if (trDef <= trAtk && trDef <= trSpe) trDef = clamp100((int)trDef + 1);
+      else trSpe = clamp100((int)trSpe + 1);
+    } else if (GOALS[i] == 100) {
+      addBond(4);
+    } else {
+      heartUntil = millis() + HEART_MS;
+    }
+  }
+  if (reached) save();
+  if (reached) {
+    lastDexReward = reached;
+    dexRewardUntil = millis() + 4200;
+    sfxPlay(SFX_MEDAL);
+  }
+  return reached;
+}
+
+void Pet::registerCaught(int16_t dex) {
+  if (dex < 1 || dex > 151) return;
+  bool wasKnown = isRegistered(dex) || isCaught(dex);
+  dexCaught[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+  noteDailyGoal(DAILY_GOAL_CATCH, 1);
+  if (!wasKnown) applyDexRewards();
+  save();
+}
+
+uint8_t Pet::catchChanceForWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, bool closeWin) const {
+  if (wildDex < 1 || wildDex > DEX_COUNT) return 0;
+  const DexEntry &wild = DEX_TBL[wildDex];
+  if (wild.rarity == R_LEGENDARIO) return 0;
+  int chance = wild.rarity == R_RARO ? 28 : 55;
+  int levelGap = (int)wildLevel - (int)(petLevel ? petLevel : 1);
+  if (levelGap > 0) chance -= levelGap * 4;
+  else if (levelGap < 0) chance += (-levelGap) * 2;
+  if (closeWin) chance += 8;
+  chance += bond / 20;
+  if (wild.rarity == R_RARO && chance > 60) chance = 60;
+  if (chance > 75) chance = 75;
+  if (chance < 10) chance = 10;
+  return (uint8_t)chance;
+}
+
+uint8_t Pet::respectCatchChanceForWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel) const {
+  uint8_t normal = catchChanceForWild(wildDex, wildLevel, petLevel, true);
+  if (normal == 0) return 0;
+  uint8_t chance = (uint8_t)((uint16_t)normal * 40 / 100);
+  if (chance < 5) chance = 5;
+  if (chance > 25) chance = 25;
+  return chance;
+}
+
+bool Pet::tryCatchWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, bool closeWin, uint8_t luckRoll) {
+  uint8_t chance = catchChanceForWild(wildDex, wildLevel, petLevel, closeWin);
+  if (chance == 0) return false;
+  if ((luckRoll % 100) < chance) {
+    registerCaught(wildDex);
+    joy = clamp100((int)joy + 4);
+    addBond(1);
+    save();
+    return true;
+  }
+  return false;
+}
+
+bool Pet::tryRespectCatchWild(int16_t wildDex, uint8_t wildLevel, uint8_t petLevel, uint8_t luckRoll) {
+  uint8_t chance = respectCatchChanceForWild(wildDex, wildLevel, petLevel);
+  if (chance == 0) return false;
+  if ((luckRoll % 100) < chance) {
+    registerCaught(wildDex);
+    save();
+    return true;
+  }
+  return false;
 }
 
 // forma final que ya cumplio su ciclo (7 dias): lista para despedirse. La
@@ -447,6 +621,7 @@ void Pet::feedBerry(uint8_t color) {
   }
   eatUntil = millis() + EAT_ANIM_MS;
   registerCare();
+  noteDailyGoal(DAILY_GOAL_CARE, 1);
   save();
 }
 
@@ -458,6 +633,7 @@ void Pet::feedCandy() {
   weight = clamp100(weight + 12);  // las chuches pasan factura
   eatUntil = millis() + EAT_ANIM_MS;
   registerCare();
+  noteDailyGoal(DAILY_GOAL_CARE, 1);
   save();
 }
 
@@ -474,7 +650,141 @@ void Pet::playResult(uint8_t score) {
   if (score > gameHi) gameHi = score;  // nuevo record
   addBond(2);
   registerCare();
+  noteDailyGoal(DAILY_GOAL_PLAY, 1);
   save();
+}
+
+uint8_t Pet::applyCatchResult(uint8_t score) {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  uint8_t gain = score / 3;
+  if (gain > 12) gain = 12;
+  uint8_t v = trSpe + gain;
+  trSpe = v > 100 ? 100 : v;
+  joy = clamp100(joy + 4 + (score > 12 ? 20 : score));
+  energy = dropTo(energy, 8 + score / 3, 5);
+  fullness = dropTo(fullness, 4, 5);
+  int burn = (int)weight - score;
+  weight = burn > 0 ? burn : 0;
+  if (score >= 5) heartUntil = millis() + HEART_MS;
+  if (score > catchHi) catchHi = score;
+  addBond(1);
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_CATCH, score);
+  save();
+  return gain;
+}
+
+uint8_t Pet::applyMemoResult(uint8_t rounds) {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  uint8_t gain = rounds / 2;
+  if (gain > 10) gain = 10;
+  uint8_t v = trDef + gain;
+  trDef = v > 100 ? 100 : v;
+  joy = clamp100(joy + 5 + (rounds > 8 ? 18 : rounds * 2));
+  energy = dropTo(energy, 6 + rounds / 2, 5);
+  fullness = dropTo(fullness, 3, 5);
+  if (rounds >= 4) heartUntil = millis() + HEART_MS;
+  if (rounds > memoHi) memoHi = rounds;
+  addBond(2);
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_MEMO, rounds);
+  save();
+  return gain;
+}
+
+uint8_t Pet::applyCleanResult(uint8_t score) {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  uint8_t gain = score / 2;
+  if (gain > 18) gain = 18;
+  hygiene = clamp100((int)hygiene + 20 + score * 3);
+  joy = clamp100((int)joy + 3 + (score > 10 ? 12 : score));
+  energy = dropTo(energy, 4 + score / 4, 8);
+  if (poops && score >= 4) poops--;
+  if (score >= 6) heartUntil = millis() + HEART_MS;
+  if (score > cleanHi) cleanHi = score;
+  addBond(1);
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_CARE, 1);
+  save();
+  return gain;
+}
+
+uint8_t Pet::applyTypeResult(uint8_t score) {
+  if (ceremony != CER_NONE || isEgg()) return 0;
+  uint8_t gain = score / 4;
+  if (gain > 10) gain = 10;
+  uint8_t v = trAtk + gain;
+  trAtk = v > 100 ? 100 : v;
+  joy = clamp100((int)joy + 4 + (score > 12 ? 18 : score));
+  energy = dropTo(energy, 5 + score / 3, 8);
+  fullness = dropTo(fullness, 2, 5);
+  if (score >= 5) heartUntil = millis() + HEART_MS;
+  if (score > typeHi) typeHi = score;
+  addBond(1);
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_PLAY, 1);
+  save();
+  return gain;
+}
+
+bool Pet::applyPetEvent(uint8_t eventType) {
+  if (ceremony != CER_NONE || isEgg()) return false;
+  if (eventType == PET_EVENT_BERRY) {
+    fullness = clamp100((int)fullness + 10);
+    joy = clamp100((int)joy + 4);
+  } else if (eventType == PET_EVENT_HEART) {
+    joy = clamp100((int)joy + 6);
+    addBond(1);
+  } else if (eventType == PET_EVENT_SPARKLE) {
+    joy = clamp100((int)joy + 5);
+    if (energy <= hygiene) energy = clamp100((int)energy + 3);
+    else hygiene = clamp100((int)hygiene + 3);
+  } else {
+    return false;
+  }
+  heartUntil = millis() + HEART_MS;
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_CARE, 1);
+  save();
+  return true;
+}
+
+uint8_t Pet::interactPet(bool eveningBonus) {
+  if (ceremony != CER_NONE || isEgg() || sleeping) return PET_INTERACT_NONE;
+  uint32_t nowMinute = ageMinutes ? ageMinutes : 1;
+  if (lastPetInteractMinute && nowMinute < lastPetInteractMinute + 10) {
+    heartUntil = millis() + HEART_MS;
+    return PET_INTERACT_NONE;
+  }
+  lastPetInteractMinute = nowMinute;
+  uint8_t result = PET_INTERACT_JOY;
+  PetPersonality p = personality();
+  int joyGain = (p == PERS_PLAYFUL) ? 4 : 2;
+  joy = clamp100((int)joy + joyGain);
+  if (p == PERS_LAZY) {
+    energy = clamp100((int)energy + 2);
+    result |= PET_INTERACT_ENERGY;
+  }
+  bool bondGain = eveningBonus || p == PERS_CALM || (p == PERS_BRAVE && battleWins > 0);
+  if (bondGain) {
+    uint8_t before = bond;
+    addBond(1);
+    if (bond > before) result |= PET_INTERACT_BOND;
+  }
+  heartUntil = millis() + HEART_MS;
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_CARE, 1);
+  save();
+  return result;
+}
+
+PetPersonality Pet::personality() const {
+  if (isEgg()) return PERS_BALANCED;
+  if (weight >= 72 || energy <= 20) return PERS_LAZY;
+  if (battleWins >= 8 || bestBattleStreak >= 4) return PERS_BRAVE;
+  if (catchHi >= 18 || memoHi >= 8 || gameHi >= 24 || trSpe >= 55) return PERS_PLAYFUL;
+  if ((bond >= 45 && careMistakes <= 1) || (streak >= 5 && careMistakes == 0)) return PERS_CALM;
+  return PERS_BALANCED;
 }
 
 // saco de entrenamiento: los golpes entrenan la fuerza. Devuelve la subida.
@@ -495,6 +805,46 @@ uint8_t Pet::trainStrength(uint16_t hits) {
   registerCare();
   save();
   return gain;
+}
+
+BattleReward Pet::applyBattleWin(int16_t wildDex, bool closeWin) {
+  BattleReward reward;
+  if (ceremony != CER_NONE || isEgg()) return reward;
+  if (wildDex < 1 || wildDex > DEX_COUNT) wildDex = 1;
+  const DexEntry &wild = DEX_TBL[wildDex];
+  reward.amount = (wild.rarity == R_RARO) ? 2 : 1;
+  if (closeWin) reward.amount++;
+  if (wild.bAtk >= wild.bDef && wild.bAtk >= wild.bSpe) {
+    reward.stat = BATTLE_REWARD_DEF;
+    trDef = clamp100((int)trDef + reward.amount);
+  } else if (wild.bDef >= wild.bAtk && wild.bDef >= wild.bSpe) {
+    reward.stat = BATTLE_REWARD_ATK;
+    trAtk = clamp100((int)trAtk + reward.amount);
+  } else {
+    reward.stat = BATTLE_REWARD_SPE;
+    trSpe = clamp100((int)trSpe + reward.amount);
+  }
+  battleWins++;
+  battleStreak++;
+  if (battleStreak > bestBattleStreak) bestBattleStreak = battleStreak;
+  joy = clamp100((int)joy + 8 + (closeWin ? 4 : 0));
+  energy = dropTo(energy, 8, 20);
+  fullness = dropTo(fullness, 3, 10);
+  addBond(closeWin ? 3 : 2);
+  registerCare();
+  noteDailyGoal(DAILY_GOAL_BATTLE, 1);
+  save();
+  return reward;
+}
+
+void Pet::applyBattleLoss() {
+  if (ceremony != CER_NONE || isEgg()) return;
+  battleLosses++;
+  battleStreak = 0;
+  joy = dropTo(joy, 12, 20);
+  energy = dropTo(energy, 18, 20);
+  fullness = dropTo(fullness, 4, 10);
+  save();
 }
 
 void Pet::play() {
@@ -522,6 +872,7 @@ void Pet::clean() {
   hygiene = 100;
   addBond(1);
   registerCare();
+  noteDailyGoal(DAILY_GOAL_CARE, 1);
   save();
 }
 
@@ -532,6 +883,8 @@ void Pet::caress() {
   heartUntil = millis() + HEART_MS;
   addBond(1);
   registerCare();
+  noteDailyGoal(DAILY_GOAL_CARE, 1);
+  save();
 }
 
 void Pet::eggTap() {
@@ -576,6 +929,7 @@ void Pet::save() {
   prefs.putUChar("lend", lastEnd);
   if (lastSeenEpoch) prefs.putUInt("seen", lastSeenEpoch);
   prefs.putBytes("dexreg", dexReg, sizeof(dexReg));
+  prefs.putBytes("dexcgt", dexCaught, sizeof(dexCaught));
   prefs.putUShort("strk", streak);
   prefs.putUShort("bstrk", bestStreak);
   prefs.putUInt("cday", lastCareDay);
@@ -585,6 +939,20 @@ void Pet::save() {
   prefs.putUShort("mstone", lastMilestone);
   prefs.putUShort("ghi", gameHi);
   prefs.putUShort("shi", strHi);
+  prefs.putUShort("chi", catchHi);
+  prefs.putUShort("mhi", memoHi);
+  prefs.putUShort("clhi", cleanHi);
+  prefs.putUShort("tyhi", typeHi);
+  prefs.putUShort("bwin", battleWins);
+  prefs.putUShort("bloss", battleLosses);
+  prefs.putUShort("bstk", battleStreak);
+  prefs.putUShort("bbstk", bestBattleStreak);
+  prefs.putUInt("pimin", lastPetInteractMinute);
+  prefs.putUChar("dxrew", dexRewardMask);
+  prefs.putUInt("dgday", dailyGoalDay);
+  prefs.putBytes("dgtype", dailyGoalType, sizeof(dailyGoalType));
+  prefs.putBytes("dgprog", dailyGoalProgress, sizeof(dailyGoalProgress));
+  prefs.putUChar("dgdone", dailyGoalDone);
   prefs.putString("nick", nick);
 }
 
@@ -628,6 +996,7 @@ void Pet::load() {
   sleeping = prefs.getBool("sleep", false);
   lastEnd = prefs.getUChar("lend", CER_NONE);
   prefs.getBytes("dexreg", dexReg, sizeof(dexReg));
+  prefs.getBytes("dexcgt", dexCaught, sizeof(dexCaught));
   streak = prefs.getUShort("strk", 0);
   bestStreak = prefs.getUShort("bstrk", 0);
   lastCareDay = prefs.getUInt("cday", 0);
@@ -637,6 +1006,28 @@ void Pet::load() {
   lastMilestone = prefs.getUShort("mstone", 0);
   gameHi = prefs.getUShort("ghi", 0);
   strHi = prefs.getUShort("shi", 0);
+  catchHi = prefs.getUShort("chi", 0);
+  memoHi = prefs.getUShort("mhi", 0);
+  cleanHi = prefs.getUShort("clhi", 0);
+  typeHi = prefs.getUShort("tyhi", 0);
+  battleWins = prefs.getUShort("bwin", 0);
+  battleLosses = prefs.getUShort("bloss", 0);
+  battleStreak = prefs.getUShort("bstk", 0);
+  bestBattleStreak = prefs.getUShort("bbstk", 0);
+  lastPetInteractMinute = prefs.getUInt("pimin", 0);
+  dexRewardMask = prefs.getUChar("dxrew", 0);
+  dailyGoalDay = prefs.getUInt("dgday", 0);
+  size_t gotTypes = prefs.getBytes("dgtype", dailyGoalType, sizeof(dailyGoalType));
+  size_t gotProg = prefs.getBytes("dgprog", dailyGoalProgress, sizeof(dailyGoalProgress));
+  if (gotTypes != sizeof(dailyGoalType)) {
+    dailyGoalType[0] = DAILY_GOAL_CARE;
+    dailyGoalType[1] = DAILY_GOAL_PLAY;
+    dailyGoalType[2] = DAILY_GOAL_CATCH;
+  }
+  if (gotProg != sizeof(dailyGoalProgress)) {
+    dailyGoalProgress[0] = dailyGoalProgress[1] = dailyGoalProgress[2] = 0;
+  }
+  dailyGoalDone = prefs.getUChar("dgdone", 0);
   prefs.getString("nick", nick, sizeof(nick));
   // siembra: la mascota actual cuenta como criada (guardados antiguos)
   if (speciesId >= 1) registerSpecies(speciesId);
