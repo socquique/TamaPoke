@@ -10,6 +10,20 @@ static XPowersPMU pmu;
 static bool rtcOk = false;
 static bool pmuOk = false;
 
+static void configureBatteryCharger() {
+  if (!pmuOk) return;
+  pmu.setVbusCurrentLimit(XPOWERS_AXP2101_VBUS_CUR_LIM_900MA);
+  pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
+  pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_100MA);
+  pmu.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_100MA);
+  pmu.enableChargerTerminationLimit();
+  pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
+  pmu.enableCellbatteryCharge();
+  Serial.printf("AXP2101 charger: vbusLim=%u chgCur=%u target=%u\n",
+                pmu.getVbusCurrentLimit(), pmu.getChargerConstantCurr(),
+                pmu.getChargeTargetVoltage());
+}
+
 bool rtcBegin() {
   rtcOk = rtc.begin(Wire, IIC_SDA, IIC_SCL);
   if (!rtcOk) Serial.println("PCF85063 no detectado");
@@ -43,6 +57,7 @@ void rtcSetEpoch(uint32_t e) {
 bool batBegin() {
   pmuOk = pmu.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL);
   if (!pmuOk) Serial.println("AXP2101 no detectado");
+  else configureBatteryCharger();
   return pmuOk;
 }
 
@@ -62,12 +77,13 @@ void pmuEnablePanel() {
 // el estado de energia (I2C) se cachea ~2 s: leerlo en cada frame del loop
 // metia trafico I2C inutil y podia oscilar (parpadeo de brillo)
 static uint32_t powerCacheT = 0;
+static uint32_t powerCacheMs = 2000;
 static int cachedPct = -1;
 static bool cachedCharging = false, cachedUsb = true;
 
 static void refreshPower() {
   uint32_t now = millis();
-  if (powerCacheT && now - powerCacheT < 2000) return;
+  if (powerCacheT && now - powerCacheT < powerCacheMs) return;
   powerCacheT = now ? now : 1;
   if (!pmuOk) { cachedPct = -1; cachedCharging = false; cachedUsb = true; return; }
   cachedPct = pmu.isBatteryConnect() ? pmu.getBatteryPercent() : -1;
@@ -78,6 +94,12 @@ static void refreshPower() {
 int batPercent() { refreshPower(); return cachedPct; }
 bool batCharging() { refreshPower(); return cachedCharging; }
 bool usbPresent() { refreshPower(); return cachedUsb; }
+
+void setPowerCacheInterval(uint32_t ms) {
+  if (ms < 500) ms = 500;
+  if (ms > 30000) ms = 30000;
+  powerCacheMs = ms;
+}
 
 void pwrSetup() {
   if (!pmuOk) return;

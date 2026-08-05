@@ -37,4 +37,9 @@ Huge thanks to that whole community for an enormous amount of work.
 | Board and pinout | [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75) |
 | Web installer | [ESP Web Tools](https://esphome.github.io/esp-web-tools/) (Nabu Casa) |
 
+## Testing notes
+
+The AXP2101 charging configuration issue was spotted through ShadowEnemyx's
+hardware test video: [TikTok](https://pro.tiktok.com/t/ZGdxJB3nr/).
+
 TamaPoke's own code (firmware and tools) is original work.
