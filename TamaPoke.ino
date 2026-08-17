@@ -1,9 +1,12 @@
 // TamaPoke - tamagotchi pixel art inspirado en la gen 1
-// para Waveshare ESP32-S3-Touch-AMOLED-1.75
+// para Waveshare ESP32-S3-Touch-AMOLED-1.75 (placa por defecto) o Elecrow
+// CrowPanel 1.28inch-HMI ESP32 Rotary Display (BOARD_ELECROW_CROWPANEL_128
+// en board_select.h).
 //
-// Librerias (Library Manager o repo de Waveshare):
-//   - "GFX Library for Arduino" (moononournation), con soporte CO5300 QSPI
-//   - "SensorLib" (Lewis He), driver tactil CST9217
+// Librerias (Library Manager):
+//   - "GFX Library for Arduino" (moononournation) -- CO5300 QSPI (Waveshare)
+//     y GC9A01 SPI (Elecrow)
+//   - "SensorLib" (Lewis He), driver tactil CST9217 -- solo Waveshare
 //
 // Placa: ESP32S3 Dev Module | Flash 16MB | PSRAM: OPI PSRAM | USB CDC On Boot: Enabled
 //
@@ -13,7 +16,11 @@
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
 #include "pin_config.h"
+#if defined(BOARD_ELECROW_CROWPANEL_128)
 #include "elecrow_touch.h"
+#else
+#include "TouchDrvCSTXXX.hpp"
+#endif
 #include "species.h"
 #include "dex.h"
 #include "pet.h"
@@ -25,6 +32,8 @@
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
 #define FW_VERSION "1.4"
+
+#if defined(BOARD_ELECROW_CROWPANEL_128)
 
 Arduino_DataBus *bus = new Arduino_ESP32SPI(
   TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, TFT_MISO, FSPI, true);
@@ -66,6 +75,24 @@ static void flushScaled() {
 }
 
 ElecrowTouch touch;
+
+#else  // BOARD_WAVESHARE_AMOLED
+
+Arduino_DataBus *bus = new Arduino_ESP32QSPI(
+  LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
+Arduino_CO5300 *panel = new Arduino_CO5300(
+  bus, LCD_RESET, 0 /*rotation*/, LCD_WIDTH, LCD_HEIGHT, 6, 0, 0, 0);
+// Framebuffer completo en PSRAM: dibujamos todo y hacemos flush() (sin parpadeo)
+Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
+
+static void panelSetBrightness(uint8_t v) { panel->setBrightness(v); }
+static void initScaledFlush() {}  // nada que preparar: el panel ya es 466x466
+static void flushScaled() { gfx->flush(); }
+
+TouchDrvCST92xx touch;
+
+#endif
+
 Pet pet;
 
 // sprite animado de la SD para la especie actual (si existe el archivo)
@@ -199,6 +226,8 @@ void setup() {
   Serial.setTxTimeoutMs(0);
   Serial.printf("TamaPoke fw v%s\n", FW_VERSION);
   loadLang();  // idioma guardado (ES por defecto)
+
+#if defined(BOARD_ELECROW_CROWPANEL_128)
   // Rails del panel (LCD logic + backlight anode): deben ir HIGH antes de
   // gfx->begin(), si no la pantalla queda a oscuras aunque el resto arranque.
   pinMode(LCD_PWR_EN1, OUTPUT);
@@ -217,15 +246,54 @@ void setup() {
   touch.begin(Wire, CST816D_ADDR, IIC_SDA, IIC_SCL);
   // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
   attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+#else
+  Wire.begin(IIC_SDA, IIC_SCL);
+  // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
+  // Red de seguridad para PMU/RTC (SensorLib NO respeta este timeout en el
+  // tactil; el cuelgue del tactil dormido se resuelve gateando por INT, ver
+  // handleTouch).
+  Wire.setTimeOut(50);
+
+  // CRITICO: encender la alimentacion del panel (BLDO1=OLED VDD 3.3V) ANTES de
+  // inicializar el display. Si el PMU se reseteo (drenaje total), este rail
+  // queda OFF y la pantalla se ve negra aunque el resto de la placa funcione.
+  pmuEnablePanel();
+
+  // QSPI a 80MHz (por defecto 40): el flush del framebuffer es el cuello de
+  // botella del fps (~56ms a 40MHz). Si el panel mostrara basura, bajar a 40M.
+  if (!gfx->begin(80000000)) Serial.println("gfx->begin() fallo");
+  initScaledFlush();
+  panelSetBrightness(180);
+
+  touch.setPins(TP_RESET, TP_INT);
+  bool touchOk = false;
+  for (int i = 0; i < 3 && !touchOk; i++) {  // a veces falla al primer intento
+    touchOk = touch.begin(Wire, 0x5A, IIC_SDA, IIC_SCL);
+    if (!touchOk) delay(150);
+  }
+  if (!touchOk) Serial.println("CST9217 no detectado");
+  // begin() deja el chip en modo comando (lee la identidad y no sale);
+  // hace falta un reset por hardware para que vuelva a reportar toques
+  touch.reset();
+  touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
+  touch.setMirrorXY(true, true);  // el panel esta montado girado 180 grados
+  // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
+  pinMode(TP_INT, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+#endif
 
   pet.begin();
-  // sdBegin() deshabilitado en este port: esta placa no tiene ranura SD, y
+#if defined(BOARD_ELECROW_CROWPANEL_128)
+  // sdBegin() deshabilitado en esta placa: no tiene ranura SD, y
   // SD_MMC.begin(..., formatOnFail=true) intentando montar/formatear una
-  // tarjeta inexistente en frio puede tardar varios segundos -- sospechoso
-  // de perder la ventana de enumeracion USB del host en un arranque en frio
-  // (un reset calido desde el bootloader no mostraba el problema). A
-  // verificar con un ciclo de energia real tras este cambio.
-  // sdBegin();
+  // tarjeta inexistente en frio se queda colgado el tiempo suficiente como
+  // para perder la ventana de enumeracion USB del host (un reset calido
+  // desde el bootloader no lo mostraba, lo que lo hizo dificil de ver).
+  // No se toco el comportamiento de la Waveshare: alli la SD es una feature
+  // central (sprites PMD) y normalmente hay una tarjeta puesta.
+#else
+  sdBegin();
+#endif
   thumbs.load();
 
   // reloj real: aplica el tiempo que estuvo apagado
@@ -240,10 +308,11 @@ void setup() {
   }
   pet.syncClock(e);
 
-  // audioBegin() deshabilitado en este port: sus pines I2S (BCK/DI/WS) y el
-  // enable del ampli (PA) chocan con SCLK/CS/backlight de la Elecrow, y esta
-  // placa no tiene codec ES8311 de todos modos. Ver pin_config.h.
-  // audioBegin();
+#if !defined(BOARD_ELECROW_CROWPANEL_128)
+  audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
+#endif
+  // La Elecrow no tiene codec ES8311; sus pines I2S/PA reales ademas chocan
+  // con SCLK/CS/backlight de esta placa. Ver pin_config.h.
 
   lastInteract = millis();
 }
