@@ -36,6 +36,35 @@ Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
 // AMOLED): el "brillo" es PWM sobre el pin de backlight.
 static void panelSetBrightness(uint8_t v) { ledcWrite(TFT_BLK, v); }
 
+// ---------------------------------------------------------------------------
+// Downscale-on-flush: todo TamaPoke.ino dibuja en un canvas logico de
+// 466x466 (coordenadas absolutas cableadas por todo el archivo, sin factor de
+// escala). Esta placa tiene un panel fisico de 240x240. En vez de reescribir
+// cada coordenada, reducimos el framebuffer por vecino-mas-cercano justo
+// antes de mandarlo al panel. Tablas de indice precalculadas: 240*240 = 57600
+// lecturas/frame, muy por debajo del presupuesto de ~85-100ms de render().
+// ---------------------------------------------------------------------------
+static uint16_t *scaledBuf = nullptr;   // TFT_WIDTH x TFT_HEIGHT, PSRAM
+static uint16_t xMap[TFT_WIDTH];
+static uint16_t yMap[TFT_HEIGHT];
+
+static void initScaledFlush() {
+  scaledBuf = (uint16_t *)ps_malloc((size_t)TFT_WIDTH * TFT_HEIGHT * sizeof(uint16_t));
+  for (int x = 0; x < TFT_WIDTH; x++) xMap[x] = (uint16_t)((uint32_t)x * LCD_WIDTH / TFT_WIDTH);
+  for (int y = 0; y < TFT_HEIGHT; y++) yMap[y] = (uint16_t)((uint32_t)y * LCD_HEIGHT / TFT_HEIGHT);
+}
+
+static void flushScaled() {
+  uint16_t *fb = gfx->getFramebuffer();
+  if (!fb || !scaledBuf) { gfx->flush(); return; }  // red de seguridad si algo fallo en setup
+  for (int y = 0; y < TFT_HEIGHT; y++) {
+    const uint16_t *srcRow = fb + (size_t)yMap[y] * LCD_WIDTH;
+    uint16_t *dstRow = scaledBuf + (size_t)y * TFT_WIDTH;
+    for (int x = 0; x < TFT_WIDTH; x++) dstRow[x] = srcRow[xMap[x]];
+  }
+  panel->draw16bitRGBBitmap(0, 0, scaledBuf, TFT_WIDTH, TFT_HEIGHT);
+}
+
 ElecrowTouch touch;
 Pet pet;
 
@@ -180,6 +209,7 @@ void setup() {
   ledcWrite(TFT_BLK, 0);  // arranca apagado; updateBrightness() lo sube
 
   if (!gfx->begin(40000000)) Serial.println("gfx->begin() fallo");
+  initScaledFlush();
 
   Wire.begin(IIC_SDA, IIC_SCL);
   Wire.setTimeOut(50);
@@ -189,7 +219,13 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
 
   pet.begin();
-  sdBegin();
+  // sdBegin() deshabilitado en este port: esta placa no tiene ranura SD, y
+  // SD_MMC.begin(..., formatOnFail=true) intentando montar/formatear una
+  // tarjeta inexistente en frio puede tardar varios segundos -- sospechoso
+  // de perder la ventana de enumeracion USB del host en un arranque en frio
+  // (un reset calido desde el bootloader no mostraba el problema). A
+  // verificar con un ciclo de energia real tras este cambio.
+  // sdBegin();
   thumbs.load();
 
   // reloj real: aplica el tiempo que estuvo apagado
@@ -788,7 +824,7 @@ void renderStarterSelect() {
     gfx->setCursor(178, ry + 24);
     gfx->print(de.name);
   }
-  gfx->flush();
+  flushScaled();
 }
 
 void render() {
@@ -833,7 +869,7 @@ void render() {
                                                       : T(S_GOODBYE);
     drawHeader(d.name, d.accent, msg);
     drawCeremony();
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -929,7 +965,7 @@ void render() {
     else drawChoiceDialog();
   }
 
-  gfx->flush();
+  flushScaled();
 }
 
 // ---------- minijuego: toques con la pokeball ----------
@@ -1066,7 +1102,7 @@ void renderSack() {
       gfx->setCursor(CX - strlen(r) * 6, 256);
       gfx->print(r);
     }
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -1076,7 +1112,7 @@ void renderSack() {
     sackGain = pet.trainStrength(sackHits);
     sfxPlay(sackNewHi ? SFX_MEDAL : SFX_PLAY);
     sackOverUntil = now + 3500;
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -1109,7 +1145,7 @@ void renderSack() {
   gfx->fillRoundRect(CX - bw / 2, 350, bw, 16, 5, UI_TRACK);
   if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 350, fw, 16, 5, UI_BAR_OK);
 
-  gfx->flush();
+  flushScaled();
 }
 
 // fondo del minijuego: hatibat del bicho (cielo por hora + suelo del bioma)
@@ -1167,7 +1203,7 @@ void renderGame() {
     gfx->setTextColor(ink);
     gfx->setCursor(CX - strlen(msg) * 6, 250);
     gfx->print(msg);
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -1221,7 +1257,7 @@ void renderGame() {
   // la pokeball
   drawMap(SPR_ICON_PLAY, 16, (int)ballX - 24, (int)ballY - 24, 3, false);
 
-  gfx->flush();
+  flushScaled();
 }
 
 // ---------- ficha del bicho (deslizar vertical) ----------
@@ -1339,7 +1375,7 @@ void renderClock() {
   gfx->setTextSize(1);
   gfx->setCursor(CX - (int)strlen(ver) * 3, 436);
   gfx->print(ver);
-  gfx->flush();
+  flushScaled();
 }
 
 void clockTap(int16_t x, int16_t y) {
@@ -1596,7 +1632,7 @@ void renderCard() {
   gfx->setTextSize(2);
   gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 398);
   gfx->print(T(S_BACK));
-  gfx->flush();
+  flushScaled();
 }
 
 // ---------- teclado para renombrar ----------
@@ -1645,7 +1681,7 @@ void renderKeyboard() {
       gfx->print(lab);
     }
   }
-  gfx->flush();
+  flushScaled();
 }
 
 void keyboardTap(int16_t x, int16_t y) {
@@ -1713,7 +1749,7 @@ void renderGallery() {
     gfx->setTextSize(2);
     gfx->setCursor(CX - strlen(T(S_DETAIL_BACK)) * 6, 408);
     gfx->print(T(S_DETAIL_BACK));
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -1758,7 +1794,7 @@ void renderGallery() {
     if (i == galleryPage) gfx->fillCircle(170 + i * 14, 436, 4, UI_INK);
     else gfx->drawCircle(170 + i * 14, 436, 3, UI_INK);
   }
-  gfx->flush();
+  flushScaled();
 }
 
 void galleryTap(int16_t x, int16_t y) {

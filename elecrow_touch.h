@@ -31,14 +31,21 @@ public:
   void setMaxCoordinates(int, int) {}  // el chip ya reporta en coords de panel
   void setMirrorXY(bool, bool) {}      // sin espejado en este panel
 
-  // firma compatible con touch.getPoint(&x, &y, 1): devuelve 1 si hay toque
+  // firma compatible con touch.getPoint(&x, &y, 1): devuelve 1 si hay toque.
+  // El chip reporta en coordenadas fisicas del panel (0..TFT_WIDTH/HEIGHT),
+  // pero TamaPoke.ino dibuja en un canvas logico de LCD_WIDTH/HEIGHT (466):
+  // ver flushScaled() en TamaPoke.ino. Reescalamos aqui para que
+  // handleTouch() siga comparando contra sus zonas/umbrales en 466-space
+  // sin tocar ese codigo.
   int getPoint(int16_t *x, int16_t *y, int) {
     uint8_t raw[7] = {0};
     if (!i2cRead(0x02, raw, sizeof(raw))) return 0;
     int event = raw[1] >> 6;  // 0=down, 1=up, 2=contact
     if (event != 2 && event != 0) return 0;
-    *x = (int16_t)raw[2] + (int16_t)(raw[1] & 0x0F) * 256;
-    *y = (int16_t)raw[4] + (int16_t)(raw[3] & 0x0F) * 256;
+    int16_t px = (int16_t)raw[2] + (int16_t)(raw[1] & 0x0F) * 256;
+    int16_t py = (int16_t)raw[4] + (int16_t)(raw[3] & 0x0F) * 256;
+    *x = (int16_t)((int32_t)px * LCD_WIDTH / TFT_WIDTH);
+    *y = (int16_t)((int32_t)py * LCD_HEIGHT / TFT_HEIGHT);
     return 1;
   }
 

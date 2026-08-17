@@ -17,8 +17,18 @@
 #define TFT_CS    9
 #define TFT_RES  14
 #define TFT_BLK  46          // backlight, PWM (ledcAttach/ledcWrite)
-#define LCD_WIDTH 240
-#define LCD_HEIGHT 240
+
+// Resolucion FISICA del panel (240x240). El canvas logico se queda en 466x466
+// (ver LCD_WIDTH/LCD_HEIGHT mas abajo) porque todo TamaPoke.ino tiene
+// coordenadas absolutas cableadas para 466 y no hay factor de escala en el
+// codigo. flushScaled() en TamaPoke.ino reduce el framebuffer de 466x466 a
+// esto por vecino-mas-cercano justo antes de mandarlo al panel.
+#define TFT_WIDTH 240
+#define TFT_HEIGHT 240
+
+// Canvas logico: NO es la resolucion real del panel en este port (ver arriba).
+#define LCD_WIDTH 466
+#define LCD_HEIGHT 466
 
 // Rails de alimentacion del panel: deben ir HIGH antes de gfx->begin(), si no
 // la pantalla queda a oscuras aunque el resto de la placa funcione.
@@ -50,6 +60,10 @@
 #define I2S_WS_IO 40
 #define I2S_DI_IO 17
 #define I2S_DO_IO 18
-#define SDMMC_CLK 19
-#define SDMMC_CMD 20
-#define SDMMC_DATA 4
+// OJO: GPIO19/20 son las lineas nativas USB D-/D+ del ESP32-S3 -- si
+// SD_MMC.setPins() las reclama, el USB-JTAG-serial deja de enumerar en el
+// host aunque la placa siga corriendo (asi se detecto este bug). GPIO35-37
+// tambien evitados: los usa el PSRAM octal (PSRAM=opi).
+#define SDMMC_CLK 4
+#define SDMMC_CMD 8
+#define SDMMC_DATA 12
