@@ -561,24 +561,15 @@ def rgb565(hexcol):
 
 # nombre -> (tipo, evolucionaA, nivelEvolucion, escala)
 SPECIES_META = {
-    # escala tocada para el port a la Elecrow 1.28" (elecrow-port): TamaPoke
-    # dibuja en un canvas logico de 466x466 que luego se reduce a los 240x240
-    # fisicos del panel por vecino-mas-cercano (ver flushScaled() en
-    # TamaPoke.ino). Con las escalas originales (5/6/7) cada bloque de sprite
-    # cae en ~2.6-3.6px fisicos, un valor no entero que genera un bloque
-    # irregular y ruidoso. 8/10/12 caen mas cerca de un multiplo entero
-    # (~4.1/5.2/6.2 px), asi el error de muestreo es una fraccion menor del
-    # bloque y se ve mas limpio. Si se vuelve a la Waveshare original (main),
-    # revertir a 5/6/7.
-    "CHARMANDER": ("TYPE_FUEGO", "SP_CHARMELEON", 16, 8),
-    "CHARMELEON": ("TYPE_FUEGO", "SP_CHARIZARD", 36, 10),
-    "CHARIZARD":  ("TYPE_FUEGO", "-1", 0, 12),
-    "BULBASAUR":  ("TYPE_PLANTA", "SP_IVYSAUR", 16, 8),
-    "IVYSAUR":    ("TYPE_PLANTA", "SP_VENUSAUR", 36, 10),
-    "VENUSAUR":   ("TYPE_PLANTA", "-1", 0, 12),
-    "SQUIRTLE":   ("TYPE_AGUA", "SP_WARTORTLE", 16, 8),
-    "WARTORTLE":  ("TYPE_AGUA", "SP_BLASTOISE", 36, 10),
-    "BLASTOISE":  ("TYPE_AGUA", "-1", 0, 12),
+    "CHARMANDER": ("TYPE_FUEGO", "SP_CHARMELEON", 16, 5),
+    "CHARMELEON": ("TYPE_FUEGO", "SP_CHARIZARD", 36, 6),
+    "CHARIZARD":  ("TYPE_FUEGO", "-1", 0, 7),
+    "BULBASAUR":  ("TYPE_PLANTA", "SP_IVYSAUR", 16, 5),
+    "IVYSAUR":    ("TYPE_PLANTA", "SP_VENUSAUR", 36, 6),
+    "VENUSAUR":   ("TYPE_PLANTA", "-1", 0, 7),
+    "SQUIRTLE":   ("TYPE_AGUA", "SP_WARTORTLE", 16, 5),
+    "WARTORTLE":  ("TYPE_AGUA", "SP_BLASTOISE", 36, 6),
+    "BLASTOISE":  ("TYPE_AGUA", "-1", 0, 7),
 }
 
 ACCENT = {"TYPE_FUEGO": '#e8503a', "TYPE_PLANTA": '#3c8a4c', "TYPE_AGUA": '#4f93c4'}
