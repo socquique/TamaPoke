@@ -12,8 +12,8 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
-#include "TouchDrvCSTXXX.hpp"
 #include "pin_config.h"
+#include "elecrow_touch.h"
 #include "species.h"
 #include "dex.h"
 #include "pet.h"
@@ -26,14 +26,17 @@
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
 #define FW_VERSION "1.4"
 
-Arduino_DataBus *bus = new Arduino_ESP32QSPI(
-  LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
-Arduino_CO5300 *panel = new Arduino_CO5300(
-  bus, LCD_RESET, 0 /*rotation*/, LCD_WIDTH, LCD_HEIGHT, 6, 0, 0, 0);
+Arduino_DataBus *bus = new Arduino_ESP32SPI(
+  TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, TFT_MISO, FSPI, true);
+Arduino_GC9A01 *panel = new Arduino_GC9A01(bus, TFT_RES, 0 /*rotation*/, true /*IPS*/);
 // Framebuffer completo en PSRAM: dibujamos todo y hacemos flush() (sin parpadeo)
 Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
 
-TouchDrvCST92xx touch;
+// El GC9A01 no tiene registro de brillo por comando (a diferencia del CO5300
+// AMOLED): el "brillo" es PWM sobre el pin de backlight.
+static void panelSetBrightness(uint8_t v) { ledcWrite(TFT_BLK, v); }
+
+ElecrowTouch touch;
 Pet pet;
 
 // sprite animado de la SD para la especie actual (si existe el archivo)
@@ -167,37 +170,22 @@ void setup() {
   Serial.setTxTimeoutMs(0);
   Serial.printf("TamaPoke fw v%s\n", FW_VERSION);
   loadLang();  // idioma guardado (ES por defecto)
+  // Rails del panel (LCD logic + backlight anode): deben ir HIGH antes de
+  // gfx->begin(), si no la pantalla queda a oscuras aunque el resto arranque.
+  pinMode(LCD_PWR_EN1, OUTPUT);
+  pinMode(LCD_PWR_EN2, OUTPUT);
+  digitalWrite(LCD_PWR_EN1, HIGH);
+  digitalWrite(LCD_PWR_EN2, HIGH);
+  ledcAttach(TFT_BLK, 5000, 8);
+  ledcWrite(TFT_BLK, 0);  // arranca apagado; updateBrightness() lo sube
+
+  if (!gfx->begin(40000000)) Serial.println("gfx->begin() fallo");
+
   Wire.begin(IIC_SDA, IIC_SCL);
-  // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
-  // Red de seguridad para PMU/RTC (SensorLib NO respeta este timeout en el
-  // tactil; el cuelgue del tactil dormido se resuelve gateando por INT, ver
-  // handleTouch).
   Wire.setTimeOut(50);
-
-  // CRITICO: encender la alimentacion del panel (BLDO1=OLED VDD 3.3V) ANTES de
-  // inicializar el display. Si el PMU se reseteo (drenaje total), este rail
-  // queda OFF y la pantalla se ve negra aunque el resto de la placa funcione.
-  pmuEnablePanel();
-
-  // QSPI a 80MHz (por defecto 40): el flush del framebuffer es el cuello de
-  // botella del fps (~56ms a 40MHz). Si el panel mostrara basura, bajar a 40M.
-  if (!gfx->begin(80000000)) Serial.println("gfx->begin() fallo");
-  panel->setBrightness(180);
-
   touch.setPins(TP_RESET, TP_INT);
-  bool touchOk = false;
-  for (int i = 0; i < 3 && !touchOk; i++) {  // a veces falla al primer intento
-    touchOk = touch.begin(Wire, 0x5A, IIC_SDA, IIC_SCL);
-    if (!touchOk) delay(150);
-  }
-  if (!touchOk) Serial.println("CST9217 no detectado");
-  // begin() deja el chip en modo comando (lee la identidad y no sale);
-  // hace falta un reset por hardware para que vuelva a reportar toques
-  touch.reset();
-  touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
-  touch.setMirrorXY(true, true);  // el panel esta montado girado 180 grados
+  touch.begin(Wire, CST816D_ADDR, IIC_SDA, IIC_SCL);
   // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
-  pinMode(TP_INT, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
 
   pet.begin();
@@ -216,7 +204,10 @@ void setup() {
   }
   pet.syncClock(e);
 
-  audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
+  // audioBegin() deshabilitado en este port: sus pines I2S (BCK/DI/WS) y el
+  // enable del ampli (PA) chocan con SCLK/CS/backlight de la Elecrow, y esta
+  // placa no tiene codec ES8311 de todos modos. Ver pin_config.h.
+  // audioBegin();
 
   lastInteract = millis();
 }
@@ -319,7 +310,7 @@ void updateBrightness(uint32_t now) {
   static uint8_t current = 255;
   if (target != current) {
     current = target;
-    panel->setBrightness(target);
+    panelSetBrightness(target);
   }
 }
 
