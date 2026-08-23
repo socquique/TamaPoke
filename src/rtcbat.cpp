@@ -1,5 +1,5 @@
-#include "rtcbat.h"
-#include "pin_config.h"  // define XPOWERS_CHIP_AXP2101
+#include "../include/rtcbat.hpp"
+#include "../include/pin_config.hpp"  // define XPOWERS_CHIP_AXP2101
 #include <Wire.h>
 #include <time.h>
 #include <SensorPCF85063.hpp>

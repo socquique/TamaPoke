@@ -7,7 +7,7 @@ y detalles a pixel (ojos, boca, manchas). El script valida, renderiza un
 contact-sheet PNG para revision visual, y emite los arrays C y JS:
 
   python3 tools/sprites.py        # valida + renderiza tools/sheet.png
-  python3 tools/sprites.py emit   # regenera species.h y emitted_sprites.js
+  python3 tools/sprites.py emit   # regenera include/species.hpp y emitted_sprites.js
 """
 from PIL import Image, ImageDraw
 
@@ -583,7 +583,7 @@ UI_COLORS = {
 }
 
 
-def emit_c(path="species.h"):
+def emit_c(path="include/species.hpp"):
     out = []
     out.append("#pragma once\n#include <stdint.h>\n\n")
     out.append("// GENERADO por tools/sprites.py - edita alli y ejecuta:\n")

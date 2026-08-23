@@ -47,12 +47,12 @@ A quick reference to how the game really works (values straight from the code).
 Needs: **FOOD**, **JOY**, **ENE** (energy), **HYG** (hygiene). Start 80 / 80 / 80 / 100.
 While **awake**, per minute:
 
-| Stat | Drain/min | Notes |
-|---|---|---|
-| FOOD | −2 | |
-| ENE | −1 | −1 extra if overweight (weight > 50 → sluggish) |
-| HYG | −1 | **−4 more per poop** on screen (max 3 poops) |
-| JOY | −1 | **−2 extra** if FOOD < 30, **−2 extra** if HYG < 30 |
+| Stat | Drain/min | Notes                                               |
+| ---- | --------- | --------------------------------------------------- |
+| FOOD | −2        |                                                     |
+| ENE  | −1        | −1 extra if overweight (weight > 50 → sluggish)     |
+| HYG  | −1        | **−4 more per poop** on screen (max 3 poops)        |
+| JOY  | −1        | **−2 extra** if FOOD < 30, **−2 extra** if HYG < 30 |
 
 - ~**15 %/min** chance to poop (only if FOOD > 40). Poops tank hygiene fast.
 - **Care slip-up** = letting any stat hit **≤ 10** (30-min cooldown so it counts once).
@@ -74,11 +74,11 @@ While **awake**, per minute:
 - Hatch the egg: tap it **3×** (or wait — it hatches on its own).
 - Every later egg rolls a **rarity tier** (over the ~79 base forms that come from eggs):
 
-| Tier | Base chance | After a proper goodbye | # species |
-|---|---|---|---|
-| ✨ Legendary | ~3 %\* | ~10 % | 5 |
-| 🔵 Rare | ~27 % | ~45 % | 27 |
-| ⚪ Common | the rest | the rest | 47 |
+| Tier        | Base chance | After a proper goodbye | # species |
+| ----------- | ----------- | ---------------------- | --------- |
+| ✨ Legendary | ~3 %\*      | ~10 %                  | 5         |
+| 🔵 Rare      | ~27 %       | ~45 %                  | 27        |
+| ⚪ Common    | the rest    | the rest               | 47        |
 
   \* Legendaries only start appearing once you've **registered ≥ 25** Pokémon.
 - A daily **streak** and high **bond** push rare/legendary odds higher.
@@ -130,16 +130,16 @@ SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the r
 - **AXP2101** (power management + battery + PWR button), **PCF85063** (RTC),
   microSD slot, **ES8311** audio codec (→ amplifier → external speaker on the
   MX1.25 connector)
-- Pins taken from the [official Waveshare repo](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75) (see `pin_config.h`)
+- Pins taken from the [official Waveshare repo](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75) (see `include/pin_config.hpp`)
 
 ## Libraries (Arduino IDE / arduino-cli)
 
-| Library | Author | Use |
-|---|---|---|
-| GFX Library for Arduino (`Arduino_GFX`) | moononournation | CO5300 over QSPI + framebuffer in PSRAM |
-| SensorLib | Lewis He | CST9217 touch + PCF85063 RTC |
-| XPowersLib | Lewis He | AXP2101 PMU (battery, brightness, PWR button) |
-| ESP_I2S (bundled in the ESP32 core) | Espressif | I2S to the ES8311 codec |
+| Library                                 | Author          | Use                                           |
+| --------------------------------------- | --------------- | --------------------------------------------- |
+| GFX Library for Arduino (`Arduino_GFX`) | moononournation | CO5300 over QSPI + framebuffer in PSRAM       |
+| SensorLib                               | Lewis He        | CST9217 touch + PCF85063 RTC                  |
+| XPowersLib                              | Lewis He        | AXP2101 PMU (battery, brightness, PWR button) |
+| ESP_I2S (bundled in the ESP32 core)     | Espressif       | I2S to the ES8311 codec                       |
 
 ## IDE setup / build
 
@@ -236,10 +236,10 @@ witness it), each opening a two-option dialog:
   the feet (lowest content row), not the canvas. The Pokédex thumbnails
   (`thumbs.bin`, TPTH) are derived from these by `tools/make_thumbs.py`.
 - **In-house workshop** (`tools/sprites.py`): 9 primitive-drawn sprites as a
-  no-SD fallback + the UI icons. Generates `species.h`. Preview in
+  no-SD fallback + the UI icons. Generates `include/species.hpp`. Preview in
   `tools/sheet.png`, emit with `python3 tools/sprites.py emit`.
 
-`sdmon.h/.cpp` loads the PMD sprites into PSRAM (`PmdMon` for TPK2) plus the
+`sdmon.hpp/.cpp` loads the PMD sprites into PSRAM (`PmdMon` for TPK2) plus the
 thumbnails (`SdThumbs`). `SdMon` (TPK1) remains as a dormant legacy fallback only.
 
 ## Pokédex and species data
@@ -308,16 +308,17 @@ beach, forest, volcano, mountain, snow). Sleeping forces night.
 ## Layout
 
 - `TamaPoke.ino` — init, game loop, render of every screen, gestures, serial console, audio
-- `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
-- `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
-- `rtcbat.h` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
-- `audio.h` / `audio.cpp` — ES8311 + I2S + Game-Boy-style tone synth (non-blocking task)
-- `i18n.h` / `i18n.cpp` — the 6-language string tables
-- `dex.h` — GENERATED (`gen_dex.py`): the 151 table
-- `species.h` — GENERATED (`sprites.py`): fallback sprites, UI icons, colours
-- `pin_config.h` — the board's official pins
-- `tools/` — pipeline: `dex_data.py` (data), `dex_stats.py`, `dex_names.py` +
-  `gen_names.py` (localized names), `gen_dex.py`,
+- `include/` / `src/` — the sketch's own headers (`.hpp`) and sources (`.cpp`), compiled by
+  Arduino's `src` sketch convention:
+  - `pet.hpp` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
+  - `sdmon.hpp` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
+  - `rtcbat.hpp` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
+  - `audio.hpp` / `audio.cpp` — ES8311 + I2S + Game-Boy-style tone synth (non-blocking task)
+  - `i18n.hpp` / `i18n.cpp` — the 6-language string tables
+  - `include/dex.hpp` — GENERATED (`gen_dex.py`): the 151 table
+  - `include/species.hpp` — GENERATED (`sprites.py`): fallback sprites, UI icons, colours
+  - `include/pin_config.hpp` — the board's official pins
+- `tools/` — pipeline: `dex_data.py` (data), `dex_stats.py`, `gen_dex.py`,
   `sprites.py` (workshop), `pack_pmd.py` / `make_thumbs.py`
   (packers), `pack_bundle.py` (web bundle), `send_sd.py` (SD upload), `touch_log.py`
 - `tools/sdcard/mons/` — the generated .bin files (animated, shiny, PMD, thumbnails)
@@ -332,7 +333,7 @@ runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio tes
 `TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
 `LS` / `PUT` (SD files).
 
-To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
+To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `include/pet.hpp`.
 
 ## Roadmap
 

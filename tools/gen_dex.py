@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera dex.h (tabla de la Pokedex para el firmware) desde dex_data.py.
+"""Genera include/dex.hpp (tabla de la Pokedex para el firmware) desde dex_data.py.
 
   python3 tools/gen_dex.py
 """
@@ -104,7 +104,7 @@ def main():
     c = Counter(rarities)
     print(f"bases: {c['R_COMUN']} comunes, {c['R_RARO']} raras, {c['R_LEGENDARIO']} legendarias, {c['R_EVO']} solo-evolucion")
 
-    path = os.path.join(os.path.dirname(__file__), '..', 'dex.h')
+    path = os.path.join(os.path.dirname(__file__), '..', 'include', 'dex.hpp')
     open(path, 'w').write(''.join(out))
     print(f"guardado {os.path.normpath(path)} ({len(DEX)} especies)")
 

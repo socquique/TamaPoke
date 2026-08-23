@@ -1,5 +1,5 @@
-#include "audio.h"
-#include "pin_config.h"
+#include "../include/audio.hpp"
+#include "../include/pin_config.hpp"
 #include <Arduino.h>
 #include <Wire.h>
 #include <ESP_I2S.h>

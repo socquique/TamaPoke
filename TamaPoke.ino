@@ -13,14 +13,14 @@
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
 #include "TouchDrvCSTXXX.hpp"
-#include "pin_config.h"
-#include "species.h"
-#include "dex.h"
-#include "pet.h"
-#include "sdmon.h"
-#include "rtcbat.h"
-#include "i18n.h"
-#include "audio.h"
+#include "include/pin_config.hpp"
+#include "include/species.hpp"
+#include "include/dex.hpp"
+#include "include/pet.hpp"
+#include "include/sdmon.hpp"
+#include "include/rtcbat.hpp"
+#include "include/i18n.hpp"
+#include "include/audio.hpp"
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
