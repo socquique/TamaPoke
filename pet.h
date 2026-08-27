@@ -57,7 +57,7 @@ public:
   uint32_t lastCareDay = 0;
   // vinculo (del bicho: sube lento con cuidado, se resetea al nacer otro)
   uint8_t bond = 0;
-  char nick[12] = "";    // apodo (vacio = nombre de especie)
+  char nick[32] = "";    // apodo (vacio = nombre de especie)
   // medallas: del individuo + contador acumulado entre todas las crianzas
   uint16_t medals = 0, totalMedals = 0;
   uint16_t newMedal = 0;   // recien conseguida(s), para celebrar

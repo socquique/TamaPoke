@@ -181,6 +181,58 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Escolhe o inicial",
     "Sem sprites", "Carrega-os no SD",
   },
+  // ---------------- JA ----------------
+  {
+    "しんかした！", "おいしい！", "うれしそう！", "おなかすいた！", "おふろにいれて！",
+    "つかれた...", "かなしい...", "ちょっとふとった...", "いろちがい！！", "ごきげん！",
+    "ありがとう！ またね", "にげちゃった...", "バイバイ！",
+
+    "たまご", "でんせつのたまご！？", "めずらしいたまご！", "たまごをタッチ...", "うごいた！", "もうすぐ！",
+
+    "ずかん %u/151",
+
+    "%s%s Lv.%u",
+
+    "%s とおわかれ？", "はい", "いいえ",
+
+    "わざ %u", "ちから +%u", "しんきろく！", "きろく: %u", "れんだ！",
+
+    "スコア: %u", "たのしい！", "+ごきげん",
+
+    "じかんせってい", "じ", "ふん", "うえスワイプ: もどる", "ことば",
+
+    "メダル！", "すごい！", "%u にちれんぞく！",
+
+    "れんぞく %u  きろく %u", "なかよし", "きのみ ???", "あかいきのみ", "あおいきのみ", "みどりのきのみ",
+
+    "%s   %luにち", "なまえをタッチ: へんこう",
+
+    "バトル", "こうげき", "ぼうぎょ", "すばやさ", "たいじゅう", "ちからトレーニング",
+
+    "メダル %d/%d", "タッチ: もどる",
+
+    "なまえ:", "タッチでもどる",
+
+    "ごはん", "ごきげん", "げんき", "きれい",
+
+    "きろく %u",
+
+    "せいちょう", "Lv.%u", "Lv.%uまで %uふん", "しんか", "さいしゅうけい",
+
+    "しんかできる！", "ぜんぶ40でしんか",
+
+    "%u Lv.でしんか", "おせわミス: %u",
+
+    "おと", "おと",
+
+    "しんか", "%sがなにかいいたそう...", "%sがさびしがっている...",
+
+    "しんかする？", "このまま", "おわかれする？", "さようなら", "いっしょにいる",
+
+    "さいしょのポケモンをえらぶ",
+
+    "スプライトなし", "SDにいれてください",
+  },
 };
 
 // Nombres de medalla en sus tres longitudes [idioma][medalla].
@@ -191,6 +243,7 @@ static const char *const MED_NAME[LANG_COUNT][MED_COUNT] = {
   { "Lv.10", "Lv.25", "Lv.50", "BEERE", "7 SERIE", "BINDUNG", "ENDFORM", "FIT" },
   { "Lv.10", "Lv.25", "Lv.50", "BACCA", "SERIE 7", "LEGAME", "FORMA MAX", "IN FORMA" },
   { "Niv.10", "Niv.25", "Niv.50", "BAGA", "SEQ 7", "LACO", "FORMA MAX", "EM FORMA" },
+  { "Lv.10", "Lv.25", "Lv.50", "きのみ", "7にち", "なかよし", "さいしゅう", "げんき" },
 };
 static const char *const MED_LBL[LANG_COUNT][MED_COUNT] = {
   { "Nv10", "Nv25", "Nv50", "BAYA", "7DIAS", "VINC", "TOPE", "SANO" },
@@ -199,6 +252,7 @@ static const char *const MED_LBL[LANG_COUNT][MED_COUNT] = {
   { "Lv10", "Lv25", "Lv50", "BEERE", "7TAGE", "BND", "END", "FIT" },
   { "Lv10", "Lv25", "Lv50", "BACCA", "7GG", "LEG", "MAX", "FIT" },
   { "Niv10", "Niv25", "Niv50", "BAGA", "7DIAS", "LACO", "MAX", "FIT" },
+  { "Lv10", "Lv25", "Lv50", "きのみ", "7にち", "なかよし", "しんか", "げんき" },
 };
 static const char *const MED_DSC[LANG_COUNT][MED_COUNT] = {
   { "NIVEL 10", "NIVEL 25", "NIVEL 50", "BAYA HALLADA",
@@ -213,6 +267,9 @@ static const char *const MED_DSC[LANG_COUNT][MED_COUNT] = {
     "SERIE 7 GIORNI", "LEGAME MAX", "FORMA FINALE", "IN FORMA" },
   { "NIVEL 10", "NIVEL 25", "NIVEL 50", "BAGA ACHADA",
     "SEQ 7 DIAS", "LACO MAX", "FORMA FINAL", "EM FORMA" },
+  // JA
+  { "レベル 10", "レベル 25", "レベル 50", "きのみ はっけん",
+    "7にち れんぞく", "なかよし MAX", "さいしゅうしんか", "げんきいっぱい" },
 };
 
 const char *T(StrId id) { return STRINGS[gLang][id]; }
