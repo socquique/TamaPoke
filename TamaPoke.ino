@@ -160,6 +160,7 @@ int16_t tX0, tY0, tXl, tYl; // gesto en curso (inicio y ultima posicion)
 uint32_t tStart = 0;
 bool holdFired = false;
 
+// 日本語表示用フォントへ切り替え
 void setLangFont() {
   if (gLang == LANG_JA) {
     gfx->setUTF8Print(true);
@@ -170,6 +171,7 @@ void setLangFont() {
   }
 }
 
+// 標準フォントへ戻す
 void resetLangFont() {
   gfx->setFont();
   gfx->setUTF8Print(false);
@@ -181,7 +183,7 @@ void setup() {
   // CRITICO: sin esto, Serial.print BLOQUEA el juego cuando no hay un
   // monitor serie abierto en el host (el bufer TX del USB CDC se llena
   // y nadie lo vacia) -> con timeout 0 los mensajes se descartan
- // Serial.setTxTimeoutMs(0);
+  Serial.setTxTimeoutMs(0);
   Serial.printf("TamaPoke fw v%s\n", FW_VERSION);
   loadLang();  // idioma guardado (ES por defecto)
   Wire.begin(IIC_SDA, IIC_SCL);
@@ -219,12 +221,13 @@ void setup() {
 
   pet.begin();
 
+  // 初回プレイでスターター未選択なら、先に言語を選ばせる
   if (pet.awaitingStarter()) {
   firstLangPick = true;
 }
 
 sdBegin();
-thumbs.load();
+  thumbs.load();
 
   // reloj real: aplica el tiempo que estuvo apagado
   rtcBegin();
@@ -345,6 +348,8 @@ void updateBrightness(uint32_t now) {
   }
 }
 
+// ---------- consola serie (provision de SD + depuracion) ----------
+
 void handleSerial() {
   if (!Serial.available()) return;
   String line = Serial.readStringUntil('\n');
@@ -449,6 +454,8 @@ void handleSerial() {
     Serial.println("DONE");
   }
 }
+
+// ---------- entrada tactil ----------
 
 bool inPetZone(int16_t x, int16_t y) {
   return x > 110 && x < 356 && y > 95 && y < 310;
@@ -567,6 +574,7 @@ void onSwipe(int dir) {
 
 void onTap(int16_t x, int16_t y) {
 
+  // ---------- 初回言語選択 ----------
   if (firstLangPick) {
 
     for (int i = 0; i < LANG_COUNT; i++) {
@@ -602,6 +610,8 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
 
+
+  // ---------- 従来処理 ----------
   // Serial.printf("TOUCH %d %d\n", x, y);  // diagnostico (silenciado: satura el log)
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial
     for (int i = 0; i < 3; i++) {
@@ -713,8 +723,12 @@ void onTap(int16_t x, int16_t y) {
   }
 }
 
+// ---------- render ----------
+
 bool gNight = false;  // noche real (por hora) o durmiendo: lo fija render()
 uint16_t inkColor() { return gNight ? UI_INK_NIGHT : UI_INK; }
+
+// ---------- escena de fondo: bioma del tipo + hora real del RTC ----------
 
 #define C565(r, g, b) ((uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3)))
 #define HORIZON 232  // linea donde el cielo se encuentra con el suelo
@@ -827,6 +841,7 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
 
 // primera partida: elige inicial entre Bulbasaur / Charmander / Squirtle
 
+// ---------- 初回言語選択 ----------
 void renderFirstLangSelect() {
 
   gfx->fillScreen(RGB565_BLACK);
@@ -834,6 +849,7 @@ void renderFirstLangSelect() {
 
   gfx->setTextColor(UI_INK);
 
+  // タイトルはまだ言語未決定なので英語固定
   gfx->setFont();
   gfx->setUTF8Print(false);
   gfx->setTextSize(3);
@@ -842,6 +858,7 @@ void renderFirstLangSelect() {
   gfx->setCursor(CX - strlen(title) * 9, 55);
   gfx->print(title);
 
+  // 言語ボタン
   static const char *const names[LANG_COUNT] = {
     "ESPANOL",
     "ENGLISH",
@@ -860,6 +877,7 @@ void renderFirstLangSelect() {
     int x = 58 + col * 178;
     int y = 105 + row * 60;
 
+    // 最後の日本語だけ中央
     if (i == LANG_JA) {
       x = 147;
       y = 105 + 3 * 60;
@@ -893,11 +911,13 @@ void renderStarterSelect() {
 
   gfx->setTextColor(UI_INK);
 
+  // ---------- タイトル ----------
   if (gLang == LANG_JA) {
 
     setLangFont();
     gfx->setTextSize(1);
 
+    // 「さいしょのポケモンをえらぶ」等
     gfx->setCursor(135, 72);
     gfx->print(t);
 
@@ -906,10 +926,12 @@ void renderStarterSelect() {
   } else {
 
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(t) * 6, 68);
+  gfx->setCursor(CX - strlen(t) * 6, 68);
     gfx->print(t);
   }
 
+
+  // ---------- 3匹の選択肢 ----------
   for (int i = 0; i < 3; i++) {
 
     int16_t d = STARTER_DEX[i];
@@ -917,25 +939,11 @@ void renderStarterSelect() {
 
     int ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP);
 
-    gfx->fillRoundRect(
-      70,
-      ry,
-      326,
-      STARTER_ROW_H,
-      14,
-      lerp565(de.accent, UI_WHITE, 6, 8)
-    );
+    gfx->fillRoundRect(70, ry, 326, STARTER_ROW_H, 14, lerp565(de.accent, UI_WHITE, 6, 8));
 
-    gfx->drawRoundRect(
-      70,
-      ry,
-      326,
-      STARTER_ROW_H,
-      14,
-      de.accent
-    );
+    gfx->drawRoundRect(70, ry, 326, STARTER_ROW_H, 14, de.accent);
 
-    const uint8_t *th = thumbs.get(d);
+    const uint8_t *th = thumbs.get(d);     // miniatura del inicial (si la SD esta lista)
 
     if (th) {
       drawThumb(th, 76, ry - 5, 3, false);
@@ -943,6 +951,7 @@ void renderStarterSelect() {
 
     gfx->setTextColor(UI_INK);
 
+    // ---------- 日本語名 ----------
     if (gLang == LANG_JA) {
 
       setLangFont();
@@ -950,6 +959,7 @@ void renderStarterSelect() {
 
       const char *nm = dexName(d);
 
+      // 日本語名をだいたい中央寄せ
       int chars = strlen(nm) / 3;
       int nameW = chars * 16;
 
@@ -966,11 +976,12 @@ void renderStarterSelect() {
 
     }
 
+    // ---------- その他の言語 ----------
     else {
 
       gfx->setTextSize(3);
-      gfx->setCursor(178, ry + 24);
-      gfx->print(dexName(d));
+    gfx->setCursor(178, ry + 24);
+    gfx->print(dexName(d));
     }
   }
 
@@ -978,6 +989,7 @@ void renderStarterSelect() {
 }
 void render() {
 
+  // 初回はスターターより先に言語選択
   if (firstLangPick) {
     renderFirstLangSelect();
     return;
@@ -1029,8 +1041,12 @@ void render() {
   }
 
   if (pet.isEgg()) {
+  // ==================================================
+  // 日本語
+  // ==================================================
   if (gLang == LANG_JA) {
 
+    // ---------- 卵タイトル ----------
     setLangFont();
     gfx->setTextColor(inkColor());
     gfx->setTextSize(1);
@@ -1038,6 +1054,7 @@ void render() {
     gfx->setCursor(195, 58);
     gfx->print(T(S_EGG_HDR));
 
+    // ---------- 卵の状態メッセージ ----------
     gfx->setCursor(150, 96);
     gfx->print(eggMsg());
 
@@ -1045,28 +1062,24 @@ void render() {
 
   }
 
+  // ==================================================
+  // その他の言語
+  // ==================================================
   else {
 
-    drawHeader(
-      T(S_EGG_HDR),
-      inkColor(),
-      eggMsg()
-    );
+    drawHeader(T(S_EGG_HDR), inkColor(), eggMsg());
   }
 
+
+  // ---------- 卵 ----------
   int s = 5;
   int x = CX - 16 * s;
   int y = PET_CY - 16 * s;
 
-  drawMap(
-    SPR_EGG,
-    SPRITE_H,
-    x,
-    y,
-    s,
-    false
-  );
+    drawMap(SPR_EGG, SPRITE_H, x, y, s, false);
 
+
+  // ---------- ヒビ ----------
   if (pet.eggCracks() >= 1) {
 
     for (auto &c : CRACK1) {
@@ -1093,18 +1106,13 @@ void render() {
     }
   }
 
-  if (pet.eggRarity() >= R_RARO) {
 
-    const char *rar =
-      (pet.eggRarity() == R_LEGENDARIO)
-      ? T(S_EGG_LEGEND)
-      : T(S_EGG_RARE);
+  // ---------- レア / 伝説 ----------
+    if (pet.eggRarity() >= R_RARO) {
 
-    gfx->setTextColor(
-      pet.eggRarity() == R_LEGENDARIO
-      ? UI_BAR_WARN
-      : 0x4C98
-    );
+      const char *rar = (pet.eggRarity() == R_LEGENDARIO) ? T(S_EGG_LEGEND) : T(S_EGG_RARE);
+
+      gfx->setTextColor(pet.eggRarity() == R_LEGENDARIO ? UI_BAR_WARN : 0x4C98);
 
     if (gLang == LANG_JA) {
 
@@ -1119,23 +1127,17 @@ void render() {
     } else {
 
       gfx->setTextSize(2);
-      gfx->setCursor(
-        CX - strlen(rar) * 6,
-        316
-      );
+      gfx->setCursor(CX - strlen(rar) * 6, 316);
 
       gfx->print(rar);
     }
   }
 
+
+  // ---------- 図鑑登録数 ----------
   char reg[32];
 
-  snprintf(
-    reg,
-    sizeof(reg),
-    T(S_POKEDEX_FMT),
-    pet.registeredCount()
-  );
+    snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount());
 
   gfx->fillRect(
     0,
@@ -1161,30 +1163,32 @@ void render() {
 
     gfx->setTextSize(2);
 
-    gfx->setCursor(
-      CX - strlen(reg) * 6,
-      348
-    );
+    gfx->setCursor(CX - strlen(reg) * 6, 348);
 
     gfx->print(reg);
   }
 
   } else {
 const DexEntry &d = DEX_TBL[pet.speciesId];
-const char *base = pet.nick[0] ? pet.nick : dexName(pet.speciesId);
+    const char *base = pet.nick[0] ? pet.nick : dexName(pet.speciesId);
 
 if (gLang == LANG_JA) {
 
   gfx->setTextColor(gNight ? UI_INK_NIGHT : d.accent);
 
+  // ==================================================
+  // ニックネームあり
+  // ==================================================
   if (pet.nick[0]) {
 
     setLangFont();
     gfx->setTextSize(1);
 
+  // ---------- レベル ----------
   char lv[16];
   snprintf(lv, sizeof(lv), "Lv.%u", pet.level());
 
+  // Lvだけ標準フォントで大きく表示
   resetLangFont();
 
   gfx->setTextColor(gNight ? UI_INK_NIGHT : d.accent);
@@ -1195,20 +1199,25 @@ if (gLang == LANG_JA) {
   gfx->setCursor(CX - lvW / 2, 18);
   gfx->print(lv);
 
+  // ニックネーム用の日本語フォントに戻す
   setLangFont();
   gfx->setTextSize(1);
 
+// ---------- ニックネーム ----------
 int nameChars = strlen(base) / 3;
 int nameW = nameChars * 16;
 
 int nameX = CX - nameW / 2;
 int nameY = 58;
 
+// 名前は濃く表示
 gfx->setTextColor(gNight ? UI_INK_NIGHT : UI_INK);
 
+// 1回目
 gfx->setCursor(nameX, nameY);
 gfx->print(base);
 
+// 1px右に重ねて少し太く
 gfx->setCursor(nameX + 1, nameY);
 gfx->print(base);
 
@@ -1216,10 +1225,16 @@ resetLangFont();
 
   }
 
+  // ==================================================
+  // ニックネームなし
+  // 日本語の種族名を表示
+  // ==================================================
 else {
+  // ---------- レベル ----------
   char lv[16];
   snprintf(lv, sizeof(lv), "Lv.%u", pet.level());
 
+  // Lvだけ標準フォントで大きく表示
   resetLangFont();
 
   gfx->setTextColor(gNight ? UI_INK_NIGHT : d.accent);
@@ -1230,6 +1245,8 @@ else {
   gfx->setCursor(CX - lvW / 2, 18);
   gfx->print(lv);
 
+
+// ---------- ポケモン名 ----------
 setLangFont();
 gfx->setTextSize(1);
 
@@ -1241,16 +1258,22 @@ int nameW = nameChars * 16;
 int nameX = CX - nameW / 2;
 int nameY = 58;
 
+// 名前は濃く表示
 gfx->setTextColor(gNight ? UI_INK_NIGHT : UI_INK);
 
+// 1回目
 gfx->setCursor(nameX, nameY);
 gfx->print(speciesName);
 
+// 1px右に重ねて少し太く
 gfx->setCursor(nameX + 1, nameY);
 gfx->print(speciesName);
 
 resetLangFont();
 }
+  // ==================================================
+  // 状態メッセージ
+  // ==================================================
   const char *msg = statusMsg();
 
   setLangFont();
@@ -1265,24 +1288,18 @@ resetLangFont();
 
 } else {
 
-  char name[28];
+    char name[28];
 
-  snprintf(
-    name,
-    sizeof(name),
-    T(S_NAME_FMT),
-    pet.shiny ? "*" : "",
-    base,
-    pet.level()
-  );
+    snprintf(name, sizeof(name), T(S_NAME_FMT), pet.shiny ? "*" : "", base, pet.level());
 
-  drawHeader(
-    name,
-    gNight ? UI_INK_NIGHT : d.accent,
-    statusMsg()
-  );
+    drawHeader(name, gNight ? UI_INK_NIGHT : d.accent, statusMsg());
 
 }  // gLang の終了
+
+
+// ==================================================
+// 通常画面のキャラクターなどを描画
+// ==================================================
 
 drawStreakBadge();
 
@@ -1292,6 +1309,8 @@ drawBath();
 
 drawPoops();
 
+
+// ---------- 下部パネル ----------
 gfx->fillRect(
   0,
   312,
@@ -1306,6 +1325,7 @@ drawButtons();
 
 drawCelebration();
 
+// ---------- 特殊ボタン ----------
 if (pet.wantEvolveButton()) {
 
   drawEvolveButton();
@@ -1324,61 +1344,64 @@ else if (pet.wantFarewellButton()) {
 
 }  // pet.isEgg() の else 終了
 
-if (pet.sleeping) {
+  if (pet.sleeping) {
 
-  gfx->setTextColor(UI_INK_NIGHT);
+    gfx->setTextColor(UI_INK_NIGHT);
   gfx->setTextSize(3);
-  gfx->setCursor(320, 130);
-  gfx->print("Zz");
+    gfx->setCursor(320, 130);
+    gfx->print("Zz");
 
 }
 
+
+// ---------- selector de comida ----------
 if (feedMenuUntil) {
 
-  if (millis() > feedMenuUntil) {
+    if (millis() > feedMenuUntil) {
 
     feedMenuUntil = 0;
 
   } else {
 
-    gfx->fillRoundRect(101, 288, 264, 64, 14, UI_WHITE);
-    gfx->drawRoundRect(101, 288, 264, 64, 14, inkColor());
+      gfx->fillRoundRect(101, 288, 264, 64, 14, UI_WHITE);
+      gfx->drawRoundRect(101, 288, 264, 64, 14, inkColor());
 
-    drawMap(SPR_ICON_FOOD, 16, 110, 296, 3, false);
-    drawMap(SPR_ICON_BERRY_B, 16, 176, 296, 3, false);
-    drawMap(SPR_ICON_BERRY_G, 16, 242, 296, 3, false);
-    drawMap(SPR_ICON_CANDY, 16, 308, 296, 3, false);
+      drawMap(SPR_ICON_FOOD, 16, 110, 296, 3, false);
+      drawMap(SPR_ICON_BERRY_B, 16, 176, 296, 3, false);
+      drawMap(SPR_ICON_BERRY_G, 16, 242, 296, 3, false);
+      drawMap(SPR_ICON_CANDY, 16, 308, 296, 3, false);
 
   }
 
 }
 
+
   // dialogo "soltar?" (pulsacion larga sobre el bicho)
 if (confirmUntil) {
 
-  if (millis() > confirmUntil) {
+    if (millis() > confirmUntil) {
 
     confirmUntil = 0;
 
   } else {
 
-    gfx->fillRoundRect(94, 168, 278, 152, 16, UI_WHITE);
-    gfx->drawRoundRect(94, 168, 278, 152, 16, UI_INK);
+      gfx->fillRoundRect(94, 168, 278, 152, 16, UI_WHITE);
+      gfx->drawRoundRect(94, 168, 278, 152, 16, UI_INK);
 
     char q[48];
 
-    snprintf(
-      q,
-      sizeof(q),
-      T(S_RELEASE_FMT),
-      dexName(pet.speciesId)
-    );
+      snprintf(q, sizeof(q), T(S_RELEASE_FMT), dexName(pet.speciesId));
 
+
+    // ==================================================
+    // 日本語
+    // ==================================================
     if (gLang == LANG_JA) {
 
       setLangFont();
       gfx->setTextSize(1);
 
+      // ---------- 「○○をにがす？」 ----------
       gfx->setTextColor(UI_INK);
 
       gfx->setCursor(135, 205);
@@ -1386,6 +1409,8 @@ if (confirmUntil) {
 
       resetLangFont();
 
+
+      // ---------- はい ----------
       gfx->fillRoundRect(
         118,
         252,
@@ -1404,6 +1429,8 @@ if (confirmUntil) {
 
       resetLangFont();
 
+
+      // ---------- いいえ ----------
       gfx->fillRoundRect(
         248,
         252,
@@ -1424,18 +1451,20 @@ if (confirmUntil) {
 
     }
 
+    // ==================================================
+    // その他の言語
+    // ==================================================
     else {
 
       gfx->setTextColor(UI_INK);
       gfx->setTextSize(2);
 
-      gfx->setCursor(
-        CX - strlen(q) * 6,
-        196
-      );
+      gfx->setCursor(CX - strlen(q) * 6, 196);
 
       gfx->print(q);
 
+
+      // ---------- YES ----------
       gfx->fillRoundRect(
         118,
         252,
@@ -1447,13 +1476,12 @@ if (confirmUntil) {
 
       gfx->setTextColor(UI_WHITE);
 
-      gfx->setCursor(
-        118 + (100 - (int)strlen(T(S_YES)) * 12) / 2,
-        270
-      );
+      gfx->setCursor(118 + (100 - (int)strlen(T(S_YES)) * 12) / 2, 270);
 
       gfx->print(T(S_YES));
 
+
+      // ---------- NO ----------
       gfx->fillRoundRect(
         248,
         252,
@@ -1463,10 +1491,7 @@ if (confirmUntil) {
         UI_BAR_BAD
       );
 
-      gfx->setCursor(
-        248 + (100 - (int)strlen(T(S_NO)) * 12) / 2,
-        270
-      );
+      gfx->setCursor(248 + (100 - (int)strlen(T(S_NO)) * 12) / 2, 270);
 
       gfx->print(T(S_NO));
     }
@@ -1481,6 +1506,8 @@ if (confirmUntil) {
 
   gfx->flush();
 }
+
+// ---------- minijuego: toques con la pokeball ----------
 
 void startGame() {
   if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
@@ -1561,6 +1588,8 @@ void stepGame() {
   gamePetX += chase;
 }
 
+// ---------- saco de entrenamiento (entrena la fuerza) ----------
+
 void startSack() {
   if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
   sackOpen = true;
@@ -1586,32 +1615,35 @@ void renderSack() {
   uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
 
   // pantalla de resultado
-if (sackOverUntil) {
+  if (sackOverUntil) {
 
-  if (now > sackOverUntil) {
-    sackOpen = false;
-    return;
-  }
+    if (now > sackOverUntil) { sackOpen = false; return; }
 
-  char b[20];
-  snprintf(b, sizeof(b), T(S_HITS_FMT), sackHits);
+    char b[20];
+    snprintf(b, sizeof(b), T(S_HITS_FMT), sackHits);
 
-  char g[18];
-  snprintf(g, sizeof(g), T(S_STR_GAIN_FMT), sackGain);
+    char g[18];
+    snprintf(g, sizeof(g), T(S_STR_GAIN_FMT), sackGain);
 
+  // ==================================================
+  // 日本語
+  // ==================================================
   if (gLang == LANG_JA) {
 
     setLangFont();
     gfx->setTextSize(1);
 
+    // ヒット数
     gfx->setTextColor(ink);
     gfx->setCursor(150, 150);
     gfx->print(b);
 
+    // こうげき上昇
     gfx->setTextColor(UI_BAR_BAD);
     gfx->setCursor(150, 210);
     gfx->print(g);
 
+    // 新記録 / 記録
     gfx->setTextColor(ink);
 
     if (sackNewHi && sackHits > 0) {
@@ -1634,6 +1666,9 @@ if (sackOverUntil) {
 
   }
 
+  // ==================================================
+  // その他の言語
+  // ==================================================
   else {
 
     gfx->setTextColor(ink);
@@ -1700,6 +1735,7 @@ if (sackOverUntil) {
   gfx->setCursor(CX - strlen(buf) * 18, 268);
   gfx->print(buf);
 
+// 「はやくタッチ！」などのメッセージ
 if (gLang == LANG_JA) {
 
   setLangFont();
@@ -1756,27 +1792,32 @@ void renderGame() {
   bool night = sceneHour() < 6 || sceneHour() >= 20;
   uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
 
- if (gameOverUntil) {
+  if (gameOverUntil) {
 
   drawGameScene();
 
-  if (millis() > gameOverUntil) {
+    if (millis() > gameOverUntil) {
     gameOpen = false;
     return;
   }
 
-  char buf[22];
-  snprintf(buf, sizeof(buf), T(S_SCORE_FMT), gameScore);
+    char buf[22];
+    snprintf(buf, sizeof(buf), T(S_SCORE_FMT), gameScore);
 
+  // ==================================================
+  // 日本語
+  // ==================================================
   if (gLang == LANG_JA) {
 
     setLangFont();
     gfx->setTextSize(1);
 
+    // ---------- スコア ----------
     gfx->setTextColor(ink);
     gfx->setCursor(165, 160);
     gfx->print(buf);
 
+    // ---------- 新記録 / 記録 ----------
     if (gameNewHi && gameScore > 0) {
 
       gfx->setTextColor(UI_BAR_WARN);
@@ -1793,6 +1834,7 @@ void renderGame() {
       gfx->print(rec);
     }
 
+    // ---------- ごきげんメッセージ ----------
     const char *msg =
       gameScore >= 10 ? T(S_GREAT_JOY) : T(S_PLUS_JOY);
 
@@ -1804,6 +1846,9 @@ void renderGame() {
 
   }
 
+  // ==================================================
+  // その他の言語
+  // ==================================================
   else {
 
     gfx->setTextColor(ink);
@@ -1854,7 +1899,7 @@ void renderGame() {
   gfx->print(buf);
   char rec[24];
 
-snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameHi);
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameHi);
 
 if (gLang == LANG_JA) {
 
@@ -1913,15 +1958,19 @@ if (gLang == LANG_JA) {
   gfx->flush();
 }
 
+// ---------- ficha del bicho (deslizar vertical) ----------
+
 void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color) {
 
   gfx->setTextColor(UI_INK);
 
+  // ラベル
   if (gLang == LANG_JA) {
 
     setLangFont();
     gfx->setTextSize(1);
 
+    // 日本語ラベル
     gfx->setCursor(96, y + 4);
     gfx->print(label);
 
@@ -1935,6 +1984,7 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
 
   }
 
+  // 数値
   char num[8];
   snprintf(num, sizeof(num), "%u", val);
 
@@ -1943,6 +1993,7 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
   gfx->setCursor(330, y);
   gfx->print(num);
 
+  // バー
   int bw = 150;
   int fw = (int)val * bw / maxBar;
 
@@ -1954,6 +2005,8 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
   gfx->fillRoundRect(160, y + 2, fw, 11, 3, color);
   }
 
+
+// ---------- ajuste de hora en pantalla (deslizar abajo) ----------
 // El usuario pone su hora LOCAL a ojo; el firmware la usa tal cual, asi que
 // no hay que gestionar zona horaria. Preserva el dia (no rompe racha/edad).
 
@@ -1996,6 +2049,7 @@ if (gLang == LANG_JA) {
   setLangFont();
   gfx->setTextSize(1);
 
+  // 日本語は仮で中央寄せ
   gfx->setCursor(170, 58);
   gfx->print(T(S_SET_TIME));
 
@@ -2022,11 +2076,13 @@ if (gLang == LANG_JA) {
   gfx->setTextSize(1);
   gfx->setTextColor(UI_INK);
 
+  // ↓ 日本語だけの位置
   gfx->setCursor(145, 264);
   gfx->print(T(S_HOUR));
   gfx->setCursor(146, 264);
   gfx->print(T(S_HOUR));
 
+  // ↓ 日本語だけの位置
   gfx->setCursor(302, 264);
   gfx->print(T(S_MIN));
   gfx->setCursor(303, 264);
@@ -2058,6 +2114,7 @@ if (gLang == LANG_JA) {
   setLangFont();
   gfx->setTextSize(1);
 
+  // 「おと ON / おと OFF」を中央付近に表示
   gfx->setCursor(58, LANG_PILL_Y + 16);
   gfx->print(sl);
 
@@ -2166,22 +2223,14 @@ void drawCelebration() {
   if (pet.showMedal()) {
 
     for (int i = 0; i < MED_COUNT; i++) {
-      if (pet.newMedal & (1 << i)) {
-        l2 = medalName(i);
-        break;
-      }
+      if (pet.newMedal & (1 << i)) { l2 = medalName(i); break; }
     }
 
     l1 = T(S_MEDAL_BANNER);
 
   } else if (pet.showMilestone()) {
 
-    snprintf(
-      buf,
-      sizeof(buf),
-      T(S_STREAK_DAYS_FMT),
-      pet.streak
-    );
+    snprintf(buf, sizeof(buf), T(S_STREAK_DAYS_FMT), pet.streak);
 
     l1 = T(S_GREAT);
     l2 = buf;
@@ -2189,29 +2238,26 @@ void drawCelebration() {
 
   if (!l1) return;
 
-  gfx->fillRoundRect(
-    73, 150,
-    320, 96,
-    16,
-    UI_BAR_WARN
-  );
 
-  gfx->drawRoundRect(
-    73, 150,
-    320, 96,
-    16,
-    UI_INK
-  );
+  gfx->fillRoundRect(73, 150, 320, 96, 16, UI_BAR_WARN);
 
+  gfx->drawRoundRect(73, 150, 320, 96, 16, UI_INK);
+
+
+  // ==================================================
+  // 日本語
+  // ==================================================
   if (gLang == LANG_JA) {
 
     setLangFont();
     gfx->setTextSize(1);
     gfx->setTextColor(UI_INK);
 
+    // 「メダルゲット！」など
     gfx->setCursor(150, 184);
     gfx->print(l1);
 
+    // メダル名 / 連続日数
     gfx->setCursor(150, 220);
     gfx->print(l2);
 
@@ -2219,22 +2265,19 @@ void drawCelebration() {
 
   }
 
+  // ==================================================
+  // その他の言語
+  // ==================================================
   else {
 
     gfx->setTextColor(UI_INK);
 
     gfx->setTextSize(3);
-    gfx->setCursor(
-      CX - strlen(l1) * 9,
-      176
-    );
+  gfx->setCursor(CX - strlen(l1) * 9, 176);
     gfx->print(l1);
 
     gfx->setTextSize(2);
-    gfx->setCursor(
-      CX - strlen(l2) * 6,
-      212
-    );
+  gfx->setCursor(CX - strlen(l2) * 6, 212);
     gfx->print(l2);
   }
 }
@@ -2255,32 +2298,37 @@ void renderCardProfile() {
   const char *nm = pet.nick[0] ? pet.nick : dexName(pet.speciesId);
 
   char head[26];
-  snprintf(head, sizeof(head), T(S_NAME_FMT),
-           pet.shiny ? "*" : "", nm, pet.level());
+  snprintf(head, sizeof(head), T(S_NAME_FMT), pet.shiny ? "*" : "", nm, pet.level());
 
-gfx->setTextColor(d.accent);
+  // 名前・レベル
+  gfx->setTextColor(d.accent);
 
 if (gLang == LANG_JA) {
 
   setLangFont();
   gfx->setTextSize(1);
 
+// ---------- レベルを上に中央表示 ----------
 char lv[16];
 snprintf(lv, sizeof(lv), "Lv.%u", pet.level());
 
+// LvはASCIIなので標準フォントで少し大きく表示
 resetLangFont();
 
 gfx->setTextColor(gNight ? UI_INK_NIGHT : d.accent);
 gfx->setTextSize(2);
 
+// 標準フォント size 2 は1文字約12px
 int lvW = strlen(lv) * 12;
 
 gfx->setCursor(CX - lvW / 2, 18);
 gfx->print(lv);
 
+// この後のニックネーム用に日本語フォントへ戻す
 setLangFont();
 gfx->setTextSize(1);
 
+  // ---------- 名前を下に中央表示 ----------
   int nameChars = strlen(nm) / 3;
   int nameW = nameChars * 16;
 
@@ -2295,23 +2343,21 @@ gfx->setTextSize(1);
   int hts = (hlen <= 11) ? 3 : 2;
 
   gfx->setTextSize(hts);
-  gfx->setCursor(
-    CX - hlen * (hts == 3 ? 9 : 6),
-    hts == 3 ? 34 : 40
-  );
+  gfx->setCursor(CX - hlen * (hts == 3 ? 9 : 6), hts == 3 ? 34 : 40);
 
   gfx->print(head);
 }
 
 if (pet.nick[0]) {
 
-  const char *sp = dexName(pet.speciesId);
+    const char *sp = dexName(pet.speciesId);
 
   if (gLang == LANG_JA) {
 
     setLangFont();
     gfx->setTextSize(1);
 
+    // 灰色ではなく濃い文字色
     gfx->setTextColor(UI_INK);
 
     int spChars = strlen(sp) / 3;
@@ -2340,8 +2386,10 @@ if (pet.nick[0]) {
     drawPmdAct(PMD_IDLE, CX, 206, millis(), true, false, 4);
   }
 
+  // 連続記録
   int sx = 138, sy = 224;
 
+  // 炎だけ5px上へ
   int fy = sy - 11;
 
 gfx->fillTriangle(
@@ -2358,8 +2406,8 @@ gfx->fillTriangle(
     UI_BAR_WARN
 );
 
-char rl[30];
-snprintf(rl, sizeof(rl), T(S_STREAK_FMT), pet.streak, pet.bestStreak);
+  char rl[30];
+  snprintf(rl, sizeof(rl), T(S_STREAK_FMT), pet.streak, pet.bestStreak);
 
 gfx->setTextColor(UI_INK);
 
@@ -2380,29 +2428,18 @@ if (gLang == LANG_JA) {
   gfx->print(rl);
 
 }
-  drawCardStat(
-      258,
-      T(S_VIN),
-      pet.bond,
-      100,
-      C565(0xd4, 0x52, 0x7e)
-  );
+  // なかよし
+  drawCardStat(258, T(S_VIN), pet.bond, 100, C565(0xd4, 0x52, 0x7e));
 
-  const char *berry =
-      !pet.berryKnown ? T(S_BERRY_UNK)
-      : pet.lovesBerry(0) ? T(S_BERRY_RED)
-      : pet.lovesBerry(1) ? T(S_BERRY_BLUE)
-                          : T(S_BERRY_GREEN);
+  const char *berry = !pet.berryKnown ? T(S_BERRY_UNK)
+                      : pet.lovesBerry(0) ? T(S_BERRY_RED)
+                      : pet.lovesBerry(1) ? T(S_BERRY_BLUE)
+                                          : T(S_BERRY_GREEN);
 
   char info[40];
 
-  snprintf(
-      info,
-      sizeof(info),
-      T(S_INFO_FMT),
-      berry,
-      (unsigned long)(pet.ageMinutes / 1440)
-  );
+  snprintf(info, sizeof(info), T(S_INFO_FMT), berry,
+           (unsigned long)(pet.ageMinutes / 1440));
 
   gfx->setTextColor(UI_INK);
 
@@ -2416,10 +2453,11 @@ if (gLang == LANG_JA) {
     resetLangFont();
   } else {
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(info) * 6, 296);
+  gfx->setCursor(CX - strlen(info) * 6, 296);
     gfx->print(info);
   }
 
+  // 名前変更ヒント
 gfx->setTextColor(UI_TRACK);
 
 if (gLang == LANG_JA) {
@@ -2446,11 +2484,13 @@ void renderCardStats() {
 
   gfx->setTextColor(UI_INK);
 
+  // ---------- タイトル ----------
   if (gLang == LANG_JA) {
 
     setLangFont();
     gfx->setTextSize(1);
 
+    // 日本語タイトル
     gfx->setCursor(185, 52);
     gfx->print(T(S_BATTLE));
 
@@ -2459,15 +2499,19 @@ void renderCardStats() {
   } else {
 
     gfx->setTextSize(3);
-    gfx->setCursor(CX - strlen(T(S_BATTLE)) * 9, 48);
+  gfx->setCursor(CX - strlen(T(S_BATTLE)) * 9, 48);
     gfx->print(T(S_BATTLE));
   }
 
+
+  // ---------- ステータス ----------
   drawCardStat(118, T(S_STAT_ATK), pet.atkStat(), 260, UI_BAR_BAD);
   drawCardStat(160, T(S_STAT_DEF), pet.defStat(), 260, 0x4C98);
   drawCardStat(202, T(S_STAT_SPE), pet.speStat(), 260, UI_BAR_WARN);
   drawCardStat(244, T(S_STAT_WGT), pet.weight, 100, 0xB3C8);
 
+
+  // ---------- トレーニングボタン ----------
   gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
   gfx->setTextColor(UI_BG_DAY);
 
@@ -2476,6 +2520,7 @@ void renderCardStats() {
     setLangFont();
     gfx->setTextSize(1);
 
+    // 日本語ボタン文字
     gfx->setCursor(155, 318);
     gfx->print(T(S_TRAIN_STR));
 
@@ -2484,7 +2529,7 @@ void renderCardStats() {
   } else {
 
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(T(S_TRAIN_STR)) * 6, 311);
+  gfx->setCursor(CX - strlen(T(S_TRAIN_STR)) * 6, 311);
     gfx->print(T(S_TRAIN_STR));
   }
 
@@ -2503,6 +2548,7 @@ void renderCardMedals() {
 
   gfx->setTextColor(UI_INK);
 
+  // ---------- タイトル ----------
   if (gLang == LANG_JA) {
 
     setLangFont();
@@ -2516,10 +2562,12 @@ void renderCardMedals() {
   } else {
 
     gfx->setTextSize(3);
-    gfx->setCursor(CX - strlen(head) * 9, 48);
+  gfx->setCursor(CX - strlen(head) * 9, 48);
     gfx->print(head);
   }
 
+
+  // ---------- メダル一覧 ----------
   for (int i = 0; i < MED_COUNT; i++) {
 
     int x = 28 + (i % 2) * 206;
@@ -2527,38 +2575,25 @@ void renderCardMedals() {
 
     bool g = pet.hasMedal(1 << i);
 
-    gfx->fillRoundRect(
-      x,
-      y,
-      196,
-      44,
-      10,
-      g ? UI_BAR_OK : UI_TRACK
-    );
+    gfx->fillRoundRect(x, y, 196, 44, 10, g ? UI_BAR_OK : UI_TRACK);
 
-    if (g) {
 
-      gfx->fillCircle(
-        x + 22,
-        y + 22,
-        11,
-        UI_BG_DAY
-      );
+    // ---------- 取得済みマーク ----------
+    if (g) {  // marca de conseguida
+
+      gfx->fillCircle(x + 22, y + 22, 11, UI_BG_DAY);
 
       gfx->setTextColor(UI_BAR_OK);
       gfx->setTextSize(2);
 
-      gfx->setCursor(
-        x + 16,
-        y + 13
-      );
+      gfx->setCursor(x + 16, y + 13);
 
       gfx->print("v");
     }
 
-    gfx->setTextColor(
-      g ? UI_BG_DAY : 0x8410
-    );
+
+    // ---------- メダル名 ----------
+    gfx->setTextColor(g ? UI_BG_DAY : 0x8410);
 
     if (gLang == LANG_JA) {
 
@@ -2578,10 +2613,7 @@ void renderCardMedals() {
 
       gfx->setTextSize(2);
 
-      gfx->setCursor(
-        x + 44,
-        y + 14
-      );
+    gfx->setCursor(x + 44, y + 14);
 
       gfx->print(medalDesc(i));
     }
@@ -2596,6 +2628,7 @@ void renderCardProgress() {
 
   gfx->setTextColor(UI_INK);
 
+  // ---------- タイトル ----------
   if (gLang == LANG_JA) {
 
     setLangFont();
@@ -2609,10 +2642,12 @@ void renderCardProgress() {
   } else {
 
     gfx->setTextSize(3);
-    gfx->setCursor(CX - strlen(T(S_PROGRESS)) * 9, 44);
+  gfx->setCursor(CX - strlen(T(S_PROGRESS)) * 9, 44);
     gfx->print(T(S_PROGRESS));
   }
 
+
+  // ---------- レベル ----------
   char lv[10];
 
   snprintf(lv, sizeof(lv), T(S_LVL_FMT), pet.level());
@@ -2623,6 +2658,8 @@ void renderCardProgress() {
   gfx->setCursor(CX - strlen(lv) * 15, 86);
   gfx->print(lv);
 
+
+  // ---------- 次レベルまでのバー ----------
   uint8_t into = pet.ageMinutes % MINUTES_PER_LEVEL;
 
   int bx = 93;
@@ -2645,15 +2682,11 @@ void renderCardProgress() {
     );
   }
 
+
+  // ---------- 次のレベルまで ----------
   char nx[26];
 
-  snprintf(
-    nx,
-    sizeof(nx),
-    T(S_NEXT_LVL_FMT),
-    MINUTES_PER_LEVEL - into,
-    pet.level() + 1
-  );
+  snprintf(nx, sizeof(nx), T(S_NEXT_LVL_FMT), MINUTES_PER_LEVEL - into, pet.level() + 1);
 
   gfx->setTextColor(UI_INK);
 
@@ -2670,24 +2703,25 @@ void renderCardProgress() {
   } else {
 
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(nx) * 6, by + 32);
+  gfx->setCursor(CX - strlen(nx) * 6, by + 32);
     gfx->print(nx);
   }
   // estado de evolucion
+// ---------- 進化状態 ----------
 
-char evoBuf[28];
-const char *evo;
-uint16_t evoCol = UI_INK;
+  char evoBuf[28];
+  const char *evo;
+  uint16_t evoCol = UI_INK;
 
-if (d.evolvesTo == 0) {
+  if (d.evolvesTo == 0) {
 
-  evo = T(S_FINAL_FORM);
+    evo = T(S_FINAL_FORM);
 
 } else {
 
-  int needed = d.evolveLevel + pet.careMistakes;
+    int needed = d.evolveLevel + pet.careMistakes;
 
-  if (pet.level() >= needed) {
+    if (pet.level() >= needed) {
 
     if (pet.lowestStat() >= 40) {
       evo = T(S_EVO_READY);
@@ -2699,26 +2733,27 @@ if (d.evolvesTo == 0) {
 
   } else {
 
-    snprintf(
-      evoBuf,
-      sizeof(evoBuf),
-      T(S_EVO_IN_FMT),
-      needed - pet.level()
-    );
+      snprintf(evoBuf, sizeof(evoBuf), T(S_EVO_IN_FMT), needed - pet.level());
 
     evo = evoBuf;
   }
 }
 
+
+// ==================================================
+// 日本語
+// ==================================================
 if (gLang == LANG_JA) {
 
   setLangFont();
   gfx->setTextSize(1);
 
+  // 「しんか」
   gfx->setTextColor(UI_TRACK);
   gfx->setCursor(195, 230);
   gfx->print(T(S_EVO_LABEL));
 
+  // 進化状態
   gfx->setTextColor(evoCol);
   gfx->setCursor(140, 260);
   gfx->print(evo);
@@ -2738,18 +2773,13 @@ if (gLang == LANG_JA) {
   gfx->print(evo);
 }
 
-char ms[24];
 
-snprintf(
-  ms,
-  sizeof(ms),
-  T(S_MISTAKES_FMT),
-  pet.careMistakes
-);
+// ---------- お世話ミス ----------
+  char ms[24];
 
-gfx->setTextColor(
-  pet.careMistakes > 0 ? UI_BAR_BAD : UI_INK
-);
+  snprintf(ms, sizeof(ms), T(S_MISTAKES_FMT), pet.careMistakes);
+
+  gfx->setTextColor(pet.careMistakes > 0 ? UI_BAR_BAD : UI_INK);
 
 if (gLang == LANG_JA) {
 
@@ -2806,6 +2836,8 @@ if (gLang == LANG_JA) {
   gfx->flush();
 }
 
+// ---------- teclado para renombrar ----------
+
 static const char KB_KEYS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-";  // 28 + DEL + OK = 30
 #define KB_COLS 6
 #define KB_X 40
@@ -2813,6 +2845,7 @@ static const char KB_KEYS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-";  // 28 + DEL + OK 
 #define KB_W 64
 #define KB_H 52
 
+// 日本語用カタカナキーボード
 static const char *const KB_KANA[3][27] = {
 
   {
@@ -2842,6 +2875,7 @@ static const char *const KB_KANA[3][27] = {
 
 uint8_t kbKanaPage = 0;
 
+// UTF-8の文字列をnameBufへ1文字追加
 bool appendUtf8Char(const char *s) {
 
   size_t n = strlen(s);
@@ -2857,12 +2891,14 @@ bool appendUtf8Char(const char *s) {
   return true;
 }
 
+// UTF-8の最後の1文字を削除
 void deleteLastUtf8Char() {
 
   if (nameLen == 0) return;
 
   nameLen--;
 
+  // UTF-8の継続バイトを飛ばして文字の先頭まで戻る
   while (nameLen > 0 &&
          (((uint8_t)nameBuf[nameLen] & 0xC0) == 0x80)) {
     nameLen--;
@@ -2880,6 +2916,7 @@ void openKeyboard() {
 
   nameLen = strlen(nameBuf);
 
+  // 日本語キーボードは最初のページから
   kbKanaPage = 0;
 }
 
@@ -2890,6 +2927,7 @@ void renderKeyboard() {
 
   gfx->setTextColor(UI_INK);
 
+  // ---------- タイトル「なまえ」 ----------
   if (gLang == LANG_JA) {
 
     setLangFont();
@@ -2903,10 +2941,12 @@ void renderKeyboard() {
   } else {
 
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(T(S_NAME)) * 6, 56);
+  gfx->setCursor(CX - strlen(T(S_NAME)) * 6, 56);
     gfx->print(T(S_NAME));
   }
 
+
+  // ---------- 現在の名前 ----------
   gfx->fillRoundRect(83, 84, 300, 40, 8, UI_WHITE);
   gfx->drawRoundRect(83, 84, 300, 40, 8, UI_INK);
 
@@ -2924,37 +2964,28 @@ void renderKeyboard() {
   } else {
 
     gfx->setTextSize(3);
-    gfx->setCursor(95, 94);
+  gfx->setCursor(95, 94);
     gfx->print(nameLen ? nameBuf : "_");
   }
 
+
+  // ---------- 30個のキー ----------
   for (int i = 0; i < 30; i++) {
 
     int x = KB_X + (i % KB_COLS) * KB_W;
     int y = KB_Y + (i / KB_COLS) * KB_H;
 
+    // 27=削除、28=ページ切替、29=OK
     bool special = (i >= 27);
 
-    gfx->fillRoundRect(
-      x,
-      y,
-      KB_W - 6,
-      KB_H - 6,
-      6,
-      special ? UI_BAR_WARN : UI_WHITE
-    );
+    gfx->fillRoundRect(x, y, KB_W - 6, KB_H - 6, 6, special ? UI_BAR_WARN : UI_WHITE);
 
-    gfx->drawRoundRect(
-      x,
-      y,
-      KB_W - 6,
-      KB_H - 6,
-      6,
-      UI_INK
-    );
+    gfx->drawRoundRect(x, y, KB_W - 6, KB_H - 6, 6, UI_INK);
 
     gfx->setTextColor(UI_INK);
 
+
+    // ---------- 日本語 ----------
     if (gLang == LANG_JA) {
 
       if (i < 27) {
@@ -2962,6 +2993,7 @@ void renderKeyboard() {
         setLangFont();
         gfx->setTextSize(1);
 
+        // カタカナをキー中央付近へ
         gfx->setCursor(
           x + KB_W / 2 - 8,
           y + KB_H / 2 + 5
@@ -2973,6 +3005,7 @@ void renderKeyboard() {
 
       } else {
 
+        // 特殊キーはASCIIのまま
         gfx->setTextSize(2);
 
         const char *lab;
@@ -2995,22 +3028,20 @@ void renderKeyboard() {
 
     }
 
+    // ---------- 他の言語 ----------
     else {
 
       gfx->setTextSize(2);
 
-      if (i < 28) {
+    if (i < 28) {
 
-        gfx->setCursor(
-          x + KB_W / 2 - 9,
-          y + KB_H / 2 - 10
-        );
+      gfx->setCursor(x + KB_W / 2 - 9, y + KB_H / 2 - 10);
 
-        gfx->print(KB_KEYS[i]);
+      gfx->print(KB_KEYS[i]);
 
       } else {
 
-        const char *lab = (i == 28) ? "<-" : "OK";
+      const char *lab = (i == 28) ? "<-" : "OK";
 
         gfx->setCursor(
           x + KB_W / 2 - 15,
@@ -3039,13 +3070,19 @@ void keyboardTap(int16_t x, int16_t y) {
 
   if (i >= 30) return;
 
+
+  // ==================================================
+  // 日本語キーボード
+  // ==================================================
   if (gLang == LANG_JA) {
 
+    // 削除
     if (i == 27) {
 
       deleteLastUtf8Char();
     }
 
+    // ページ切替
     else if (i == 28) {
 
       kbKanaPage = (kbKanaPage + 1) % 3;
@@ -3058,6 +3095,7 @@ void keyboardTap(int16_t x, int16_t y) {
       kbOpen = false;
     }
 
+    // カタカナ入力
     else {
 
       appendUtf8Char(KB_KANA[kbKanaPage][i]);
@@ -3066,8 +3104,14 @@ void keyboardTap(int16_t x, int16_t y) {
     return;
   }
 
+
+  // ==================================================
+  // 従来の英字キーボード
+  // ==================================================
+
   if (i == 28) {
 
+    // 1文字削除
     if (nameLen) {
       nameBuf[--nameLen] = 0;
     }
@@ -3083,6 +3127,8 @@ void keyboardTap(int16_t x, int16_t y) {
     nameBuf[nameLen] = 0;
   }
 }
+
+// ---------- galeria pokedex ----------
 
 #define GAL_X 73
 #define GAL_Y 84
@@ -3111,10 +3157,11 @@ void renderGallery() {
     gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
     const DexEntry &d = DEX_TBL[galleryDetail];
     bool reg = pet.isRegistered(galleryDetail);
-gfx->setTextColor(reg ? d.accent : UI_INK);
+    gfx->setTextColor(reg ? d.accent : UI_INK);
 
 if (gLang == LANG_JA && reg) {
 
+  // ---------- 図鑑番号 ----------
   char num[12];
   snprintf(num, sizeof(num), "N.%03d", galleryDetail);
 
@@ -3125,12 +3172,16 @@ if (gLang == LANG_JA && reg) {
 
   int numW = strlen(num) * 12;
 
+  // No.を少し上へ
   gfx->setCursor(CX - numW / 2, 30);
   gfx->print(num);
 
+
+  // ---------- ポケモン名 ----------
   setLangFont();
   gfx->setTextSize(1);
 
+  // 名前は濃い色に固定
   gfx->setTextColor(UI_INK);
 
   const char *jpName = dexName(galleryDetail);
@@ -3138,6 +3189,7 @@ if (gLang == LANG_JA && reg) {
   int nameChars = strlen(jpName) / 3;
   int nameW = nameChars * 16;
 
+  // 名前を少し下へ
   gfx->setCursor(CX - nameW / 2, 70);
 
   if (pet.isShinyRegistered(galleryDetail)) {
@@ -3150,26 +3202,18 @@ if (gLang == LANG_JA && reg) {
 
 } else {
 
+  // ---------- 従来表示 ----------
   char head[24];
 
-  snprintf(
-    head,
-    sizeof(head),
-    "N.%03d %s%s",
-    galleryDetail,
-    pet.isShinyRegistered(galleryDetail) ? "*" : "",
-    reg ? dexName(galleryDetail) : "???"
-  );
+    snprintf(head, sizeof(head), "N.%03d %s%s", galleryDetail,
+             pet.isShinyRegistered(galleryDetail) ? "*" : "", reg ? dexName(galleryDetail) : "???");
 
-  int glen = strlen(head);
-  int gts = (glen <= 13) ? 3 : 2;
+    int glen = strlen(head);
+    int gts = (glen <= 13) ? 3 : 2;  // auto-encoge nombres largos (no caben a t3)
 
-  gfx->setTextSize(gts);
+    gfx->setTextSize(gts);
 
-  gfx->setCursor(
-    CX - glen * (gts == 3 ? 9 : 6),
-    gts == 3 ? 56 : 60
-  );
+    gfx->setCursor(CX - glen * (gts == 3 ? 9 : 6), gts == 3 ? 56 : 60);
 
   gfx->print(head);
 }
@@ -3195,7 +3239,7 @@ if (gLang == LANG_JA) {
 } else {
 
   gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_DETAIL_BACK)) * 6, 408);
+    gfx->setCursor(CX - strlen(T(S_DETAIL_BACK)) * 6, 408);
   gfx->print(T(S_DETAIL_BACK));
 }
     gfx->flush();
@@ -3208,7 +3252,7 @@ if (gLang == LANG_JA) {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
 char head[24];
-snprintf(head, sizeof(head), T(S_POKEDEX_FMT), pet.registeredCount());
+  snprintf(head, sizeof(head), T(S_POKEDEX_FMT), pet.registeredCount());
 
 gfx->setTextColor(UI_INK);
 
@@ -3308,13 +3352,15 @@ void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
 
   drawBattery();
 
-   gfx->setTextColor(nameColor);
+  // ---------- 名前 ----------
+  gfx->setTextColor(nameColor);
 
    if (gLang == LANG_JA) {
 
    setLangFont();
    gfx->setTextSize(1);
 
+   // 日本語名を中央寄せ
    int nameChars = strlen(name) / 3;
    int nameW = nameChars * 16;
 
@@ -3326,11 +3372,12 @@ void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
    } else {
 
     gfx->setTextSize(3);
-    gfx->setCursor(CX - strlen(name) * 9, 52);
+  gfx->setCursor(CX - strlen(name) * 9, 52);
     gfx->print(name);
 
   }
 
+  // 状態メッセージ
   gfx->setTextColor(inkColor());
 
   if (gLang == LANG_JA) {
@@ -3338,6 +3385,7 @@ void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
     setLangFont();
     gfx->setTextSize(1);
 
+    // 日本語用：少し左上へ
     gfx->setCursor(180, 105);
     gfx->print(msg);
 
@@ -3346,7 +3394,7 @@ void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
   } else {
 
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(msg) * 6, 90);
+  gfx->setCursor(CX - strlen(msg) * 6, 90);
     gfx->print(msg);
 
   }
@@ -3418,23 +3466,13 @@ void drawChoiceDialog() {
   uint16_t c1, c2, t1, t2;
 
   if (choiceKind == 1) {  // evolucion
-    q = T(S_EVO_Q);
-    o1 = T(S_EVO_TAP);
-    o2 = T(S_EVO_KEEP);
+    q = T(S_EVO_Q); o1 = T(S_EVO_TAP); o2 = T(S_EVO_KEEP);
 
-    c1 = UI_BAR_BAD;
-    t1 = UI_WHITE;
-    c2 = UI_TRACK;
-    t2 = UI_INK;
+    c1 = UI_BAR_BAD; t1 = UI_WHITE; c2 = UI_TRACK; t2 = UI_INK;
   } else {                // despedida
-    q = T(S_FAR_Q);
-    o1 = T(S_FAR_GO);
-    o2 = T(S_FAR_STAY);
+    q = T(S_FAR_Q); o1 = T(S_FAR_GO); o2 = T(S_FAR_STAY);
 
-    c1 = UI_BAR_WARN;
-    t1 = UI_INK;
-    c2 = UI_BAR_OK;
-    t2 = UI_WHITE;
+    c1 = UI_BAR_WARN; t1 = UI_INK; c2 = UI_BAR_OK; t2 = UI_WHITE;
   }
 
   gfx->fillRoundRect(73, 156, 320, 188, 16, UI_WHITE);
@@ -3442,6 +3480,7 @@ void drawChoiceDialog() {
 
   if (gLang == LANG_JA) {
 
+    // ---------- 質問文 ----------
     setLangFont();
     gfx->setTextSize(1);
     gfx->setTextColor(UI_INK);
@@ -3451,6 +3490,7 @@ void drawChoiceDialog() {
 
     resetLangFont();
 
+    // ---------- 1つ目のボタン ----------
     gfx->fillRoundRect(93, 206, 280, 52, 12, c1);
 
     setLangFont();
@@ -3462,6 +3502,7 @@ void drawChoiceDialog() {
 
     resetLangFont();
 
+    // ---------- 2つ目のボタン ----------
     gfx->fillRoundRect(93, 268, 280, 52, 12, c2);
 
     setLangFont();
@@ -3477,17 +3518,17 @@ void drawChoiceDialog() {
 
     gfx->setTextColor(UI_INK);
     gfx->setTextSize(2);
-    gfx->setCursor(CX - (int)strlen(q) * 6, 176);
+  gfx->setCursor(CX - (int)strlen(q) * 6, 176);
     gfx->print(q);
 
     gfx->fillRoundRect(93, 206, 280, 52, 12, c1);
     gfx->setTextColor(t1);
-    gfx->setCursor(CX - (int)strlen(o1) * 6, 224);
+  gfx->setCursor(CX - (int)strlen(o1) * 6, 224);
     gfx->print(o1);
 
     gfx->fillRoundRect(93, 268, 280, 52, 12, c2);
     gfx->setTextColor(t2);
-    gfx->setCursor(CX - (int)strlen(o2) * 6, 286);
+  gfx->setCursor(CX - (int)strlen(o2) * 6, 286);
     gfx->print(o2);
   }
 }
@@ -3495,7 +3536,7 @@ void drawChoiceDialog() {
 // boton-CTA rojo y grande para evolucionar (pulsa para llamar la atencion)
 void drawEvolveButton() {
   uint32_t now = millis();
-  int p = (int)(5 * sinf(now * 0.006f));
+  int p = (int)(5 * sinf(now * 0.006f));  // late: -5..5
 
   int x = EVO_BTN_X - p;
   int y = EVO_BTN_Y - p;
@@ -3523,7 +3564,7 @@ void drawEvolveButton() {
   } else {
 
     gfx->setTextSize(3);
-    gfx->setCursor(CX - (int)strlen(t) * 9, y + h / 2 - 11);
+  gfx->setCursor(CX - (int)strlen(t) * 9, y + h / 2 - 11);
     gfx->print(t);
   }
 }
@@ -3700,6 +3741,8 @@ void drawPet() {
   if (pet.showHeart()) drawMap(SPR_HEART, 32, x + 20 * s, y - 2 * s, 2, false);
 }
 
+// ---------- escena de bano ----------
+
 void startBath() {
   if (pet.isEgg() || pet.sleeping || pet.ceremony || bathUntil) return;
   bathUntil = millis() + 3000;
@@ -3752,6 +3795,8 @@ void drawBath() {
     }
   }
 }
+
+// ---------- mascota PMD: comportamiento ----------
 
 uint32_t pmdActTotalMs(const PmdAct &a) {
   uint32_t t = 0;
@@ -3939,6 +3984,7 @@ void drawBar(int x, int y, const char *label, uint8_t val) {
 
   gfx->setTextColor(inkColor());
 
+  // 日本語のときだけ日本語フォントを使用
   if (gLang == LANG_JA) {
     gfx->setUTF8Print(true);
     gfx->setFont(u8g2_font_unifont_t_japanese1);
@@ -3957,8 +4003,10 @@ void drawBar(int x, int y, const char *label, uint8_t val) {
 
   gfx->print(label);
 
+  // 日本語は文字幅が広いのでバーを少し右へ
   int bx = x + ((gLang == LANG_JA) ? 72 : 48);
 
+  // ラベル描画後は元のフォントへ戻す
   if (gLang == LANG_JA) {
     gfx->setFont();
     gfx->setUTF8Print(false);
@@ -3994,7 +4042,7 @@ const char *eggMsg() {
 
 const char *statusMsg() {
   if (pet.evolving()) return T(S_EVOLVING);
-  if (bathUntil) return "Splish splash!";
+  if (bathUntil) return "Splish splash!";  // onomatopeya universal
   if (pet.sleeping) return "Zzz...";
   if (pet.eating()) return T(S_EATING);
   if (pet.showHeart()) return T(S_LIKES);
