@@ -1,368 +1,161 @@
-# TamaPoke
+# TamaPoke for M5Stack Cardputer ADV
 
-[![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://socquique.github.io/TamaPoke/web/)
-[![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
-![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.2-8A2BE2)
-![Code](https://img.shields.io/badge/code-MIT-blue)
-![Languages](https://img.shields.io/badge/languages-6-FFCB05)
-[![Stars](https://img.shields.io/github/stars/socquique/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/socquique/TamaPoke/stargazers)
+> **PORT / ADAPTATION — NOT THE ORIGINAL TAMA POKE PROJECT**
+>
+> This repository is an unofficial **M5Stack Cardputer ADV port** of **TamaPoke**, originally developed by **socquique**.
+> The original project, pet engine, game design, Pokédex data, and core TamaPoke work belong to the original developer.
+>
+> **Original TamaPoke:** https://github.com/socquique/TamaPoke
+>
+> This repository's contribution is the Cardputer ADV hardware/UI adaptation, low-memory PMD streaming, keyboard controls, display layout, and Cardputer-specific persistence work.
 
-A gen-1-Pokémon-inspired tamagotchi for the
-**Waveshare ESP32-S3-Touch-AMOLED-1.75** (round 466×466 AMOLED, CO5300 driver
-over QSPI, CST9217 touch over I2C). Raise any of the 151, evolve it, train it
-and complete them all (shinies included).
 
-> **Personal, non-commercial fan project.** Code is MIT; the sprites are from
-> PMD SpriteCollab (CC BY-NC, Pokémon © Nintendo/Game Freak), and the 3D case is
-> CC BY-NC-SA. See **[License](#license)** and **Credits**.
+This port adapts the original 466×466 touchscreen/AMOLED experience to the **M5Stack Cardputer ADV** with its 240×135 ST7789 display, physical keyboard, speaker, and microSD slot.
 
-🔴 **3D-printed Pokéball case + print profiles → [on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)** · flash it in your browser → **[web installer](https://socquique.github.io/TamaPoke/web/)**
+> **Current release:** v0.7  
+> **Target:** M5Stack Cardputer ADV  
+> **Upstream TamaPoke commit pinned by this port:** `fdb24a7d19564ee641c9a7dfc776f6bce11cd78b`
 
-## Status
+## Highlights
 
-Running on hardware. Implemented: the 151 + shinies animated from microSD, full
-life cycle (egg by rarity → evolution → farewell/release/runaway, each gated
-behind a decision dialog), bred-Pokédex with gallery, battle stats (genes +
-training), retention hooks (streak / bond / medals / name), biome + real-time
-backgrounds, ball minigame, training bag, animated bath, RTC with offline
-progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
-**sound (ES8311)**, **6 UI languages (English default)**, **starter choice on
-first run**, and a one-click **web installer**.
+- 151 Generation-1 Pokémon
+- Normal and shiny PMD SpriteCollab animations
+- Starter selection: Bulbasaur / Charmander / Squirtle
+- Feeding, happiness, energy, hygiene, sleep and cleaning
+- Egg hatching and evolution
+- Pokédex gallery
+- Pet profile, battle stats, medals and progress pages
+- Pokéball minigame
+- Strength-training punching bag
+- Time-of-day habitats: dawn, day, sunset and night
+- Meadow, beach, forest, volcano, mountain and snow biomes
+- Speaker sound effects
+- Buffered full-screen rendering to reduce flicker
+- Cardputer-native keyboard navigation
+- Automatic microSD save journal with restart recovery
 
-Pending: wild encounters / battle (designed, not implemented), 3D case, soak
-test. See **Roadmap**.
+## Cardputer ADV controls
 
-## Game manual (the actual numbers)
+| Control | Action |
+|---|---|
+| Left / Right arrow keycaps | Select bottom action |
+| Enter | Activate selected action |
+| Space | Pet Pokémon / minigame action |
+| Up | Pet card |
+| Down | Settings |
+| D | Pokédex |
+| E | Evolution when available |
+| G | Farewell / runaway when available |
+| N | Rename |
+| R | Release |
+| Esc / top-left key | Back |
+| Del / Backspace | Back |
 
-A quick reference to how the game really works (values straight from the code).
+The printed Cardputer arrow keycaps work directly without requiring Fn.
 
-### Time & leveling
-- **1 real minute = 1 in-game minute.** Your Pokémon gains **+1 level every hour**
-  of real time. Leveling is purely time-based — caring well doesn't speed it up,
-  but neglect *delays evolution*.
-- It keeps **aging while powered off** (the RTC runs), catching up to **2 weeks** max.
+## microSD setup
 
-### The four stats (0–100)
-Needs: **FOOD**, **JOY**, **ENE** (energy), **HYG** (hygiene). Start 80 / 80 / 80 / 100.
-While **awake**, per minute:
+TamaPoke sprite data is **not distributed in this repository**.
 
-| Stat | Drain/min | Notes |
-|---|---|---|
-| FOOD | −2 | |
-| ENE | −1 | −1 extra if overweight (weight > 50 → sluggish) |
-| HYG | −1 | **−4 more per poop** on screen (max 3 poops) |
-| JOY | −1 | **−2 extra** if FOOD < 30, **−2 extra** if HYG < 30 |
+Generate the sprite packs from the original TamaPoke project and copy the resulting `mons` folder to the root of a FAT32 microSD:
 
-- ~**15 %/min** chance to poop (only if FOOD > 40). Poops tank hygiene fast.
-- **Care slip-up** = letting any stat hit **≤ 10** (30-min cooldown so it counts once).
-  Each slip-up **delays evolution by 1 level** and cools the bond.
+```text
+SD CARD/
+└── mons/
+    ├── p001.bin
+    ├── ps001.bin
+    ├── ...
+    ├── p151.bin
+    └── ps151.bin
+```
 
-### Actions
-- 🍎 **Berry** (3 flavors): +25 FOOD. Each species has a **hidden favorite flavor**
-  → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
-- 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
-- ⚽ **Play / minigame:** +JOY, −ENE; the minigame trains **SPEED** and burns weight.
-- 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
-- 🫧 **Bath:** clears poops, HYG → 100.
-- 👆 **Pet it:** +5 JOY + bond.
-- 🌙 **Sleep:** rest — ENE **+6/min**, needs drain ~**4× slower** with floors
-  (FOOD 30 / JOY 35 / HYG 45). No poops, no slip-ups, can't run away while asleep.
+The port streams one PMD animation frame at a time because Cardputer ADV does not include PSRAM.
 
-### Eggs & who you get (spawn odds)
-- **First ever pet:** you pick a starter — **Bulbasaur / Charmander / Squirtle**.
-- Hatch the egg: tap it **3×** (or wait — it hatches on its own).
-- Every later egg rolls a **rarity tier** (over the ~79 base forms that come from eggs):
+### Save files
 
-| Tier | Base chance | After a proper goodbye | # species |
-|---|---|---|---|
-| ✨ Legendary | ~3 %\* | ~10 % | 5 |
-| 🔵 Rare | ~27 % | ~45 % | 27 |
-| ⚪ Common | the rest | the rest | 47 |
+v0.7 automatically creates two rotating save slots on the microSD:
 
-  \* Legendaries only start appearing once you've **registered ≥ 25** Pokémon.
-- A daily **streak** and high **bond** push rare/legendary odds higher.
-- A clean **goodbye blesses** the next egg; a **run-away curses** it (forces Common).
-- Within a tier it favors species whose **evolution line you haven't finished** (so
-  all 151 are completable).
-- **Shiny:** base **1 / 48** (→ **1 / 24** right after a goodbye), improved by
-  streak/bond down to a best of **1 / 8**. Tracked separately in the dex.
-- Every hatch rolls unique **genes** (90–110 % per stat) — no two are identical.
+```text
+/tamapoke_v7_a.bin
+/tamapoke_v7_b.bin
+```
 
-### Evolution
-- Triggers when **level ≥ its evolution level** (16 for most base forms; ~30 for
-  stone-style, ~40 for trade-style) **and every stat ≥ 40** at that moment.
-- **Never automatic** — a button appears and **you tap to witness it** (with a
-  flicker between the old and new form). Each **slip-up delays it by 1 level**.
-- You can **decline** ("keep form"); it re-offers at the next level.
-- *Eevee* branches toward whichever evolution you're still missing.
+Keep the same microSD inserted when using TamaPoke. Important actions save immediately, and changed state is checked for background autosave about every 2 seconds.
 
-### The three endings (you choose & witness each — none auto-fire)
-- 💛 **Farewell** — when it's a **final form** that has lived **3 days**. A button
-  appears; triggering it **blesses your next egg**. You can **postpone** ("stay
-  together", re-offered in a day). The good ending.
-- 💔 **Run-away** — if you let **all four stats sit at 0 for a full hour**. A single
-  act of care cancels it. It **curses the next egg** (forces Common). The sad ending.
-- 👋 **Release** — long-press the creature to let it go on your terms (neutral).
+## One-click Windows build
 
-After any ending, a **new egg** appears.
+1. Install VS Code + PlatformIO once.
+2. Download or clone this repository.
+3. Double-click:
 
-### Bonds, streaks, medals, Pokédex
-- **Streak** (player-wide, survives across pets): first care each real day; milestones
-  at **3 / 7 / 30 / 100** days; skipping a day breaks it.
-- **Bond** (per pet, resets on hatch): grows with affection (**cap +8/day**), cools on
-  neglect. Both streak & bond improve egg/shiny odds.
-- **8 medals** (Lv10/25/50, favorite berry found, 7-day streak, max bond, final form,
-  "fit" = weight 0 & no slip-ups), per-pet + a global counter.
-- **Pokédex:** raising a species registers it; **151 + shinies** to complete.
+```text
+00_BUILD_BIN_ONE_CLICK.bat
+```
 
-### Battle stats
-ATK / DEF / SPD = real **Gen-1 base** × genes + level + training (STRENGTH ← bag,
-SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the roadmap.)*
+4. Wait for `BUILD SUCCESSFUL`.
+
+The preferred one-file output is:
+
+```text
+TamaPoke-CardputerADV-v0.7-MERGED.bin
+```
+
+## Manual PlatformIO build
+
+```bash
+platformio run -e m5stack-cardputer-adv
+```
+
+The build system downloads the pinned upstream TamaPoke `pet.cpp`, `pet.h`, and `dex.h` and applies the Cardputer ADV compatibility/persistence patches before compilation.
 
 ## Hardware
 
-- Board: [ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75)
-  — get the **Standard** (no case) or **-G** (GPS, also fits) version; **not the "-B"**
-  (ships with a protective case that won't fit). The separate "1.75**C**" is a different board.
-- Round 466×466 AMOLED, **CO5300** driver (QSPI, 80 MHz)
-- Capacitive touch **CST9217** (I2C, address 0x5A)
-- **AXP2101** (power management + battery + PWR button), **PCF85063** (RTC),
-  microSD slot, **ES8311** audio codec (→ amplifier → external speaker on the
-  MX1.25 connector)
-- Pins taken from the [official Waveshare repo](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75) (see `pin_config.h`)
+- M5Stack Cardputer ADV / Stamp-S3A
+- ESP32-S3
+- 240×135 ST7789 display
+- TCA8418 keyboard
+- microSD
+- built-in speaker
 
-## Libraries (Arduino IDE / arduino-cli)
+microSD SPI pins used by this port:
 
-| Library | Author | Use |
-|---|---|---|
-| GFX Library for Arduino (`Arduino_GFX`) | moononournation | CO5300 over QSPI + framebuffer in PSRAM |
-| SensorLib | Lewis He | CST9217 touch + PCF85063 RTC |
-| XPowersLib | Lewis He | AXP2101 PMU (battery, brightness, PWR button) |
-| ESP_I2S (bundled in the ESP32 core) | Espressif | I2S to the ES8311 codec |
+| Signal | GPIO |
+|---|---:|
+| CS | 12 |
+| MOSI | 14 |
+| SCK | 40 |
+| MISO | 39 |
 
-## IDE setup / build
+## M5Burner
 
-- Board: **ESP32S3 Dev Module** · Flash **16MB** · PSRAM **OPI PSRAM**
-  (required: the 466×466×16-bit framebuffer ≈ 434 KB lives in PSRAM) ·
-  Partition Scheme with FAT (e.g. `16M Flash (3MB APP/9MB FATFS)`) ·
-  USB CDC On Boot **Enabled**
+A release-ready merged BIN can be shared through M5Burner **USER CUSTOM → Publish**.
 
-```bash
-FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
-arduino-cli compile --fqbn "$FQBN" .
-arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn "$FQBN" .
-```
+Recommended listing:
 
-### Easiest install: the web installer
+**Name:** `TamaPoke Cardputer ADV`  
+**Version:** `0.7`  
+**Device:** `Cardputer ADV`  
+**Framework:** `Arduino / PlatformIO`
 
-`web/index.html` flashes the firmware (ESP Web Tools) and pushes the sprites to
-the SD over Web Serial, no Arduino needed. Serve it over HTTPS or `localhost`
-(secure context) and open it in **Chrome/Edge**. See [`web/README.md`](web/README.md).
-
-### Generate and load the sprites yourself
-
-All sprites come from **[PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)**
-(CC BY-NC). You can regenerate the whole set and load it onto your board with the
-pipeline below — the firmware accepts files over USB (PUT protocol with per-block
-ACK), so you don't have to remove the card (it formats the SD to FAT if needed).
-
-```bash
-python3 tools/pack_pmd.py       # fetch + pack PMD sprites: the 151 + shiny -> tools/sdcard/mons/p[s]NNN.bin
-python3 tools/make_thumbs.py    # Pokédex thumbnails (from the PMD sprites) -> thumbs.bin
-python3 tools/send_sd.py        # send tools/sdcard/mons/* to the board's SD over USB
-```
-
-To make the **one-click web-installer bundle** instead of sending over USB:
-
-```bash
-python3 tools/pack_bundle.py    # bundle tools/sdcard/mons/* into web/sprites.pak
-```
-
-Then load it from the web installer's **"Load sprites"** button (or `send_sd.py`
-above). `pack_pmd.py` also takes individual dex numbers, e.g. `pack_pmd.py 7 25`.
-(~40 MB total, all PMD. Versioned under `tools/sdcard/`.)
-
-## How to play
-
-On first run you **choose a starter** (Bulbasaur / Charmander / Squirtle). After
-that you start with an **egg**. Tap it 3 times or wait and it hatches. From then
-on, care for your companion:
-
-**Four stats** that decay: **FOOD**, **JOY**, **ENE** (energy), **HYG** (hygiene).
-If one bottoms out it counts as a *slip-up*.
-
-**Buttons (bottom arc, icons):**
-- 🍎 **Feed** → food menu: 3 berries (each species has a hidden favourite that
-  gives a bonus) and a candy (+happiness but it fattens; weight makes it sluggish).
-- ⚽ **Play** → the pokeball minigame (trains SPEED).
-- 🌙 **Light** → sleep/wake (recovers energy, dims the screen). While asleep,
-  needs decay much slower (rest).
-- 🫧 **Bath** → a foam scene that cleans up the poops.
-
-**Touch gestures:**
-- Tap the creature = pet it (+happiness, bond).
-- Horizontal swipe = open the **Pokédex / gallery**.
-- Vertical swipe up = open the **stat card** (4 pages: Profile / Battle / Medals /
-  Progress; swipe between them; tap the name on Profile to rename; on Battle the
-  "Train strength" button opens the bag).
-- Swipe down = **set the clock** and pick the **language** + sound on/off.
-- Long press (3 s) on the creature = **release** dialog.
-
-**Physical PWR button:** short = screen on/off · long (4 s) = full power-off
-(the RTC stays alive, so time passes even while it's off).
-
-## Decisions: you choose, and you watch
-
-The three life-cycle endings and evolution **don't happen on their own** — when
-the conditions are met a button appears and you tap it (so you're present to
-witness it), each opening a two-option dialog:
-
-- **Evolution** (red button): *Evolve* (epic animation: halo, rays, sparkles and
-  a **flicker between the old and new form**) or *Keep form* (re-offered next level).
-- **Farewell** (gold button, final form + 3 days): *Say goodbye* (warm farewell,
-  rising hearts → new egg) or *Stay together* (keep your companion; re-offered in
-  a day). Tension: a maxed-out friend vs. completing the Pokédex.
-- **Runaway** (dark button, total neglect for 1 h): a somber "feels abandoned"
-  ending in the rain — caring for the creature cancels it.
-
-## Sprites: PMD SpriteCollab everywhere
-
-- **PMD SpriteCollab** (everything — main screen, stat card, minigame **and the
-  Pokédex grid + detail view**): behaviour sprites — `tools/pack_pmd.py` packs
-  actions (Idle, Walk L/R, Sleep, Eat, Hurt, Attack, Pose, Nod, DeepBreath) into
-  the multi-action **TPK2** format (`/mons/pNNN.bin`). The engine in `TamaPoke.ino`
-  makes the creature wander, gesture, curl up to sleep, chew and wince. Anchored by
-  the feet (lowest content row), not the canvas. The Pokédex thumbnails
-  (`thumbs.bin`, TPTH) are derived from these by `tools/make_thumbs.py`.
-- **In-house workshop** (`tools/sprites.py`): 9 primitive-drawn sprites as a
-  no-SD fallback + the UI icons. Generates `species.h`. Preview in
-  `tools/sheet.png`, emit with `python3 tools/sprites.py emit`.
-
-`sdmon.h/.cpp` loads the PMD sprites into PSRAM (`PmdMon` for TPK2) plus the
-thumbnails (`SdThumbs`). `SdMon` (TPK1) remains as a dormant legacy fallback only.
-
-## Pokédex and species data
-
-`tools/dex_data.py` is the **single source**: name, slug, type (accent colour +
-background biome), evolution line with gen-1 levels, rarities and starters.
-`tools/dex_stats.py` has the real base stats (from PokéAPI). `tools/gen_names.py`
-pulls the **official localized names** from PokéAPI into `tools/dex_names.py`
-(only French and German differ in gen 1; Spanish, Italian and Portuguese use the
-English ones). `gen_dex.py` emits `dex.h` (the `DEX_TBL[152]` table plus the
-per-language name tables and the `dexName()` accessor). The pet's identity is its
-Pokédex number (persisted in NVS).
-
-- **Evolution** gen-1 style (levels 16/36/…; stones ≈30, trade ≈40; Eevee
-  branches to whichever evolution you're missing). Each slip-up delays it 1
-  level; it won't evolve with any stat < 40 or while asleep.
-
-## Battle stats and training
-
-Each creature has ATK/DEF/SPD = real gen-1 base × **genes** (90–110 %, rolled at
-hatch) + level + **training**:
-- SPEED ← the minigame
-- DEFENSE ← sustained good care (12 h with no slip-ups)
-- STRENGTH ← the training bag (whacking)
-
-Shown on the Battle page of the stat card. The (hidden) weight goes up with candy
-and burns off with training.
-
-## Retention: streak, bond, medals, name
-
-- **Streak** (the player's, persists across creatures): the first care of each
-  real day advances the streak; 3/7/30/100 milestones are celebrated; skipping a
-  day breaks it. Flame badge on the main screen.
-- **Bond** (the creature's): rises slowly with care and petting, drops with slip-ups.
-- **Medals** for the individual (level, berry, streak, bond, final form, fit) +
-  a global counter. Medals page of the stat card.
-- **Name**: touch keyboard; the nickname rules the header and the card.
-
-High streak and bond **improve the egg roll** (rarity and shiny): caring well
-always pays off.
-
-## Life cycle, eggs by rarity, languages
-
-The life cycle lasts **3 days** of play. Three endings (all leave a new egg):
-**farewell** (final form + 3 days), **release** (long press), **runaway** (all 4
-bars at zero for 1 h). Each bred species is recorded in the **bred Pokédex**
-(normal and shiny separately).
-
-The egg rolls rarity over the ~79 base forms (47 common / 27 rare / 5 legendary),
-**biased towards the lines you're missing** (all 151 are completable), blessed by
-a farewell and punished by a runaway. Legendaries only with 25+ registered.
-**Shiny** 1/48 (better with streak/bond/farewell).
-
-**Languages:** the UI ships in 6 languages — English (default), Spanish, French,
-German, Italian, Portuguese — switchable from the settings screen (swipe down).
-**Pokémon names are localized too**: French and German show the official names
-(Bulbizarre, Bisasam...); the other languages use the English ones, which is what
-those regions officially use for gen 1.
-
-## Backgrounds: biome + real time
-
-The idle screen paints the sky from the **RTC's real time** (dawn / day / dusk /
-night with moon and stars) and the ground from the **type's biome** (meadow,
-beach, forest, volcano, mountain, snow). Sleeping forces night.
-
-## Layout
-
-- `TamaPoke.ino` — init, game loop, render of every screen, gestures, serial console, audio
-- `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
-- `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
-- `rtcbat.h` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
-- `audio.h` / `audio.cpp` — ES8311 + I2S + Game-Boy-style tone synth (non-blocking task)
-- `i18n.h` / `i18n.cpp` — the 6-language string tables
-- `dex.h` — GENERATED (`gen_dex.py`): the 151 table
-- `species.h` — GENERATED (`sprites.py`): fallback sprites, UI icons, colours
-- `pin_config.h` — the board's official pins
-- `tools/` — pipeline: `dex_data.py` (data), `dex_stats.py`, `dex_names.py` +
-  `gen_names.py` (localized names), `gen_dex.py`,
-  `sprites.py` (workshop), `pack_pmd.py` / `make_thumbs.py`
-  (packers), `pack_bundle.py` (web bundle), `send_sd.py` (SD upload), `touch_log.py`
-- `tools/sdcard/mons/` — the generated .bin files (animated, shiny, PMD, thumbnails)
-- `web/` — the browser installer (ESP Web Tools + Web Serial sprite loader)
-
-## Serial console (115200, debug)
-
-`STATS` (full state) · `SPEC <dex>` (change species) · `LVL <n>` · `HATCH` ·
-`SHINY` · `NICK <x>` · `BYE` / `RUN` (farewell / runaway) · `ABANDON` (force the
-runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio test) ·
-`REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
-`TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
-`LS` / `PUT` (SD files).
-
-To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
-
-## Roadmap
-
-- **Wild encounters / battle** — designed (see project memory): resolution by
-  ATK/DEF/SPD with PMD Attack/Hurt animations, trainer rank as endgame. Style
-  still to pick (auto / timing / turn-based).
-- **Soak test** 24–48 h (instrumentation ready: `HEALTH` command/heartbeat).
-
-*(Done: 3D-printed case [published on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi); repo public with the browser installer + one-click sprite bundle.)*
-
-## Community forks
-
-- **[TamaPoke — Expanded](https://github.com/ShadowEnemyx/TamaPoke/tree/tamapoke-expanded-update)** by **ShadowEnemy** — a substantial community fork (different author/branch): a full **type-matchup battle system**, all **151 + shinies** with a **Pokédex / collection box** and daily goals, **6 UI languages**, **ES8311 sound**, starter choice and a one-click web installer. Worth a look. 🎮
-- **[TamaPoke](https://github.com/DylanPDao/TamaPoke)** by **DylanPDao** — another substantial fork: **gym battles** and **LAN battles** between two devices, **movesets**, a **party + box** system, an **EV/IV** stat system, and coverage extended **up to Gen 3 (386)**. Keeps the PMD sprite pipeline. 🏆
+The firmware requires a microSD containing the generated `/mons` sprite directory.
 
 ## Credits
 
-All sprites: [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)
-(community, CC BY-NC). Base stats: [PokéAPI](https://pokeapi.co). Pokémon is a ™ of
-Nintendo / Game Freak / The Pokémon Company. Non-commercial, personal-use project.
-Full list in [`CREDITS.md`](CREDITS.md).
+- Original TamaPoke project and pet engine: **socquique**
+- Original project: https://github.com/socquique/TamaPoke
+- Pokémon Mystery Dungeon SpriteCollab sprite data is maintained by its respective contributors.
+- M5Stack / M5Cardputer libraries by M5Stack.
 
-## License
+## Licensing and trademark notice
 
-- **Source code** (firmware + tooling): **[MIT](LICENSE)**.
-- **Sprites & names**: © Nintendo / Game Freak / The Pokémon Company; pixel art
-  from [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (CC BY-NC 4.0).
-  **Non-commercial use only.**
-- **3D-printed case**: remix of *"Pokeball"* by **yoyothechicken**
-  ([MakerWorld #839922](https://makerworld.com/es/models/839922-pokeball)),
-  licensed **CC BY-NC-SA**, and shared here under the same terms.
+The upstream TamaPoke source is MIT licensed. See `LICENSE-UPSTREAM`.
 
-This is an unofficial fan project, not affiliated with or endorsed by Nintendo.
+Port-specific source code in this repository is released under the MIT License; see `LICENSE`.
+
+**Pokémon, Pokémon character names, artwork, and related trademarks are property of Nintendo, Game Freak, and The Pokémon Company.** This is an unofficial fan project and is not affiliated with or endorsed by those companies.
+
+Pokémon sprite assets are not included in this repository or firmware package. Users must obtain/generate compatible sprite data separately in accordance with the upstream project and sprite-source terms.
+
+## Disclaimer
+
+This is a community hobby project. Use at your own risk. Back up your microSD save files before experimenting with development builds.

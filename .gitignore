@@ -1,15 +1,5 @@
-# artefactos de compilacion
-build/
-
-# cacheas y artefactos regenerables del taller
-tools/downloads/
-tools/__pycache__/
-__pycache__/
-tools/sheet.png
-tools/import_sheet.png
-tools/emitted_sprites.js
-tools/demo_anim.js
-tools/demo_compare.js
-
-.DS_Store
-tools/pmd_cache/
+.pio/
+.vscode/
+generated/pet.cpp
+include/pet.h
+include/dex.h

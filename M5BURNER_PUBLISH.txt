@@ -1,0 +1,30 @@
+M5BURNER PUBLISHING DETAILS
+
+Name:
+TamaPoke Cardputer ADV
+
+Version:
+0.7
+
+Device Type:
+Cardputer ADV
+
+GitHub:
+<INSERT PUBLIC GITHUB REPOSITORY URL>
+
+Firmware:
+TamaPoke-CardputerADV-v0.7-MERGED.bin
+
+Description:
+Unofficial M5Stack Cardputer ADV port of TamaPoke, originally developed by socquique (https://github.com/socquique/TamaPoke). Credit for the original TamaPoke project, pet engine, game design and core work belongs to the original developer. This port adapts TamaPoke to the Cardputer ADV keyboard, 240x135 display, speaker and microSD. Raise, feed, clean, play with and evolve Pokémon; browse the Pokédex; train battle stats; and experience time-of-day biome backgrounds. Requires a FAT32 microSD with the generated /mons sprite folder. Automatic two-slot SD saving resumes your pet after restart.
+
+Important:
+Pokemon sprite assets are NOT included in the firmware package. Users must generate/copy the /mons directory using the upstream TamaPoke tooling before use.
+
+Suggested keywords:
+Cardputer ADV, TamaPoke, virtual pet, Pokemon, ESP32-S3, M5Stack
+
+Publishing path in current M5Burner:
+USER CUSTOM -> Publish
+Log in with an M5Stack community account, fill the fields above, select the
+merged BIN and cover image, upload, then set the firmware public.
