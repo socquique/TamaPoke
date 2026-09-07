@@ -1,9 +1,12 @@
 // TamaPoke - tamagotchi pixel art inspirado en la gen 1
-// para Waveshare ESP32-S3-Touch-AMOLED-1.75
+// para Waveshare ESP32-S3-Touch-AMOLED-1.75 (placa por defecto) o Elecrow
+// CrowPanel 1.28inch-HMI ESP32 Rotary Display (BOARD_ELECROW_CROWPANEL_128
+// en board_select.h).
 //
-// Librerias (Library Manager o repo de Waveshare):
-//   - "GFX Library for Arduino" (moononournation), con soporte CO5300 QSPI
-//   - "SensorLib" (Lewis He), driver tactil CST9217
+// Librerias (Library Manager):
+//   - "GFX Library for Arduino" (moononournation) -- CO5300 QSPI (Waveshare)
+//     y GC9A01 SPI (Elecrow)
+//   - "SensorLib" (Lewis He), driver tactil CST9217 -- solo Waveshare
 //
 // Placa: ESP32S3 Dev Module | Flash 16MB | PSRAM: OPI PSRAM | USB CDC On Boot: Enabled
 //
@@ -12,8 +15,12 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
-#include "TouchDrvCSTXXX.hpp"
 #include "pin_config.h"
+#if defined(BOARD_ELECROW_CROWPANEL_128)
+#include "elecrow_touch.h"
+#else
+#include "TouchDrvCSTXXX.hpp"
+#endif
 #include "species.h"
 #include "dex.h"
 #include "pet.h"
@@ -26,6 +33,51 @@
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
 #define FW_VERSION "1.6"
 
+#if defined(BOARD_ELECROW_CROWPANEL_128)
+
+Arduino_DataBus *bus = new Arduino_ESP32SPI(
+  TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, TFT_MISO, FSPI, true);
+Arduino_GC9A01 *panel = new Arduino_GC9A01(bus, TFT_RES, 0 /*rotation*/, true /*IPS*/);
+// Framebuffer completo en PSRAM: dibujamos todo y hacemos flush() (sin parpadeo)
+Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
+
+// El GC9A01 no tiene registro de brillo por comando (a diferencia del CO5300
+// AMOLED): el "brillo" es PWM sobre el pin de backlight.
+static void panelSetBrightness(uint8_t v) { ledcWrite(TFT_BLK, v); }
+
+// ---------------------------------------------------------------------------
+// Downscale-on-flush: todo TamaPoke.ino dibuja en un canvas logico de
+// 466x466 (coordenadas absolutas cableadas por todo el archivo, sin factor de
+// escala). Esta placa tiene un panel fisico de 240x240. En vez de reescribir
+// cada coordenada, reducimos el framebuffer por vecino-mas-cercano justo
+// antes de mandarlo al panel. Tablas de indice precalculadas: 240*240 = 57600
+// lecturas/frame, muy por debajo del presupuesto de ~85-100ms de render().
+// ---------------------------------------------------------------------------
+static uint16_t *scaledBuf = nullptr;   // TFT_WIDTH x TFT_HEIGHT, PSRAM
+static uint16_t xMap[TFT_WIDTH];
+static uint16_t yMap[TFT_HEIGHT];
+
+static void initScaledFlush() {
+  scaledBuf = (uint16_t *)ps_malloc((size_t)TFT_WIDTH * TFT_HEIGHT * sizeof(uint16_t));
+  for (int x = 0; x < TFT_WIDTH; x++) xMap[x] = (uint16_t)((uint32_t)x * LCD_WIDTH / TFT_WIDTH);
+  for (int y = 0; y < TFT_HEIGHT; y++) yMap[y] = (uint16_t)((uint32_t)y * LCD_HEIGHT / TFT_HEIGHT);
+}
+
+static void flushScaled() {
+  uint16_t *fb = gfx->getFramebuffer();
+  if (!fb || !scaledBuf) { gfx->flush(); return; }  // red de seguridad si algo fallo en setup
+  for (int y = 0; y < TFT_HEIGHT; y++) {
+    const uint16_t *srcRow = fb + (size_t)yMap[y] * LCD_WIDTH;
+    uint16_t *dstRow = scaledBuf + (size_t)y * TFT_WIDTH;
+    for (int x = 0; x < TFT_WIDTH; x++) dstRow[x] = srcRow[xMap[x]];
+  }
+  panel->draw16bitRGBBitmap(0, 0, scaledBuf, TFT_WIDTH, TFT_HEIGHT);
+}
+
+ElecrowTouch touch;
+
+#else  // BOARD_WAVESHARE_AMOLED
+
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
 Arduino_CO5300 *panel = new Arduino_CO5300(
@@ -33,7 +85,14 @@ Arduino_CO5300 *panel = new Arduino_CO5300(
 // Framebuffer completo en PSRAM: dibujamos todo y hacemos flush() (sin parpadeo)
 Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
 
+static void panelSetBrightness(uint8_t v) { panel->setBrightness(v); }
+static void initScaledFlush() {}  // nada que preparar: el panel ya es 466x466
+static void flushScaled() { gfx->flush(); }
+
 TouchDrvCST92xx touch;
+
+#endif
+
 Pet pet;
 
 // sprite animado de la SD para la especie actual (si existe el archivo)
@@ -167,6 +226,27 @@ void setup() {
   Serial.setTxTimeoutMs(0);
   Serial.printf("TamaPoke fw v%s\n", FW_VERSION);
   loadLang();  // idioma guardado (ES por defecto)
+
+#if defined(BOARD_ELECROW_CROWPANEL_128)
+  // Rails del panel (LCD logic + backlight anode): deben ir HIGH antes de
+  // gfx->begin(), si no la pantalla queda a oscuras aunque el resto arranque.
+  pinMode(LCD_PWR_EN1, OUTPUT);
+  pinMode(LCD_PWR_EN2, OUTPUT);
+  digitalWrite(LCD_PWR_EN1, HIGH);
+  digitalWrite(LCD_PWR_EN2, HIGH);
+  ledcAttach(TFT_BLK, 5000, 8);
+  ledcWrite(TFT_BLK, 0);  // arranca apagado; updateBrightness() lo sube
+
+  if (!gfx->begin(40000000)) Serial.println("gfx->begin() fallo");
+  initScaledFlush();
+
+  Wire.begin(IIC_SDA, IIC_SCL);
+  Wire.setTimeOut(50);
+  touch.setPins(TP_RESET, TP_INT);
+  touch.begin(Wire, CST816D_ADDR, IIC_SDA, IIC_SCL);
+  // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
+  attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+#else
   Wire.begin(IIC_SDA, IIC_SCL);
   // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
   // Red de seguridad para PMU/RTC (SensorLib NO respeta este timeout en el
@@ -182,7 +262,8 @@ void setup() {
   // QSPI a 80MHz (por defecto 40): el flush del framebuffer es el cuello de
   // botella del fps (~56ms a 40MHz). Si el panel mostrara basura, bajar a 40M.
   if (!gfx->begin(80000000)) Serial.println("gfx->begin() fallo");
-  panel->setBrightness(180);
+  initScaledFlush();
+  panelSetBrightness(180);
 
   touch.setPins(TP_RESET, TP_INT);
   bool touchOk = false;
@@ -199,9 +280,20 @@ void setup() {
   // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
   pinMode(TP_INT, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+#endif
 
   pet.begin();
+#if defined(BOARD_ELECROW_CROWPANEL_128)
+  // sdBegin() deshabilitado en esta placa: no tiene ranura SD, y
+  // SD_MMC.begin(..., formatOnFail=true) intentando montar/formatear una
+  // tarjeta inexistente en frio se queda colgado el tiempo suficiente como
+  // para perder la ventana de enumeracion USB del host (un reset calido
+  // desde el bootloader no lo mostraba, lo que lo hizo dificil de ver).
+  // No se toco el comportamiento de la Waveshare: alli la SD es una feature
+  // central (sprites PMD) y normalmente hay una tarjeta puesta.
+#else
   sdBegin();
+#endif
   thumbs.load();
 
   // reloj real: aplica el tiempo que estuvo apagado
@@ -216,7 +308,11 @@ void setup() {
   }
   pet.syncClock(e);
 
+#if !defined(BOARD_ELECROW_CROWPANEL_128)
   audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
+#endif
+  // La Elecrow no tiene codec ES8311; sus pines I2S/PA reales ademas chocan
+  // con SCLK/CS/backlight de esta placa. Ver pin_config.h.
 
   lastInteract = millis();
 }
@@ -324,7 +420,7 @@ void updateBrightness(uint32_t now) {
   static uint8_t current = 255;
   if (target != current) {
     current = target;
-    panel->setBrightness(target);
+    panelSetBrightness(target);
   }
 }
 
@@ -802,7 +898,7 @@ void renderStarterSelect() {
     gfx->setCursor(178, ry + 24);
     gfx->print(dexName(d));
   }
-  gfx->flush();
+  flushScaled();
 }
 
 void render() {
@@ -847,7 +943,7 @@ void render() {
                                                       : T(S_GOODBYE);
     drawHeader(dexName(pet.speciesId), d.accent, msg);
     drawCeremony();
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -943,7 +1039,7 @@ void render() {
     else drawChoiceDialog();
   }
 
-  gfx->flush();
+  flushScaled();
 }
 
 // ---------- minijuego: toques con la pokeball ----------
@@ -1080,7 +1176,7 @@ void renderSack() {
       gfx->setCursor(CX - strlen(r) * 6, 256);
       gfx->print(r);
     }
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -1090,7 +1186,7 @@ void renderSack() {
     sackGain = pet.trainStrength(sackHits);
     sfxPlay(sackNewHi ? SFX_MEDAL : SFX_PLAY);
     sackOverUntil = now + 3500;
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -1123,7 +1219,7 @@ void renderSack() {
   gfx->fillRoundRect(CX - bw / 2, 350, bw, 16, 5, UI_TRACK);
   if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 350, fw, 16, 5, UI_BAR_OK);
 
-  gfx->flush();
+  flushScaled();
 }
 
 // fondo del minijuego: hatibat del bicho (cielo por hora + suelo del bioma)
@@ -1181,7 +1277,7 @@ void renderGame() {
     gfx->setTextColor(ink);
     gfx->setCursor(CX - strlen(msg) * 6, 250);
     gfx->print(msg);
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -1235,7 +1331,7 @@ void renderGame() {
   // la pokeball
   drawMap(SPR_ICON_PLAY, 16, (int)ballX - 24, (int)ballY - 24, 3, false);
 
-  gfx->flush();
+  flushScaled();
 }
 
 // ---------- ficha del bicho (deslizar vertical) ----------
@@ -1353,7 +1449,7 @@ void renderClock() {
   gfx->setTextSize(1);
   gfx->setCursor(CX - (int)strlen(ver) * 3, 436);
   gfx->print(ver);
-  gfx->flush();
+  flushScaled();
 }
 
 void clockTap(int16_t x, int16_t y) {
@@ -1611,7 +1707,7 @@ void renderCard() {
   gfx->setTextSize(2);
   gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 398);
   gfx->print(T(S_BACK));
-  gfx->flush();
+  flushScaled();
 }
 
 // ---------- teclado para renombrar ----------
@@ -1660,7 +1756,7 @@ void renderKeyboard() {
       gfx->print(lab);
     }
   }
-  gfx->flush();
+  flushScaled();
 }
 
 void keyboardTap(int16_t x, int16_t y) {
@@ -1728,7 +1824,7 @@ void renderGallery() {
     gfx->setTextSize(2);
     gfx->setCursor(CX - strlen(T(S_DETAIL_BACK)) * 6, 408);
     gfx->print(T(S_DETAIL_BACK));
-    gfx->flush();
+    flushScaled();
     return;
   }
 
@@ -1773,7 +1869,7 @@ void renderGallery() {
     if (i == galleryPage) gfx->fillCircle(170 + i * 14, 436, 4, UI_INK);
     else gfx->drawCircle(170 + i * 14, 436, 3, UI_INK);
   }
-  gfx->flush();
+  flushScaled();
 }
 
 void galleryTap(int16_t x, int16_t y) {
