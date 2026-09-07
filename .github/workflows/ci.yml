@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  firmware:
+    name: Compile firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      # Fijado a la version del core verificada para compilar este sketch. Subirla
+      # a mano y a proposito: alguna version nueva del core ha roto librerias de
+      # terceros antes.
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.3.10
+
+      - name: Install libraries
+        run: arduino-cli lib install "GFX Library for Arduino" SensorLib XPowersLib
+
+      - name: Compile
+        run: >
+          arduino-cli compile --warnings=all
+          --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
+          .
+
+  generated:
+    name: Generated headers up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: pip install pillow
+
+      - name: Regenerate dex.h and species.h
+        run: |
+          python3 tools/gen_dex.py
+          python3 tools/sprites.py emit
+
+      # dex.h y species.h llevan "GENERADO - no editar" en su cabecera; esto pilla
+      # a quien edite la salida en vez del generador, o se olvide de regenerar
+      # tras tocar los datos de origen.
+      - name: Fail if regenerating produced a diff
+        run: git diff --exit-code -- dex.h species.h
+
+  tools-lint:
+    name: Lint tools/ (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: pip install ruff
+      - run: ruff check tools/
+
+  i18n:
+    name: i18n format-specifier consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: python3 tools/test_i18n_formats.py

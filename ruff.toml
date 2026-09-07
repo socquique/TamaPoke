@@ -1,0 +1,9 @@
+# Lint config for tools/ (the project's Python tooling), wired into CI
+# (.github/workflows/ci.yml). Scoped to pyflakes (F: unused imports, undefined
+# names, unused variables, unused local assignments...) rather than
+# pycodestyle style rules: the scripts here predate any line-length or style
+# convention, and a full style pass across tools/ is separate, larger work
+# than wiring up a correctness-focused CI lint gate. Broaden `select` once (if)
+# the codebase is brought up to a shared style first.
+[lint]
+select = ["F"]
