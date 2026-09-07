@@ -249,6 +249,11 @@ bool sdSerialCommand(const String &line) {
       Serial.println("ERR");
       return true;
     }
+    // FILE_WRITE ANADE al final si el fichero ya existe, asi que reintentar uno
+    // que quedo a medias lo alargaba en vez de reemplazarlo: quedaba un sprite
+    // corrupto y mas grande que el original. Importa mas desde que el instalador
+    // reanuda transferencias cortadas, porque reintenta justo los que fallaron.
+    if (SD_MMC.exists(path)) SD_MMC.remove(path);
     File f = SD_MMC.open(path, FILE_WRITE);
     if (!f) {
       Serial.println("ERR");
@@ -273,6 +278,10 @@ bool sdSerialCommand(const String &line) {
     Serial.setTimeout(1000);
     sdDirty = (remaining == 0);
     Serial.println(remaining == 0 ? "DONE" : "ERR");
+    return true;
+  } else if (line == "SDINFO") {  // diagnostico remoto de "no me reconoce la SD"
+    Serial.printf("total=%llu used=%llu\n", SD_MMC.totalBytes(), SD_MMC.usedBytes());
+    Serial.println("DONE");
     return true;
   } else if (line == "LS") {
     File dir = SD_MMC.open("/mons");
