@@ -1680,8 +1680,12 @@ void renderKeyboard() {
 }
 
 void keyboardTap(int16_t x, int16_t y) {
+  // filtra ANTES de dividir: con x/y menores que KB_X/KB_Y la resta da negativo
+  // y la division entera trunca hacia cero (no hacia -inf), asi que col/row
+  // saldria 0 en vez de negativo y el filtro de abajo no lo detectaria
+  if (x < KB_X || y < KB_Y) return;
   int col = (x - KB_X) / KB_W, row = (y - KB_Y) / KB_H;
-  if (col < 0 || col >= KB_COLS || row < 0 || row >= 5) return;
+  if (col >= KB_COLS || row >= 5) return;
   int i = row * KB_COLS + col;
   if (i >= 30) return;
   if (i == 28) {  // borrar
@@ -1804,8 +1808,10 @@ void galleryTap(int16_t x, int16_t y) {
     galleryPmd.unload();
     return;
   }
+  // mismo motivo que en el teclado: filtrar antes de dividir
+  if (x < GAL_X || y < GAL_Y) return;
   int c = (x - GAL_X) / GAL_CELL, r = (y - GAL_Y) / GAL_CELL;
-  if (c < 0 || c > 3 || r < 0 || r > 3) return;
+  if (c > 3 || r > 3) return;
   int16_t dex = galleryPage * 16 + r * 4 + c + 1;
   if (dex > 151) return;
   galleryDetail = dex;
