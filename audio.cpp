@@ -19,7 +19,19 @@
 static I2SClass i2s;
 static bool gReady = false;
 static bool gOn = true;
+static bool gSleeping = false;
 static QueueHandle_t gQ = nullptr;
+
+// El NS4150B tarda bastante mas de 8 ms en estabilizarse tras cada apagado, asi
+// que encenderlo justo antes de cada efecto se comia los cortos: el jingle de
+// arranque (440 ms) se oia y los pitidos de 35 ms no. Se deja encendido mientras
+// haya sonido y la mascota este despierta, como en el ejemplo verificado de
+// Waveshare, y solo se apaga al dormir o al silenciar.
+static void updateAmplifierPower() {
+  // gReady evita encenderlo en una placa donde el codec no arranco: ahi el
+  // amplificador solo aportaria siseo, porque no va a sonar nada.
+  digitalWrite(PA, (gReady && gOn && !gSleeping) ? HIGH : LOW);
+}
 
 // ---- I2C del códec ----
 static bool esW(uint8_t reg, uint8_t val) {
@@ -125,13 +137,10 @@ static void playTone(uint16_t f, uint16_t ms) {
 static void audioTask(void *) {
   uint8_t id;
   for (;;) {
-    if (xQueueReceive(gQ, &id, portMAX_DELAY) && gOn && gReady && id < SFX_COUNT) {
-      digitalWrite(PA, HIGH);  // enciende el amplificador
-      delay(8);                // deja que arranque
+    if (xQueueReceive(gQ, &id, portMAX_DELAY) && gOn && !gSleeping && gReady &&
+        id < SFX_COUNT) {
       const SfxDef &d = SFX[id];
       for (uint8_t i = 0; i < d.len; i++) playTone(d.n[i].f, d.n[i].ms);
-      delay(60);               // deja salir la cola del DMA antes de cortar
-      digitalWrite(PA, LOW);   // apaga el amp entre sonidos (evita siseo)
     }
   }
 }
@@ -139,7 +148,7 @@ static void audioTask(void *) {
 void audioBegin() {
   // I2S primero: arranca el MCLK que necesita el códec para engancharse
   pinMode(PA, OUTPUT);
-  digitalWrite(PA, LOW);   // amp apagado; la tarea lo enciende al reproducir
+  digitalWrite(PA, LOW);   // hasta saber si el sonido esta activado
 
   i2s.setPins(I2S_BCK_IO, I2S_WS_IO, I2S_DO_IO, I2S_DI_IO, I2S_MCK_IO);
   if (!i2s.begin(I2S_MODE_STD, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT,
@@ -155,6 +164,7 @@ void audioBegin() {
   p.end();
 
   gReady = true;
+  updateAmplifierPower();
   gQ = xQueueCreate(8, sizeof(uint8_t));
   xTaskCreatePinnedToCore(audioTask, "audio", 4096, nullptr, 1, nullptr, 0);
   sfxPlay(SFX_HATCH);  // jingle de arranque (confirma que suena)
@@ -166,9 +176,16 @@ void sfxPlay(uint8_t id) {
 
 void audioSetEnabled(bool on) {
   gOn = on;
+  updateAmplifierPower();
   Preferences p;
   p.begin("tamapoke", false);
   p.putBool("snd", on);
   p.end();
 }
 bool audioEnabled() { return gOn; }
+
+void audioSetSleeping(bool sleeping) {
+  if (gSleeping == sleeping) return;
+  gSleeping = sleeping;
+  updateAmplifierPower();  // durmiendo no hay efectos: amp apagado, sin consumo
+}

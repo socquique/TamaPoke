@@ -24,7 +24,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.5"
+#define FW_VERSION "1.6"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -241,6 +241,11 @@ void ensureMon() {
 void loop() {
   uint32_t now = millis();
   pet.update(now);
+
+  // el amplificador sigue al estado de sueno (la llamada sale sola si no cambia).
+  // Aqui cubre todas las vias: el boton de luz, el sueno nocturno y el que llega
+  // aplicado desde la progresion offline.
+  audioSetSleeping(pet.sleeping);
 
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
   // (incluye el caso de cumplir al despertar). canEvolveNow es false durmiendo.

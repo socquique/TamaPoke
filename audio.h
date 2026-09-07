@@ -21,3 +21,4 @@ void audioBegin();          // init ES8311 + I2S + amplificador + tarea de audio
 void sfxPlay(uint8_t id);   // encola un efecto (no bloquea el loop)
 void audioSetEnabled(bool on);
 bool audioEnabled();
+void audioSetSleeping(bool sleeping);  // dormida: amplificador apagado
