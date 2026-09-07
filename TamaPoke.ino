@@ -224,6 +224,9 @@ void setup() {
 // carga/descarga el sprite de SD cuando cambia la especie
 void ensureMon() {
   if (pet.speciesId == monFor && monShinyFor == pet.shiny && !sdDirty) return;
+  // los ficheros recien recibidos pueden incluir un thumbs.bin nuevo, que se
+  // cargaba solo en setup(): sin esto no se veia en la galeria hasta reiniciar
+  if (sdDirty) { thumbs.unload(); thumbs.load(); }
   sdDirty = false;
   monFor = pet.speciesId;
   monShinyFor = pet.shiny;

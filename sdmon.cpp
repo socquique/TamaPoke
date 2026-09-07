@@ -84,7 +84,14 @@ void PmdMon::unload() {
   loaded = false;
 }
 
+void SdThumbs::unload() {
+  if (data) { free(data); data = nullptr; }
+  loaded = false;
+  count = 0;
+}
+
 bool SdThumbs::load() {
+  unload();  // recargar sin fugar el blob anterior
   if (!sdReady) return false;
   File f = SD_MMC.open("/mons/thumbs.bin", FILE_READ);
   if (!f) {

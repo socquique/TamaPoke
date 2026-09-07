@@ -49,6 +49,7 @@ struct SdThumbs {
   uint8_t *data = nullptr;
   uint16_t count = 0;
   bool load();
+  void unload();  // libera el blob: recargar tras recibir un thumbs.bin nuevo
   const uint8_t *get(int16_t dex) const;  // blob: w,h,palCount,pal[],idx[]
 };
 extern SdThumbs thumbs;
