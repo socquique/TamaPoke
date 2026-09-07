@@ -15,6 +15,20 @@
 #define FAREWELL_AGE_MIN (3UL * 24 * 60)   // se despide a los 3 dias de juego (en forma final)
 #define RUNAWAY_TICKS 60                   // se escapa tras 1 h con TODO a cero
 
+// milisegundos que faltan hasta `deadline` (0 si ya paso, o si deadline==0:
+// "temporizador inactivo"). Todos los temporizadores del juego (dialogos,
+// animaciones) se guardan como un instante absoluto "deadline = millis() +
+// duracion" y se comparaban con millis() < deadline / millis() > deadline;
+// eso se rompe cuando millis() da la vuelta a los ~49,7 dias de uptime. La
+// resta sin signo, reinterpretada como con signo, es segura frente a esa
+// vuelta mientras el intervalo real sea muy inferior a ~24,8 dias (aqui el
+// temporizador mas largo son ~12 s), sin cambiar como se guarda el deadline.
+static inline uint32_t timeLeft(uint32_t deadline) {
+  if (!deadline) return 0;
+  int32_t left = (int32_t)(deadline - millis());
+  return left > 0 ? (uint32_t)left : 0;
+}
+
 // ceremonias de fin de ciclo
 enum : uint8_t { CER_NONE = 0, CER_FAREWELL, CER_RUNAWAY, CER_RELEASE };
 
@@ -96,13 +110,11 @@ public:
 
   bool isEgg() const { return speciesId < 0; }
   uint8_t eggCracks() const { return eggTaps; }
-  bool eating() const { return millis() < eatUntil; }
-  bool showHeart() const { return millis() < heartUntil; }
-  bool evolving() const { return millis() < evolveUntil; }
+  bool eating() const { return timeLeft(eatUntil) > 0; }
+  bool showHeart() const { return timeLeft(heartUntil) > 0; }
+  bool evolving() const { return timeLeft(evolveUntil) > 0; }
   float evolveT() const {     // progreso de la animacion de evolucion 0..1
-    uint32_t n = millis();
-    uint32_t left = evolveUntil > n ? evolveUntil - n : 0;
-    return 1.0f - (float)left / (float)EVOLVE_ANIM_MS;
+    return 1.0f - (float)timeLeft(evolveUntil) / (float)EVOLVE_ANIM_MS;
   }
   bool canEvolveNow() const;  // condiciones de evolucion cumplidas (lista)
   void evolve();              // dispara la transformacion (la llama un toque del usuario)
@@ -141,16 +153,14 @@ public:
   // progreso de la ceremonia de despedida/escapada, 0..1 (para animarla)
   float ceremonyT() const {
     if (ceremony == CER_NONE) return 0.0f;
-    uint32_t n = millis();
-    uint32_t left = ceremonyUntil > n ? ceremonyUntil - n : 0;
-    return 1.0f - (float)left / (float)CEREMONY_MS;
+    return 1.0f - (float)timeLeft(ceremonyUntil) / (float)CEREMONY_MS;
   }
 
   // racha / vinculo / medallas / nombre
   void rename(const char *name);
   bool hasMedal(uint16_t m) const { return medals & m; }
-  bool showMedal() const { return millis() < medalUntil; }
-  bool showMilestone() const { return millis() < milestoneUntil; }
+  bool showMedal() const { return timeLeft(medalUntil) > 0; }
+  bool showMilestone() const { return timeLeft(milestoneUntil) > 0; }
   int careBonus() const;  // mejora del huevo por racha + vinculo
 
   // guardado periodico diferido: tick() marca pendiente y el loop lo vuelca
