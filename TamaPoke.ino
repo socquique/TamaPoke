@@ -2145,7 +2145,9 @@ uint8_t pmdFrameAt(const PmdAct &a, uint32_t t, bool loop) {
   if (!loop && t >= total) return a.frames - 1;
   t %= total;
   uint8_t i = 0;
-  while (t >= a.ms[i]) {
+  // guarda: nunca mas vueltas que frames, por si un .bin corrupto trae ms[]=0
+  // pese al saneo de la carga (defensa en profundidad)
+  for (uint8_t guard = 0; guard < a.frames && t >= a.ms[i]; guard++) {
     t -= a.ms[i];
     i = (i + 1) % a.frames;
   }

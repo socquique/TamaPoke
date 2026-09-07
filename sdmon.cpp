@@ -50,6 +50,7 @@ bool PmdMon::load(uint8_t dexNum, bool shiny) {
     a.frames = nf;
     for (uint8_t k = 0; k < nf; k++) {
       a.ms[k] = p[0] | (p[1] << 8);
+      if (a.ms[k] == 0) a.ms[k] = 100;  // nunca 0: pmdFrameAt() giraria sin avanzar
       p += 2;
     }
     a.data = p;
