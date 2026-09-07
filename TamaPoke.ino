@@ -301,14 +301,22 @@ void loop() {
   static uint32_t lastHealth = 0;
   if (now - lastHealth > 300000) {
     lastHealth = now;
-    Serial.printf("HEALTH up=%lus heap=%u min=%u\n", (unsigned long)(now / 1000),
-                  ESP.getFreeHeap(), ESP.getMinFreeHeap());
+    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d\n",
+                  (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
+                  batPercent(), batMillivolts(), batCharging() ? 1 : 0,
+                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0);
   }
 
   // 85 ms en juego/saco: margen seguro para que el redibujado no pise el envio
   // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
   // sprites grandes el dibujo tarda mas, asi que se deja colchon)
-  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen) ? 85 : 100)) {
+  // Con la pantalla apagada no se dibuja: a brillo 0 no se ve nada, pero el
+  // redibujado y el flush DMA del framebuffer de 466x466 seguian corriendo a
+  // 10 fps, y medido son 70 ms de trabajo por cada 100 (46 de ellos solo el
+  // volcado). Es la mayor carga evitable de la placa. Cada render repinta la
+  // escena entera, asi que no queda nada a medias; y al quedarse lastRender
+  // congelado, el primer frame tras despertar sale en el acto.
+  if (!screenOff && now - lastRender >= (uint32_t)((gameOpen || sackOpen) ? 85 : 100)) {
     lastRender = now;
     render();
   }

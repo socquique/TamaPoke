@@ -77,6 +77,7 @@ static void refreshPower() {
 
 int batPercent() { refreshPower(); return cachedPct; }
 bool batCharging() { refreshPower(); return cachedCharging; }
+int batMillivolts() { return pmuOk ? (int)pmu.getBattVoltage() : 0; }
 bool usbPresent() { refreshPower(); return cachedUsb; }
 
 void pwrSetup() {
