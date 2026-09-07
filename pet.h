@@ -167,6 +167,8 @@ public:
   // cuando la pantalla esta atenuada/apagada (la escritura a flash congela
   // ~1s ambos cores: asi no se ve ni corta el tactil)
   bool savePending() const { return pendingSave; }
+  // ultima hora real persistida; sirve para resembrar un RTC que perdio la hora
+  uint32_t savedEpoch() { return prefs.getUInt("seen", 0); }
   void flushSave();
 
 private:

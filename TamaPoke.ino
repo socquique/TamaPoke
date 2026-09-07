@@ -24,7 +24,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.12"
+#define FW_VERSION "1.13"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -212,9 +212,19 @@ void setup() {
   pwrSetup();
   uint32_t e = rtcEpoch();
   if (e == 0) {
-    rtcSetEpoch(1767225600UL);  // RTC virgen: semilla (la hora absoluta da igual,
-    e = rtcEpoch();             // solo importan las diferencias)
-    Serial.println("RTC sin hora: sembrado, sin progresion offline esta vez");
+    // Sin pila de respaldo, el PCF85063 pierde la hora al cortar la
+    // alimentacion. Sembrar siempre la fecha fija haria RETROCEDER el tiempo de
+    // juego respecto a lo ya guardado, y eso rompe la racha, la edad y la hora
+    // de la escena. Se siembra con la ultima hora vista, si es posterior, para
+    // que el tiempo no vaya nunca hacia atras. Los minutos apagado se pierden
+    // igual (sin RTC no hay forma de saberlos), pero nada se descuadra.
+    uint32_t seed = 1767225600UL;             // RTC virgen de verdad
+    uint32_t seen = pet.savedEpoch();         // usa la NVS que pet ya tiene abierta
+    if (seen > seed) seed = seen;
+    rtcSetEpoch(seed);
+    e = rtcEpoch();
+    Serial.printf("RTC sin hora: sembrado en %u%s\n", seed,
+                  seen > 1767225600UL ? " (desde la ultima hora guardada)" : "");
   }
   pet.syncClock(e);
 
