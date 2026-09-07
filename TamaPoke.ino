@@ -79,6 +79,7 @@ uint32_t feedMenuUntil = 0;   // selector de comida abierto hasta este millis
 bool gameOpen = false;
 uint32_t gameOverUntil = 0;
 float ballX, ballY, ballVX, ballVY, gamePetX;
+uint32_t lastGameStep = 0;  // ultima llamada a stepGame(): fisica por tiempo real, no por frame
 uint8_t gameScore, gameMisses;
 float hitX, hitY;             // ultimo golpe (anillo de impacto)
 uint32_t hitTime = 0;
@@ -960,6 +961,7 @@ void startGame() {
   gameNewHi = false;
   hitTime = 0;
   gamePetX = 233;
+  lastGameStep = millis();
   respawnBall();
 }
 
@@ -995,11 +997,22 @@ void gameTap(int16_t x, int16_t y) {
 }
 
 void stepGame() {
+  uint32_t now = millis();
+  // paso relativo a 85 ms, el periodo de frame con el que se afinaron estas
+  // constantes (ver el planificador de render en loop()): sin esto la fisica
+  // avanzaba "un paso por frame" y el juego iba mas rapido o mas lento segun
+  // lo que tardara en dibujarse el frame anterior, que depende del tamano del
+  // sprite cargado. Con un Charizard la bola caia mas despacio que con un
+  // Diglett, asi que el record no era comparable entre especies.
+  float k = lastGameStep ? (now - lastGameStep) / 85.0f : 1.0f;
+  if (k > 3.0f) k = 3.0f;  // frame anormalmente tardio: no dar un salto enorme
+  lastGameStep = now;
+
   float grav = 0.40f + gameScore * 0.013f;  // cae un poco mas rapido cada vez
   if (grav > 0.80f) grav = 0.80f;
-  ballVY += grav;
-  ballX += ballVX;
-  ballY += ballVY;
+  ballVY += grav * k;
+  ballX += ballVX * k;
+  ballY += ballVY * k;
   // rebote en la pared circular
   float dx = ballX - CX, dy = ballY - CY;
   float d = sqrtf(dx * dx + dy * dy);
@@ -1027,7 +1040,7 @@ void stepGame() {
   float chase = (ballX - gamePetX) * 0.12f;
   if (chase > 7) chase = 7;
   if (chase < -7) chase = -7;
-  gamePetX += chase;
+  gamePetX += chase * k;
 }
 
 // ---------- saco de entrenamiento (entrena la fuerza) ----------
