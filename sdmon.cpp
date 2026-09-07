@@ -89,6 +89,7 @@ void SdThumbs::unload() {
   if (data) { free(data); data = nullptr; }
   loaded = false;
   count = 0;
+  size = 0;
 }
 
 bool SdThumbs::load() {
@@ -99,9 +100,15 @@ bool SdThumbs::load() {
     Serial.println("sin thumbs.bin (galeria sin miniaturas)");
     return false;
   }
-  uint32_t size = f.size();
-  data = (uint8_t *)ps_malloc(size);
-  if (!data || f.read(data, size) != size || memcmp(data, "TPTH", 4) != 0) {
+  uint32_t sz = f.size();
+  // acota el tamano: evita un ps_malloc absurdo con un archivo corrupto
+  if (sz < 10 || sz > 2UL * 1024 * 1024) {
+    Serial.println("thumbs.bin invalido (tamano)");
+    f.close();
+    return false;
+  }
+  data = (uint8_t *)ps_malloc(sz);
+  if (!data || f.read(data, sz) != sz || memcmp(data, "TPTH", 4) != 0) {
     Serial.println("thumbs.bin invalido");
     if (data) { free(data); data = nullptr; }
     f.close();
@@ -109,8 +116,15 @@ bool SdThumbs::load() {
   }
   f.close();
   memcpy(&count, data + 4, 2);
+  // la tabla de offsets (uno por especie) debe caber entera en lo leido
+  if ((uint32_t)6 + 4UL * count > sz) {
+    Serial.println("thumbs.bin invalido (tabla de offsets)");
+    unload();
+    return false;
+  }
+  size = sz;
   loaded = true;
-  Serial.printf("miniaturas cargadas: %u (%u KB)\n", count, size / 1024);
+  Serial.printf("miniaturas cargadas: %u (%u KB)\n", count, sz / 1024);
   return true;
 }
 
@@ -118,6 +132,11 @@ const uint8_t *SdThumbs::get(int16_t dex) const {
   if (!loaded || dex < 1 || dex > count) return nullptr;
   uint32_t off;
   memcpy(&off, data + 6 + 4 * (dex - 1), 4);
+  // el offset viene del fichero sin comprobar: sin esto, un thumbs.bin truncado
+  // o corrupto hacia leer fuera de la reserva de PSRAM
+  if (off > size - 3) return nullptr;  // la cabecera w,h,palCount debe caber (size >= 10 siempre)
+  uint32_t need = 3 + (uint32_t)data[off + 2] * 2 + (uint32_t)data[off] * data[off + 1];
+  if (need > size || off > size - need) return nullptr;  // y el blob entero tambien
   return data + off;
 }
 
@@ -222,6 +241,14 @@ bool sdSerialCommand(const String &line) {
       return true;
     }
     if (!path.startsWith("/")) path = "/" + path;
+    // acota la escritura a /mons/: la ruta llega tal cual de la linea serie, sin
+    // sanear, asi que un PUT manipulado podria escribir en cualquier sitio de la
+    // tarjeta. Los dos clientes reales (tools/send_sd.py y web/index.html) ya
+    // mandan nombres con el prefijo mons/.
+    if (!path.startsWith("/mons/") || path.indexOf("..") >= 0) {
+      Serial.println("ERR");
+      return true;
+    }
     File f = SD_MMC.open(path, FILE_WRITE);
     if (!f) {
       Serial.println("ERR");
@@ -235,7 +262,10 @@ bool sdSerialCommand(const String &line) {
       size_t want = remaining > sizeof(buf) ? sizeof(buf) : remaining;
       size_t n = Serial.readBytes(buf, want);
       if (n == 0) break;  // timeout
-      f.write(buf, n);
+      // sin mirar el retorno, una tarjeta llena o con fallo de escritura daba
+      // DONE igualmente y dejaba el fichero truncado en la SD: justo la entrada
+      // corrupta contra la que hay que protegerse luego al cargar el sprite
+      if (f.write(buf, n) != n) break;
       remaining -= n;
       Serial.println("#");  // ack: listo para el siguiente bloque
     }
