@@ -1,6 +1,6 @@
 {
   "name": "TamaPoke",
-  "version": "1.10",
+  "version": "1.11",
   "new_install_prompt_erase": true,
   "builds": [
     {

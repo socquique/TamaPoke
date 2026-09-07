@@ -24,7 +24,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.10"
+#define FW_VERSION "1.11"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -34,6 +34,7 @@ Arduino_CO5300 *panel = new Arduino_CO5300(
 Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
 
 TouchDrvCST92xx touch;
+#define TOUCH_ADDR 0x5A  // CST9217
 Pet pet;
 
 // sprite animado de la SD para la especie actual (si existe el archivo)
@@ -455,6 +456,20 @@ void handleTouch() {
   // congelaba el loop entero; SensorLib no respeta el timeout de Wire.
   if (!gTouchIrq && !wasPressed) return;
   gTouchIrq = false;
+  // Un ciclo de solo direccion antes de leer. Sin esto, getPoint() se colgaba
+  // exactamente 1000 ms (el timeout por defecto del driver I2C, que SensorLib no
+  // acota) y congelaba el loop entero: es lo que se percibia como "el minijuego
+  // se congela 2-3 segundos al tocar la bola" (issue #16), porque ahi los toques
+  // son rapidos y seguidos.
+  //
+  // Medido en placa, jugando lo mismo (~470 lecturas, marcador ~50):
+  //   sin esta linea: 5 parones de 1000 ms en 60 s
+  //   con ella:       0
+  // El contador de rechazos salio 0 en ambos casos, asi que NO funciona
+  // saltandose lecturas cuando el chip no contesta: lo que hace es despertarlo,
+  // para que la lectura siguiente no se encuentre el CST9217 dormido.
+  Wire.beginTransmission(TOUCH_ADDR);
+  if (Wire.endTransmission() != 0) return;  // no responde: se reintenta en 20 ms
   int16_t x, y;
   bool pressed = touch.getPoint(&x, &y, 1) > 0;
 
