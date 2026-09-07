@@ -390,15 +390,44 @@ def poop():
 
 
 def heart():
-    g = G()
-    g.disk(10.5, 12, 5.8, 5.2, 'r', 'R')
-    g.disk(21.5, 12, 5.8, 5.2, 'r', 'R')
-    g.rect(7, 13, 25, 16, 'r')
-    g.disk(16, 19, 8.0, 7.0, 'r', 'R')
-    g.px(16, 26, 'r'); g.px(15, 26, 'r')
-    g.outline()
-    g.rect(9, 10, 10, 10, 'w'); g.px(8, 11, 'w')
-    return g.rows()
+    # Dibujado a mano y editado directamente en species.h (commit 7c2b0f9,
+    # "animaciones epicas, corazon y biomas"), sin volver aqui: el generador
+    # se quedo con una version procedural distinta y species.h dejo de poder
+    # regenerarse igual. Se fija aqui el corazon que de verdad se envia.
+    return [
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        "........krrrrk....krrrrk........",
+        ".......krrrrrrk..krrrrrrk.......",
+        "......krrrrrrrrrrrrrrrrrrk......",
+        ".....krrrrrrrrrrrrrrrrrrrrk.....",
+        ".....krrwwrrrrrrrrrrrrrrRrk.....",
+        ".....krwwrrrrrrrrrrrrrrRRrk.....",
+        "......krrrrrrrrrrrrrrrrrrk......",
+        ".......krrrrrrrrrrrrrrrrk.......",
+        "........krrrrrrrrrrrrrrk........",
+        ".........krrrrrrrrrrrrk.........",
+        "..........krrrrrrrrrrk..........",
+        "...........krrrrrrrrk...........",
+        "............krrrrrrk............",
+        ".............krrrrk.............",
+        "..............krrk..............",
+        "...............kk...............",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+    ]
 
 
 # ------------------------------------------------------------ iconos botones
