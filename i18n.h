@@ -1,8 +1,11 @@
 #pragma once
 #include <Arduino.h>
 
-// Idiomas soportados. La fuente del firmware no tiene acentos: ambos textos van
-// sin tildes ni enes (igual que ya iba el espanol).
+// Idiomas soportados. La fuente 5x7 de Arduino_GFX es una tabla CP437 completa
+// (256 glifos), asi que SI hay acentos, dieresis y enes: van como byte suelto en
+// octal (\240 a, \244 n~, \202 e, \204 a"...), nunca en UTF-8, porque la UI centra
+// con strlen(t)*6 y un caracter de dos bytes descuadraria las etiquetas.
+// No estan en CP437: las mayusculas acentuadas salvo E (\220), ni a~/o~ del portugues.
 enum Lang : uint8_t { LANG_ES = 0, LANG_EN, LANG_FR, LANG_DE, LANG_IT, LANG_PT, LANG_COUNT };
 #define LANG_DEFAULT LANG_EN  // idioma por defecto: ingles
 

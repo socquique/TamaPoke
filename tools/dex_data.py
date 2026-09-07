@@ -3,7 +3,9 @@
 
 Cada entrada: (num, slug, nombre_pantalla, tipo, evoluciona_a, nivel)
 - slug: nombre en minusculas de la especie (identificador interno)
-- nombre_pantalla: ASCII en mayusculas (la fuente GFX no tiene acentos)
+- nombre_pantalla: mayusculas sin acentos. La fuente GFX si tiene glifos
+  acentuados (CP437), pero NO las mayusculas acentuadas salvo la E, y los
+  nombres se pintan en mayusculas, asi que aqui van sin tilde
 - tipo: clave de TYPE_ACCENTS (color del nombre en la UI)
 - evoluciona_a: numero de dex (0 = forma final); niveles gen 1 reales,
   piedras ~30 y por intercambio ~40 convertidos a nivel. Eevee (133) se
