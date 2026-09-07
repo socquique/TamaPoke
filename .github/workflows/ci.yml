@@ -65,6 +65,21 @@ jobs:
       - run: pip install ruff
       - run: ruff check tools/
 
+  tests:
+    name: Game-logic tests (host, no board)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      # pet.cpp / i18n.cpp / dex.h compilan y corren en el PC contra unos shims
+      # de Arduino, con millis() y random() falsos y una NVS en memoria. Aqui es
+      # donde se han roto las cosas: los tres bugs de la v1.3, v1.4 y v1.8 eran
+      # logica pura y estos tests los pillan sin tocar la placa.
+      - name: Run the suite (plus AddressSanitizer + UBSan)
+        run: ./test/run_tests.sh --asan
+
   i18n:
     name: i18n format-specifier consistency
     runs-on: ubuntu-latest

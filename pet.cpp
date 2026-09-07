@@ -488,8 +488,11 @@ uint8_t Pet::trainStrength(uint16_t hits) {
   if (ceremony != CER_NONE || isEgg()) return 0;
   uint8_t gain = hits / 4;          // ~4 golpes = 1 punto de entrenamiento
   if (gain > 18) gain = 18;         // tope por sesion: la FUE se forja a fuego lento
-  uint8_t v = trAtk + gain;
-  trAtk = v > 100 ? 100 : v;
+  uint8_t antes = trAtk;
+  uint16_t v = (uint16_t)trAtk + gain;
+  trAtk = v > 100 ? 100 : (uint8_t)v;
+  gain = trAtk - antes;             // lo que de verdad entro: al topar en 100 la
+                                    // pantalla anunciaba +18 aunque cupieran menos
   energy = dropTo(energy, 12, 5);   // cansa
   fullness = dropTo(fullness, 5, 5);
   int burn = (int)weight - hits / 3;  // tambien quema peso
