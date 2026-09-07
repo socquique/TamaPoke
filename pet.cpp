@@ -321,7 +321,7 @@ void Pet::rename(const char *name) {
   save();
 }
 
-static uint16_t calcStat(uint8_t base, uint8_t gene, uint8_t lvl, uint8_t tr) {
+static uint16_t calcStat(uint8_t base, uint8_t gene, uint16_t lvl, uint8_t tr) {
   return (uint16_t)base * gene / 100 + lvl + tr;
 }
 
@@ -412,7 +412,7 @@ bool Pet::canEvolveNow() const {
   if (isEgg() || sleeping || ceremony != CER_NONE) return false;
   const DexEntry &d = DEX_TBL[speciesId];
   if (d.evolvesTo == 0) return false;
-  return level() >= (uint8_t)(d.evolveLevel + careMistakes) && lowestStat() >= 40;
+  return level() >= (uint16_t)d.evolveLevel + careMistakes && lowestStat() >= 40;
 }
 
 void Pet::evolve() {

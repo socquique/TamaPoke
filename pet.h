@@ -118,7 +118,14 @@ public:
   void chooseStarter(int16_t dex) { eggTarget = dex; starterPick = false; save(); }
   void factoryReset() { prefs.clear(); }  // borra la NVS (test: comando serie WIPE)
   void dbgRunawayReady() { fullness = joy = energy = hygiene = 0; neglectTicks = RUNAWAY_TICKS; }  // test
-  uint8_t level() const { return 1 + ageMinutes / MINUTES_PER_LEVEL; }
+  // uint16_t, no uint8_t: con MINUTES_PER_LEVEL=60 el nivel son las horas, asi
+  // que un uint8_t da la vuelta a 0 en el nivel 256, a los ~10,6 dias. Y eso se
+  // alcanza jugando normal, porque "quedaros juntos" permite posponer la
+  // despedida indefinidamente. Se topa en 999 en vez de desbordar.
+  uint16_t level() const {
+    uint32_t lv = 1 + ageMinutes / MINUTES_PER_LEVEL;
+    return lv > 999 ? 999 : (uint16_t)lv;
+  }
   bool isRegistered(int16_t dex) const {
     return dex >= 1 && dex <= 151 && (dexReg[(dex - 1) >> 3] & (1 << ((dex - 1) & 7)));
   }
@@ -164,7 +171,7 @@ private:
   uint8_t mistakeCooldown = 0;
   uint8_t ticksSinceSave = 0;
   bool pendingSave = false;     // guardado periodico pendiente de volcar
-  uint8_t evoDeclinedLv = 0;    // "mantener forma": no ofrecer evolucion hasta subir de nivel
+  uint16_t evoDeclinedLv = 0;   // "mantener forma": no ofrecer evolucion hasta subir de nivel
   uint32_t farDeclinedAge = 0;  // "quedaros juntos": no ofrecer despedida hasta esta edad
   bool starterPick = false;     // primera partida: esperando que el jugador elija inicial
   uint8_t neglectTicks = 0;
