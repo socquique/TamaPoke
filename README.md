@@ -354,7 +354,9 @@ To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in
 All sprites: [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab)
 (community, CC BY-NC). Base stats: [PokéAPI](https://pokeapi.co). Pokémon is a ™ of
 Nintendo / Game Freak / The Pokémon Company. Non-commercial, personal-use project.
-Full list in [`CREDITS.md`](CREDITS.md).
+Full list in [`CREDITS.md`](CREDITS.md). Version history in
+[`CHANGELOG.md`](CHANGELOG.md) — most of the fixes there came from people
+who built one and reported what they found.
 
 ## License
 
