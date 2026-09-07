@@ -85,7 +85,17 @@
      Pokémon is a ™ of Nintendo / Game Freak. Non-commercial project.</p>
 </div>
 
-<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+<!-- version exacta (no el rango flotante @10) con Subresource Integrity, para
+     que un fichero del CDN alterado o cambiado sin avisar no se ejecute en
+     silencio. Ojo: el SRI solo cubre este fichero de entrada; los import()
+     dinamicos que el hace de sus propios chunks no quedan cubiertos, y cerrar
+     eso del todo obligaria a hospedar el arbol entero de esp-web-tools.
+     Al subir de version hay que recalcular el hash:
+       curl -s https://unpkg.com/esp-web-tools@X.Y.Z/dist/web/install-button.js \
+         | openssl dgst -sha384 -binary | openssl base64 -A -->
+<script type="module" crossorigin="anonymous"
+        integrity="sha384-9XfyvAabgkISlB/Xb3OpshGKpZx0TOt5Mmu78SeiNU3so/p4o2s9m66vy6Utdnom"
+        src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js"></script>
 <script>
 const log = (m) => { const el = document.getElementById('log'); el.style.display='block';
   el.textContent += m + '\n'; el.scrollTop = el.scrollHeight; };
@@ -148,15 +158,35 @@ function parsePak(buf) {
   return items;
 }
 
+// reanudacion: recuerda que ficheros se confirmaron (nombre+tamano, para que un
+// bundle regenerado con distinto contenido bajo el mismo nombre no se salte sin
+// avisar), asi una recarga tras un corte no repite los ~40 MB / ~10 min enteros
+const RESUME_KEY = 'tamapoke_sent_files';
+const loadResumeSet = () => { try { return new Set(JSON.parse(localStorage.getItem(RESUME_KEY) || '[]')); } catch { return new Set(); } };
+const saveResumeSet = (s) => { try { localStorage.setItem(RESUME_KEY, JSON.stringify([...s])); } catch {} };
+const clearResumeSet = () => { try { localStorage.removeItem(RESUME_KEY); } catch {} };
+
 async function sendAll(items) {
   const bar = document.getElementById('bar'); bar.style.display = 'block';
   const fill = bar.firstElementChild;
-  let done = 0, fail = 0;
+  const sent = loadResumeSet();
+  let done = 0, fail = 0, skipped = 0;
   for (const it of items) {
-    if (!await sendOne(it.name, it.data)) { log('   failed ' + it.name); fail++; }
+    const key = `${it.name}:${it.data.length}`;
+    if (sent.has(key)) {
+      skipped++;
+    } else if (await sendOne(it.name, it.data)) {
+      sent.add(key);
+      saveResumeSet(sent);
+    } else {
+      log('   failed ' + it.name);
+      fail++;
+    }
     done++;
     fill.style.width = (done / items.length * 100) + '%';
   }
+  if (skipped) log(`Resumed: skipped ${skipped} already-sent file(s) from an earlier attempt.`);
+  if (fail === 0) clearResumeSet();  // todo confirmado: la proxima vez no se salta nada
   log(`Done (${done - fail}/${items.length}). Restart the board (PWR button).`);
 }
 
