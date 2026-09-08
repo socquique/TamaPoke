@@ -1400,6 +1400,23 @@ void renderGame() {
 
 // ---------- ficha del bicho (deslizar vertical) ----------
 
+// x donde arrancan las barras de la ficha. Estaba fijo en 150, que daba de sobra
+// para etiquetas latinas de 3 caracteres pero no para las japonesas, mas anchas:
+// こうげき se metia dentro de la barra. Se calcula a partir de la etiqueta mas
+// larga para que las cuatro barras sigan alineadas en cualquier idioma, con el
+// valor original como suelo (asi en los idiomas latinos no cambia nada).
+// Requiere tener ya puesto el tamano de texto 2, porque textW() lo necesita.
+static int statBarX() {
+  const StrId ids[] = { S_STAT_ATK, S_STAT_DEF, S_STAT_SPE, S_STAT_WGT, S_VIN };
+  int ancho = 0;
+  for (StrId id : ids) {
+    int w = textW(T(id), 2);
+    if (w > ancho) ancho = w;
+  }
+  int x = 96 + ancho + 12;   // 12 px de aire entre etiqueta y barra
+  return x < 150 ? 150 : x;
+}
+
 void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color) {
   gfx->setTextColor(UI_INK);
   setSize(2);
@@ -1409,11 +1426,12 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
   snprintf(num, sizeof(num), "%u", val);
   setCur(330, y);
   printT(num);
-  int bw = 160;
+  int bx = statBarX();
+  int bw = 310 - bx;   // la barra siempre acaba en 310, dejando aire hasta el numero
   int fw = (int)val * bw / maxBar;
   if (fw > bw) fw = bw;
-  gfx->fillRoundRect(150, y + 2, bw, 11, 3, UI_TRACK);
-  if (fw > 2) gfx->fillRoundRect(150, y + 2, fw, 11, 3, color);
+  gfx->fillRoundRect(bx, y + 2, bw, 11, 3, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(bx, y + 2, fw, 11, 3, color);
 }
 
 // ---------- ajuste de hora en pantalla (deslizar abajo) ----------
