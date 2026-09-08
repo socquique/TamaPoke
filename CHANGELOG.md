@@ -6,6 +6,29 @@ bottom of the clock/settings screen (swipe down) and `web/manifest.json`.
 Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 **without** ticking "Erase device" keeps your Pokémon.
 
+## [1.15] - 2026-09-08
+
+### Added
+
+- **Japanese.** UI, medals and all 151 species names in katakana (フシギダネ,
+  ピカチュウ). Selectable from the settings screen like any other language.
+
+### Changed
+
+- Text measurement and cursor positioning are now centralized (`textW()`,
+  `centerX()`, `setCur()`, `setSize()`, `printT()`), replacing ~180 sites that
+  assumed one byte per character and a fixed 6 px width. Latin languages render
+  identically — the equivalence is arithmetic, not approximate. This is what
+  makes CJK possible without a per-language branch at every draw site, and
+  Chinese and Korean now only need their strings.
+- Bar positions on the stat card and the care row are derived from the width of
+  the widest translated label instead of fixed coordinates, so they stay aligned
+  in any language. With Latin labels the numbers come out identical to before.
+- New dependency: **U8g2**, for its CJK font data only.
+
+Japanese font handling, readability and layout were all tuned against real
+hardware by @usakomint, who found and diagnosed every issue in the process.
+
 ## [1.11] - 2026-09-07
 
 ### Fixed

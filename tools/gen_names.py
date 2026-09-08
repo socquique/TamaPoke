@@ -14,6 +14,7 @@ import time
 import unicodedata
 
 LANGS = ('fr', 'de')
+LANGS_UTF8 = ('ja-hrkt',)  # CJK: van tal cual en UTF-8, no en octal ASCII
 
 
 def ascii_up(s):
@@ -46,6 +47,10 @@ def main():
             v = ascii_up(names.get(lg, names['en']))
             if v != en:
                 dif[lg] = v
+        for lg in LANGS_UTF8:
+            v = names.get(lg)
+            if v:
+                dif[lg.split('-')[0]] = v  # 'ja-hrkt' -> 'ja', sin tocar el UTF-8
         if dif:
             out[num] = dif
         if num % 25 == 0:
@@ -56,8 +61,9 @@ def main():
     with open(path, 'w', encoding='utf-8') as f:
         f.write('# -*- coding: utf-8 -*-\n')
         f.write('"""GENERADO por tools/gen_names.py desde PokeAPI - no editar a mano.\n\n')
-        f.write('Nombres oficiales que difieren del ingles (solo FR y DE en gen 1),\n')
-        f.write('en mayusculas y sin acentos porque la fuente GFX es ASCII.\n"""\n\n')
+        f.write('Nombres oficiales por idioma. FR y DE van en mayusculas y sin\n')
+        f.write('acentos (fuente CP437, un byte por caracter); JA va en katakana\n')
+        f.write('UTF-8 tal cual, porque se pinta con una fuente U8g2.\n"""\n\n')
         f.write('LOCAL_NAMES = {\n')
         for num in sorted(out):
             f.write(f'    {num}: {out[num]!r},\n')

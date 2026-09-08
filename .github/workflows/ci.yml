@@ -25,7 +25,7 @@ jobs:
           arduino-cli core install esp32:esp32@3.3.10
 
       - name: Install libraries
-        run: arduino-cli lib install "GFX Library for Arduino" SensorLib XPowersLib
+        run: arduino-cli lib install "GFX Library for Arduino" SensorLib XPowersLib U8g2
 
       - name: Compile
         run: >

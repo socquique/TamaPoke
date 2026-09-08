@@ -90,6 +90,7 @@ TEST(i18n, los_acentos_van_en_un_solo_byte_no_en_utf8) {
     return (c >= 0xC2 && c <= 0xDF) || (c >= 0xE0 && c <= 0xEF) || (c >= 0xF0 && c <= 0xF4);
   };
   for (int lang = 0; lang < LANG_COUNT; lang++) {
+    if (LANG_IS_CJK(lang)) continue;  // los CJK van en UTF-8 a proposito, con fuente U8g2
     gLang = (Lang)lang;
     for (int id = 0; id < STR_COUNT; id++) {
       const char *s = T((StrId)id);
@@ -145,9 +146,13 @@ TEST(i18n, los_formatos_cuadran_con_las_llamadas_del_sketch) {
   gLang = LANG_DEFAULT;
 }
 
-TEST(i18n, las_medallas_estan_en_los_seis_idiomas) {
+TEST(i18n, las_medallas_estan_en_todos_los_idiomas) {
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
+    // los topes de longitud van en BYTES, que solo equivalen a caracteres con la
+    // fuente CP437. En CJK cada kana ocupa 3 bytes y el limite real es de anchura
+    // en pantalla, que aqui no se puede medir: eso se comprueba en la placa.
+    const bool cjk = LANG_IS_CJK(lang);
     for (int m = 0; m < MED_COUNT; m++) {
       const char *n = medalName(m), *l = medalLabel(m), *d = medalDesc(m);
       char where[64];
@@ -156,9 +161,9 @@ TEST(i18n, las_medallas_estan_en_los_seis_idiomas) {
       CHECK_MSG(l && l[0], std::string("medalLabel vacio ") + where);
       CHECK_MSG(d && d[0], std::string("medalDesc vacio ") + where);
       // la etiqueta corta va en una casilla de la cuadricula de medallas
-      if (l) CHECK_MSG(strlen(l) <= 6, std::string("etiqueta demasiado larga ") + where + ": " + l);
-      if (n) CHECK_MSG(strlen(n) <= 12, std::string("nombre demasiado largo ") + where + ": " + n);
-      if (d) CHECK_MSG(strlen(d) <= 16, std::string("descripcion demasiado larga ") + where + ": " + d);
+      if (!cjk && l) CHECK_MSG(strlen(l) <= 6, std::string("etiqueta demasiado larga ") + where + ": " + l);
+      if (!cjk && n) CHECK_MSG(strlen(n) <= 12, std::string("nombre demasiado largo ") + where + ": " + n);
+      if (!cjk && d) CHECK_MSG(strlen(d) <= 16, std::string("descripcion demasiado larga ") + where + ": " + d);
     }
   }
   gLang = LANG_DEFAULT;
@@ -166,6 +171,7 @@ TEST(i18n, las_medallas_estan_en_los_seis_idiomas) {
 
 TEST(i18n, las_medallas_no_llevan_acentos) {
   for (int lang = 0; lang < LANG_COUNT; lang++) {
+    if (LANG_IS_CJK(lang)) continue;  // los CJK van en UTF-8 con fuente U8g2
     gLang = (Lang)lang;
     for (int m = 0; m < MED_COUNT; m++) {
       const char *tab[3] = { medalName(m), medalLabel(m), medalDesc(m) };

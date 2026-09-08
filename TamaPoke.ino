@@ -13,6 +13,7 @@
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
 #include "TouchDrvCSTXXX.hpp"
+#include <U8g2lib.h>  // fuentes CJK (japones); ver applyLangFont()
 #include "pin_config.h"
 #include "species.h"
 #include "dex.h"
@@ -24,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.14"
+#define FW_VERSION "1.15"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -188,6 +189,7 @@ void setup() {
   // botella del fps (~56ms a 40MHz). Si el panel mostrara basura, bajar a 40M.
   if (!gfx->begin(80000000)) Serial.println("gfx->begin() fallo");
   panel->setBrightness(180);
+  applyLangFont();  // fuente del idioma guardado (clasica salvo CJK)
 
   touch.setPins(TP_RESET, TP_INT);
   bool touchOk = false;
@@ -828,7 +830,7 @@ void renderStarterSelect() {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(centerX(t, 2), 68);
-  gfx->print(t);
+  printT(t);
   for (int i = 0; i < 3; i++) {
     int16_t d = STARTER_DEX[i];
     const DexEntry &de = DEX_TBL[d];
@@ -840,7 +842,7 @@ void renderStarterSelect() {
     gfx->setTextColor(UI_INK);
     setSize(3);
     setCur(178, ry + 24);
-    gfx->print(dexName(d));
+    printT(dexName(d));
   }
   gfx->flush();
 }
@@ -860,13 +862,57 @@ void renderStarterSelect() {
 uint8_t gTextSize = 1;
 int gFontAscent = 0;  // px del borde superior a la linea base, 0 = fuente clasica
 
+// --- ajuste de la fuente CJK (los dos valores van juntos) ---
+// La fuente clasica mide 8 px de alto a escala 1. Si la CJK mide mas, hay que
+// dividir la escala para que los tamanos cuadren... pero dividir ADELGAZA el
+// trazo: a escala 1 la unifont pinta lineas de 1 px mientras el latino a escala
+// 2 las pinta de 2, y el japones se ve tenue aunque mida igual.
+//
+// Por eso conviene una fuente base pequena Y EN NEGRITA (_b_), que permita usar
+// la MISMA escala que el latino: asi el grosor coincide y no hay que dividir.
+//
+// Se probo una fuente realmente negrita (b10_b) y NO sirve a este tamano: los
+// trazos se juntan y los kana pierden detalle, ilegibles incluso para un lector
+// nativo. Se vuelve a la unifont, que es la mas legible, y el trazo fino se
+// compensa en printT() repintando 1 px desplazado (pseudo-negrita).
+#define CJK_FONT u8g2_font_unifont_t_japanese1
+#define CJK_SIZE_DIV 2
+
 void setSize(uint8_t n) {
-  gTextSize = n;
-  gfx->setTextSize(n);
+  // gTextSize guarda la escala REALMENTE aplicada, no la pedida: setCur()
+  // multiplica el ascenso por ella y tiene que cuadrar con lo que se pinta.
+  gTextSize = gCjkFont ? (n >= CJK_SIZE_DIV ? n / CJK_SIZE_DIV : 1) : n;
+  gfx->setTextSize(gTextSize);
 }
 
 void setCur(int x, int y) {
   gfx->setCursor(x, y + gFontAscent * gTextSize);
+}
+
+// Fija la fuente del idioma activo. Es el UNICO sitio que la toca: el resto del
+// codigo dibuja igual para todos los idiomas gracias a textW()/setCur().
+//
+// El ascenso se mide en vez de codificarlo: getTextBounds() devuelve y1 como
+// desplazamiento del borde superior respecto al cursor, negativo con las fuentes
+// U8g2 (que anclan en la linea base). Asi setCur() puede seguir tratando la Y
+// como "arriba" sea cual sea la fuente, sin constantes magicas por fuente.
+void applyLangFont() {
+  gCjkFont = LANG_IS_CJK(gLang);
+  if (!gCjkFont) {
+    gfx->setFont();            // 5x7 clasica, CP437: la Y ya es el borde superior
+    gfx->setUTF8Print(false);
+    gFontAscent = 0;
+    return;
+  }
+  gfx->setFont(CJK_FONT);
+  gfx->setUTF8Print(true);     // las cadenas japonesas son UTF-8 multibyte
+  int16_t x1, y1;
+  uint16_t w, h;
+  uint8_t antes = gTextSize;
+  gfx->setTextSize(1);
+  gfx->getTextBounds("A", 0, 0, &x1, &y1, &w, &h);
+  gFontAscent = -y1;           // y1 negativo: subir desde la linea base
+  gfx->setTextSize(antes);
 }
 
 // ---------- medida de texto (preparado para fuentes CJK) ----------
@@ -888,6 +934,24 @@ uint16_t textW(const char *s, uint8_t size) {
 
 // x del cursor para dejar el texto centrado en CX
 int centerX(const char *s, uint8_t size) { return CX - textW(s, size) / 2; }
+
+// Imprime respetando la fuente activa. Con la CJK repinta el texto desplazado
+// 1 px: la unifont a escala reducida deja trazos de 1 px y se ve tenue, y una
+// fuente de verdad negrita a este tamano junta los trazos y estropea los kana.
+// Repintar engorda el trazo sin deformar el glifo. Probado en placa por
+// usakomint, que comparo las dos opciones en japones.
+// El teclado de apodos es solo alfabeto (se deja asi a proposito), de modo que
+// aqui nunca hay CJK y no hace falta engordar nada.
+void printT(char c) { gfx->print(c); }
+
+void printT(const char *s) {
+  if (gCjkFont) {
+    int16_t x = gfx->getCursorX(), y = gfx->getCursorY();
+    gfx->print(s);
+    gfx->setCursor(x + 1, y);
+  }
+  gfx->print(s);
+}
 
 void render() {
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial (prioridad total)
@@ -948,7 +1012,7 @@ void render() {
       gfx->setTextColor(pet.eggRarity() == R_LEGENDARIO ? UI_BAR_WARN : 0x4C98);
       setSize(2);
       setCur(centerX(rar, 2), 316);
-      gfx->print(rar);
+      printT(rar);
     }
     char reg[24];
     snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount());
@@ -956,7 +1020,7 @@ void render() {
     gfx->setTextColor(inkColor());
     setSize(2);
     setCur(centerX(reg, 2), 348);
-    gfx->print(reg);
+    printT(reg);
   } else {
     const DexEntry &d = DEX_TBL[pet.speciesId];
     char name[28];
@@ -981,7 +1045,7 @@ void render() {
     gfx->setTextColor(UI_INK_NIGHT);
     setSize(3);
     setCur(320, 130);
-    gfx->print("Zz");
+    printT("Zz");
   }
 
   // selector de comida
@@ -1010,14 +1074,14 @@ void render() {
       gfx->setTextColor(UI_INK);
       setSize(2);
       setCur(centerX(q, 2), 196);
-      gfx->print(q);
+      printT(q);
       gfx->fillRoundRect(118, 252, 100, 52, 12, UI_BAR_OK);
       gfx->setTextColor(UI_WHITE);
       setCur(118 + (100 - textW(T(S_YES), 2)) / 2, 270);
-      gfx->print(T(S_YES));
+      printT(T(S_YES));
       gfx->fillRoundRect(248, 252, 100, 52, 12, UI_BAR_BAD);
       setCur(248 + (100 - textW(T(S_NO), 2)) / 2, 270);
-      gfx->print(T(S_NO));
+      printT(T(S_NO));
     }
   }
 
@@ -1157,24 +1221,24 @@ void renderSack() {
     gfx->setTextColor(ink);
     setSize(4);
     setCur(centerX(b, 4), 150);
-    gfx->print(b);
+    printT(b);
     char g[18];
     snprintf(g, sizeof(g), T(S_STR_GAIN_FMT), sackGain);
     gfx->setTextColor(UI_BAR_BAD);
     setSize(3);
     setCur(centerX(g, 3), 210);
-    gfx->print(g);
+    printT(g);
     setSize(2);
     if (sackNewHi && sackHits > 0) {
       gfx->setTextColor(UI_BAR_WARN);
       setCur(centerX(T(S_NEW_RECORD), 2), 256);
-      gfx->print(T(S_NEW_RECORD));
+      printT(T(S_NEW_RECORD));
     } else {
       char r[18];
       snprintf(r, sizeof(r), T(S_RECORD_FMT), pet.strHi);
       gfx->setTextColor(ink);
       setCur(centerX(r, 2), 256);
-      gfx->print(r);
+      printT(r);
     }
     gfx->flush();
     return;
@@ -1207,11 +1271,11 @@ void renderSack() {
   gfx->setTextColor(ink);
   setSize(6);
   setCur(centerX(buf, 6), 268);
-  gfx->print(buf);
+  printT(buf);
 
   setSize(2);
   setCur(centerX(T(S_HIT_FAST), 2), 322);
-  gfx->print(T(S_HIT_FAST));
+  printT(T(S_HIT_FAST));
 
   // barra de tiempo
   uint32_t left = sackUntil - now;
@@ -1260,23 +1324,23 @@ void renderGame() {
     gfx->setTextColor(ink);
     setSize(4);
     setCur(centerX(buf, 4), 160);
-    gfx->print(buf);
+    printT(buf);
     setSize(2);
     if (gameNewHi && gameScore > 0) {
       gfx->setTextColor(UI_BAR_WARN);
       setCur(centerX(T(S_NEW_RECORD), 2), 214);
-      gfx->print(T(S_NEW_RECORD));
+      printT(T(S_NEW_RECORD));
     } else {
       char rec[20];
       snprintf(rec, sizeof(rec), T(S_RECORD_FMT), pet.gameHi);
       gfx->setTextColor(ink);
       setCur(centerX(rec, 2), 214);
-      gfx->print(rec);
+      printT(rec);
     }
     const char *msg = gameScore >= 10 ? T(S_GREAT_JOY) : T(S_PLUS_JOY);
     gfx->setTextColor(ink);
     setCur(centerX(msg, 2), 250);
-    gfx->print(msg);
+    printT(msg);
     gfx->flush();
     return;
   }
@@ -1290,12 +1354,12 @@ void renderGame() {
   gfx->setTextColor(ink);
   setSize(4);
   setCur(centerX(buf, 4), 30);
-  gfx->print(buf);
+  printT(buf);
   char rec[12];
   snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameHi);
   setSize(2);
   setCur(centerX(rec, 2), 76);
-  gfx->print(rec);
+  printT(rec);
   for (int i = 0; i < 3; i++) {
     if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
     else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
@@ -1336,20 +1400,38 @@ void renderGame() {
 
 // ---------- ficha del bicho (deslizar vertical) ----------
 
+// x donde arrancan las barras de la ficha. Estaba fijo en 150, que daba de sobra
+// para etiquetas latinas de 3 caracteres pero no para las japonesas, mas anchas:
+// こうげき se metia dentro de la barra. Se calcula a partir de la etiqueta mas
+// larga para que las cuatro barras sigan alineadas en cualquier idioma, con el
+// valor original como suelo (asi en los idiomas latinos no cambia nada).
+// Requiere tener ya puesto el tamano de texto 2, porque textW() lo necesita.
+static int statBarX() {
+  const StrId ids[] = { S_STAT_ATK, S_STAT_DEF, S_STAT_SPE, S_STAT_WGT, S_VIN };
+  int ancho = 0;
+  for (StrId id : ids) {
+    int w = textW(T(id), 2);
+    if (w > ancho) ancho = w;
+  }
+  int x = 96 + ancho + 12;   // 12 px de aire entre etiqueta y barra
+  return x < 150 ? 150 : x;
+}
+
 void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color) {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(96, y);
-  gfx->print(label);
+  printT(label);
   char num[8];
   snprintf(num, sizeof(num), "%u", val);
   setCur(330, y);
-  gfx->print(num);
-  int bw = 160;
+  printT(num);
+  int bx = statBarX();
+  int bw = 310 - bx;   // la barra siempre acaba en 310, dejando aire hasta el numero
   int fw = (int)val * bw / maxBar;
   if (fw > bw) fw = bw;
-  gfx->fillRoundRect(150, y + 2, bw, 11, 3, UI_TRACK);
-  if (fw > 2) gfx->fillRoundRect(150, y + 2, fw, 11, 3, color);
+  gfx->fillRoundRect(bx, y + 2, bw, 11, 3, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(bx, y + 2, fw, 11, 3, color);
 }
 
 // ---------- ajuste de hora en pantalla (deslizar abajo) ----------
@@ -1377,7 +1459,7 @@ void drawClockBtn(int x, int y, const char *l) {
   gfx->setTextColor(UI_INK);
   setSize(4);
   setCur(x + 17, y + 15);
-  gfx->print(l);
+  printT(l);
 }
 
 // pildoras de idioma centradas en y; rellena la activa
@@ -1385,7 +1467,7 @@ void drawClockBtn(int x, int y, const char *l) {
 #define LANG_PILL_H 30
 #define LANG_PILL_X 336          // pildora de idioma (cicla los 6 al tocar)
 #define LANG_PILL_W 96
-static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT" };
+static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA" };
 
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
@@ -1393,13 +1475,13 @@ void renderClock() {
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(T(S_SET_TIME), 3), 44);
-  gfx->print(T(S_SET_TIME));
+  printT(T(S_SET_TIME));
 
   char t[8];
   snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
   setSize(7);
   setCur(CX - 105, 108);
-  gfx->print(t);
+  printT(t);
 
   drawClockBtn(104, 190, "-");  // hora -
   drawClockBtn(170, 190, "+");  // hora +
@@ -1408,9 +1490,9 @@ void renderClock() {
   setSize(2);
   gfx->setTextColor(UI_TRACK);
   setCur(120, 256);
-  gfx->print(T(S_HOUR));
+  printT(T(S_HOUR));
   setCur(276, 256);
-  gfx->print(T(S_MIN));
+  printT(T(S_MIN));
 
   // interruptor de sonido (izquierda de la fila de idioma)
   bool snd = audioEnabled();
@@ -1420,7 +1502,7 @@ void renderClock() {
   gfx->setTextColor(snd ? UI_BG_DAY : UI_INK);
   setSize(2);
   setCur(34 + (96 - textW(sl, 2)) / 2, LANG_PILL_Y + 8);
-  gfx->print(sl);
+  printT(sl);
 
   // selector de idioma: una pildora que cicla los 6 idiomas al tocar
   gfx->fillRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_WHITE);
@@ -1430,25 +1512,25 @@ void renderClock() {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
-  gfx->print(lp);
+  printT(lp);
 
   gfx->fillRoundRect(133, 340, 200, 48, 14, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   setSize(3);
   setCur(CX - 18, 352);
-  gfx->print("OK");
+  printT("OK");
 
   gfx->setTextColor(UI_TRACK);
   setSize(2);
   setCur(centerX(T(S_CLOCK_CANCEL), 2), 410);
-  gfx->print(T(S_CLOCK_CANCEL));
+  printT(T(S_CLOCK_CANCEL));
 
   // version del firmware (discreta, abajo del todo)
   char ver[20];
   snprintf(ver, sizeof(ver), "TamaPoke v%s", FW_VERSION);
   setSize(1);
   setCur(centerX(ver, 1), 436);
-  gfx->print(ver);
+  printT(ver);
   gfx->flush();
 }
 
@@ -1468,6 +1550,7 @@ void clockTap(int16_t x, int16_t y) {
     }
     if (x >= LANG_PILL_X && x < LANG_PILL_X + LANG_PILL_W) {  // cicla idioma
       setLang((Lang)((gLang + 1) % LANG_COUNT));
+      applyLangFont();  // la fuente cambia con el idioma
       sfxPlay(SFX_TAP);
       return;
     }
@@ -1486,7 +1569,7 @@ void drawStreakBadge() {
   gfx->setTextColor(inkColor());
   setSize(2);
   setCur(x + 22, y + 2);
-  gfx->print(s);
+  printT(s);
 }
 
 // banner temporal: medalla nueva o hito de racha
@@ -1508,10 +1591,10 @@ void drawCelebration() {
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(l1, 3), 176);
-  gfx->print(l1);
+  printT(l1);
   setSize(2);
   setCur(centerX(l2, 2), 212);
-  gfx->print(l2);
+  printT(l2);
 }
 
 // medallas en la ficha: badge con etiqueta, color si conseguida
@@ -1522,7 +1605,7 @@ void drawMedalBadge(int x, int y, int i) {
   gfx->setTextColor(got ? UI_BG_DAY : 0x9492);
   setSize(2);
   setCur(x + (100 - textW(medalLabel(i), 2)) / 2, y + 5);
-  gfx->print(medalLabel(i));
+  printT(medalLabel(i));
 }
 
 // pagina 0: perfil (retrato grande, identidad, racha, vinculo, baya)
@@ -1538,13 +1621,15 @@ void renderCardProfile() {
   int hts = (hlen <= 11) ? 3 : 2;
   setSize(hts);
   setCur(CX - hlen * (hts == 3 ? 9 : 6), hts == 3 ? 34 : 40);
-  gfx->print(head);
+  printT(head);
   if (pet.nick[0]) {  // especie real bajo el apodo
     const char *sp = dexName(pet.speciesId);
     gfx->setTextColor(UI_TRACK);
     setSize(2);
     setCur(CX - (strlen(sp) + 2) * 6, 64);
-    gfx->printf("(%s)", sp);
+    char par[32];
+    snprintf(par, sizeof(par), "(%s)", sp);
+    printT(par);
   }
 
   // retrato grande animado
@@ -1559,7 +1644,7 @@ void renderCardProfile() {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(sx + 24, sy + 2);
-  gfx->print(rl);
+  printT(rl);
 
   drawCardStat(258, T(S_VIN), pet.bond, 100, C565(0xd4, 0x52, 0x7e));
 
@@ -1573,11 +1658,11 @@ void renderCardProfile() {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(centerX(info, 2), 296);
-  gfx->print(info);
+  printT(info);
 
   gfx->setTextColor(UI_TRACK);
   setCur(centerX(T(S_RENAME_HINT), 2), 332);
-  gfx->print(T(S_RENAME_HINT));
+  printT(T(S_RENAME_HINT));
 }
 
 // pagina 1: combate (4 barras + boton de entrenar)
@@ -1585,7 +1670,7 @@ void renderCardStats() {
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(T(S_BATTLE), 3), 48);
-  gfx->print(T(S_BATTLE));
+  printT(T(S_BATTLE));
 
   drawCardStat(118, T(S_STAT_ATK), pet.atkStat(), 260, UI_BAR_BAD);
   drawCardStat(160, T(S_STAT_DEF), pet.defStat(), 260, 0x4C98);
@@ -1597,7 +1682,7 @@ void renderCardStats() {
   gfx->setTextColor(UI_BG_DAY);
   setSize(2);
   setCur(centerX(T(S_TRAIN_STR), 2), 311);
-  gfx->print(T(S_TRAIN_STR));
+  printT(T(S_TRAIN_STR));
 }
 
 // pagina 2: medallas con etiqueta descriptiva
@@ -1610,7 +1695,7 @@ void renderCardMedals() {
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(head, 3), 48);
-  gfx->print(head);
+  printT(head);
 
   for (int i = 0; i < MED_COUNT; i++) {
     int x = 28 + (i % 2) * 206, y = 104 + (i / 2) * 54;
@@ -1621,12 +1706,12 @@ void renderCardMedals() {
       gfx->setTextColor(UI_BAR_OK);
       setSize(2);
       setCur(x + 16, y + 13);
-      gfx->print("v");
+      printT("v");
     }
     gfx->setTextColor(g ? UI_BG_DAY : 0x8410);
     setSize(2);
     setCur(x + 44, y + 14);
-    gfx->print(medalDesc(i));
+    printT(medalDesc(i));
   }
 }
 
@@ -1637,14 +1722,14 @@ void renderCardProgress() {
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(T(S_PROGRESS), 3), 44);
-  gfx->print(T(S_PROGRESS));
+  printT(T(S_PROGRESS));
 
   // nivel grande
   char lv[10];
   snprintf(lv, sizeof(lv), T(S_LVL_FMT), pet.level());
   setSize(5);
   setCur(centerX(lv, 5), 86);
-  gfx->print(lv);
+  printT(lv);
 
   // barra de progreso al siguiente nivel (1 nivel = 60 min de juego)
   uint8_t into = pet.ageMinutes % MINUTES_PER_LEVEL;
@@ -1657,12 +1742,12 @@ void renderCardProgress() {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(centerX(nx, 2), by + 32);
-  gfx->print(nx);
+  printT(nx);
 
   // estado de evolucion
   gfx->setTextColor(UI_TRACK);
   setCur(centerX(T(S_EVO_LABEL), 2), 230);
-  gfx->print(T(S_EVO_LABEL));
+  printT(T(S_EVO_LABEL));
   char evoBuf[28];
   const char *evo;
   uint16_t evoCol = UI_INK;
@@ -1680,14 +1765,14 @@ void renderCardProgress() {
   }
   gfx->setTextColor(evoCol);
   setCur(centerX(evo, 2), 256);
-  gfx->print(evo);
+  printT(evo);
 
   // descuidos (retrasan la evolucion)
   char ms[24];
   snprintf(ms, sizeof(ms), T(S_MISTAKES_FMT), pet.careMistakes);
   gfx->setTextColor(pet.careMistakes > 0 ? UI_BAR_BAD : UI_INK);
   setCur(centerX(ms, 2), 312);
-  gfx->print(ms);
+  printT(ms);
 }
 
 void renderCard() {
@@ -1706,7 +1791,7 @@ void renderCard() {
   gfx->setTextColor(UI_TRACK);
   setSize(2);
   setCur(centerX(T(S_BACK), 2), 398);
-  gfx->print(T(S_BACK));
+  printT(T(S_BACK));
   gfx->flush();
 }
 
@@ -1732,13 +1817,13 @@ void renderKeyboard() {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(centerX(T(S_NAME), 2), 56);
-  gfx->print(T(S_NAME));
+  printT(T(S_NAME));
   // buffer actual
   gfx->fillRoundRect(83, 84, 300, 40, 8, UI_WHITE);
   gfx->drawRoundRect(83, 84, 300, 40, 8, UI_INK);
   setSize(3);
   setCur(95, 94);
-  gfx->print(nameLen ? nameBuf : "_");
+  printT(nameLen ? nameBuf : "_");
 
   for (int i = 0; i < 30; i++) {
     int x = KB_X + (i % KB_COLS) * KB_W, y = KB_Y + (i / KB_COLS) * KB_H;
@@ -1749,11 +1834,11 @@ void renderKeyboard() {
     setSize(2);
     if (i < 28) {
       setCur(x + KB_W / 2 - 9, y + KB_H / 2 - 10);
-      gfx->print(KB_KEYS[i]);
+      printT(KB_KEYS[i]);
     } else {
       const char *lab = (i == 28) ? "<-" : "OK";
       setCur(x + KB_W / 2 - 15, y + KB_H / 2 - 10);
-      gfx->print(lab);
+      printT(lab);
     }
   }
   gfx->flush();
@@ -1816,7 +1901,7 @@ void renderGallery() {
     int gts = (glen <= 13) ? 3 : 2;  // auto-encoge nombres largos (no caben a t3)
     setSize(gts);
     setCur(CX - glen * (gts == 3 ? 9 : 6), gts == 3 ? 56 : 60);
-    gfx->print(head);
+    printT(head);
     if (galleryPmd.loaded) {
       // animado y a color si esta registrado; silueta estatica si no (estilo "?")
       drawPmdActM(galleryPmd, PMD_IDLE, CX, 300, reg ? millis() : 0, true, !reg, 6);
@@ -1827,7 +1912,7 @@ void renderGallery() {
     gfx->setTextColor(UI_INK);
     setSize(2);
     setCur(centerX(T(S_DETAIL_BACK), 2), 408);
-    gfx->print(T(S_DETAIL_BACK));
+    printT(T(S_DETAIL_BACK));
     gfx->flush();
     return;
   }
@@ -1842,7 +1927,7 @@ void renderGallery() {
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(head, 3), 36);
-  gfx->print(head);
+  printT(head);
 
   for (int r = 0; r < 4; r++) {
     for (int c = 0; c < 4; c++) {
@@ -1856,7 +1941,7 @@ void renderGallery() {
           gfx->setTextColor(UI_BAR_WARN);
           setSize(2);
           setCur(x + 62, y + 4);
-          gfx->print("*");
+          printT("*");
         }
       } else {
         char num[6];
@@ -1864,7 +1949,7 @@ void renderGallery() {
         gfx->setTextColor(UI_TRACK);
         setSize(2);
         setCur(x + 24, y + 32);
-        gfx->print(num);
+        printT(num);
       }
     }
   }
@@ -1926,11 +2011,11 @@ void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
   gfx->setTextColor(nameColor);
   setSize(3);
   setCur(centerX(name, 3), 52);
-  gfx->print(name);
+  printT(name);
   gfx->setTextColor(inkColor());
   setSize(2);
   setCur(centerX(msg, 2), 90);
-  gfx->print(msg);
+  printT(msg);
 }
 
 // animacion de la ceremonia (10s): despedida = reverencia con corazones y se
@@ -2009,15 +2094,15 @@ void drawChoiceDialog() {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(centerX(q, 2), 176);
-  gfx->print(q);
+  printT(q);
   gfx->fillRoundRect(93, 206, 280, 52, 12, c1);     // boton accion
   gfx->setTextColor(t1);
   setCur(centerX(o1, 2), 224);
-  gfx->print(o1);
+  printT(o1);
   gfx->fillRoundRect(93, 268, 280, 52, 12, c2);     // boton mantener/quedaros
   gfx->setTextColor(t2);
   setCur(centerX(o2, 2), 286);
-  gfx->print(o2);
+  printT(o2);
 }
 
 // boton-CTA rojo y grande para evolucionar (pulsa para llamar la atencion)
@@ -2032,7 +2117,7 @@ void drawEvolveButton() {
   setSize(3);
   const char *t = T(S_EVO_TAP);
   setCur(centerX(t, 3), y + h / 2 - 11);
-  gfx->print(t);
+  printT(t);
 }
 
 // boton-CTA dorado de despedida: "<nombre> quiere decirte algo..."
@@ -2048,7 +2133,7 @@ void drawFarewellButton() {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(centerX(buf, 2), y + h / 2 - 8);
-  gfx->print(buf);
+  printT(buf);
 }
 
 // boton-CTA sombrio de escapada por abandono: "<nombre> se siente abandonado..."
@@ -2065,7 +2150,7 @@ void drawRunawayButton() {
   gfx->setTextColor(C565(0xc8, 0xd2, 0xe0));
   setSize(2);
   setCur(centerX(buf, 2), y + h / 2 - 8);
-  gfx->print(buf);
+  printT(buf);
 }
 
 // animacion epica de evolucion: halo radial + rayos giratorios + parpadeo del
@@ -2119,14 +2204,14 @@ void drawPet() {
     gfx->setTextColor(inkColor());
     setSize(6);
     setCur(CX - 18, PET_CY - 80);
-    gfx->print("?");
+    printT("?");
     setSize(2);
     const char *l1 = T(S_NO_SPRITES);
     setCur(centerX(l1, 2), PET_CY - 4);
-    gfx->print(l1);
+    printT(l1);
     const char *l2 = T(S_LOAD_SPRITES);
     setCur(centerX(l2, 2), PET_CY + 20);
-    gfx->print(l2);
+    printT(l2);
     return;
   }
   const Species &sp = SPECIES[fi];
@@ -2404,12 +2489,35 @@ void drawBars() {
   drawBar(244, 346, T(S_BAR_HYG), pet.hygiene);
 }
 
+// Separacion entre la etiqueta y su barra en la fila de necesidades. Estaba fija
+// en 48 px, justo lo que ocupan 4 letras latinas a escala 2, sin margen. Las
+// etiquetas japonesas son mas anchas (ごきげん son 4 kana, ~64 px) y se metian
+// dentro de la barra. Se deriva de la etiqueta mas larga, con el 48 de suelo
+// para que en los idiomas latinos no cambie nada.
+// Requiere el tamano de texto 2 ya puesto, porque textW() lo necesita.
+static int barLabelGap() {
+  const StrId ids[] = { S_BAR_FOOD, S_BAR_JOY, S_BAR_ENE, S_BAR_HYG };
+  int ancho = 0;
+  for (StrId id : ids) {
+    int w = textW(T(id), 2);
+    if (w > ancho) ancho = w;
+  }
+  // por debajo del umbral original se deja EXACTAMENTE 48, para no mover nada en
+  // los idiomas latinos; por encima se anade aire para que la etiqueta respire
+  return ancho <= 48 ? 48 : ancho + 8;
+}
+
 void drawBar(int x, int y, const char *label, uint8_t val) {
   gfx->setTextColor(inkColor());
   setSize(2);
   setCur(x, y);
-  gfx->print(label);
-  int bx = x + 48, bw = 100, bh = 15;  // +48: deja sitio a etiquetas de 4 letras (EN)
+  printT(label);
+  int gap = barLabelGap();
+  // las dos columnas empiezan en 78 y 244: la barra de la primera tiene que
+  // acabar antes de la etiqueta de la segunda, y ambas se pintan igual de anchas
+  int bw = 232 - (78 + gap);
+  if (bw > 100) bw = 100;   // con etiquetas latinas sale 100, como estaba
+  int bx = x + gap, bh = 15;
   uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= 25) ? UI_BAR_WARN : UI_BAR_BAD;
   gfx->fillRoundRect(bx, y, bw, bh, 4, UI_TRACK);
   int fw = (bw - 4) * val / 100;
