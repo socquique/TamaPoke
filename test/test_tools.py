@@ -117,14 +117,23 @@ class TestDexData(unittest.TestCase):
             for v in (hp, atk, dfn, spe):
                 self.assertTrue(0 < v <= 255, f'stat fuera de rango en {self.byNum[num][2]}: {v}')
 
-    def test_los_nombres_traducidos_son_ascii_en_mayusculas(self):
+    def test_los_nombres_traducidos_cuadran_con_su_fuente(self):
+        # Los latinos se pintan con la fuente CP437 (un byte por caracter, sin
+        # minusculas en los nombres); el japones con una fuente U8g2 y va en
+        # katakana UTF-8, asi que ni es ASCII ni tiene mayusculas que comprobar.
+        LATINOS, CJK = ('fr', 'de'), ('ja',)
         for num, langs in self.NAMES.items():
             self.assertIn(num, self.byNum, f'nombre traducido de una especie inexistente: {num}')
             for lang, name in langs.items():
-                self.assertIn(lang, ('fr', 'de'), f'idioma inesperado: {lang}')
-                self.assertTrue(name.isascii(), f'{num} {lang} no es ASCII: {name}')
-                self.assertEqual(name, name.upper(), f'{num} {lang} lleva minusculas: {name}')
-                self.assertLessEqual(len(name), 12, f'{num} {lang} no cabe en pantalla: {name}')
+                self.assertIn(lang, LATINOS + CJK, f'idioma inesperado: {lang}')
+                self.assertTrue(name, f'{num} {lang} vacio')
+                if lang in LATINOS:
+                    self.assertTrue(name.isascii(), f'{num} {lang} no es ASCII: {name}')
+                    self.assertEqual(name, name.upper(), f'{num} {lang} lleva minusculas: {name}')
+                    self.assertLessEqual(len(name), 12, f'{num} {lang} no cabe en pantalla: {name}')
+                else:
+                    # el limite util son CARACTERES, no bytes: en UTF-8 cada kana ocupa 3
+                    self.assertLessEqual(len(name), 8, f'{num} {lang} no cabe en pantalla: {name}')
 
 
 class TestGeneratedFiles(unittest.TestCase):

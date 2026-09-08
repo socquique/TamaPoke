@@ -3,10 +3,10 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://socquique.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.14-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.15-8A2BE2)
 [![CI](https://github.com/socquique/TamaPoke/actions/workflows/ci.yml/badge.svg)](https://github.com/socquique/TamaPoke/actions/workflows/ci.yml)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
-![Languages](https://img.shields.io/badge/languages-6-FFCB05)
+![Languages](https://img.shields.io/badge/languages-7-FFCB05)
 [![Stars](https://img.shields.io/github/stars/socquique/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/socquique/TamaPoke/stargazers)
 
 A gen-1-Pokémon-inspired tamagotchi for the
@@ -140,6 +140,7 @@ SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the r
 | GFX Library for Arduino (`Arduino_GFX`) | moononournation | CO5300 over QSPI + framebuffer in PSRAM |
 | SensorLib | Lewis He | CST9217 touch + PCF85063 RTC |
 | XPowersLib | Lewis He | AXP2101 PMU (battery, brightness, PWR button) |
+| U8g2 | olikraus | CJK glyphs (Japanese); only the font data is used, not its display driver |
 | ESP_I2S (bundled in the ESP32 core) | Espressif | I2S to the ES8311 codec |
 
 ## IDE setup / build
@@ -294,8 +295,9 @@ The egg rolls rarity over the ~79 base forms (47 common / 27 rare / 5 legendary)
 a farewell and punished by a runaway. Legendaries only with 25+ registered.
 **Shiny** 1/48 (better with streak/bond/farewell).
 
-**Languages:** the UI ships in 6 languages — English (default), Spanish, French,
-German, Italian, Portuguese — switchable from the settings screen (swipe down).
+**Languages:** the UI ships in 7 languages — English (default), Spanish, French,
+German, Italian, Portuguese and Japanese — switchable from the settings screen
+(swipe down).
 **Pokémon names are localized too**: French and German show the official names
 (Bulbizarre, Bisasam...); the other languages use the English ones, which is what
 those regions officially use for gen 1.
