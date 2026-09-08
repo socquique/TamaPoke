@@ -13,6 +13,7 @@
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
 #include "TouchDrvCSTXXX.hpp"
+#include <U8g2lib.h>  // fuentes CJK (japones); ver applyLangFont()
 #include "pin_config.h"
 #include "species.h"
 #include "dex.h"
@@ -188,6 +189,7 @@ void setup() {
   // botella del fps (~56ms a 40MHz). Si el panel mostrara basura, bajar a 40M.
   if (!gfx->begin(80000000)) Serial.println("gfx->begin() fallo");
   panel->setBrightness(180);
+  applyLangFont();  // fuente del idioma guardado (clasica salvo CJK)
 
   touch.setPins(TP_RESET, TP_INT);
   bool touchOk = false;
@@ -869,6 +871,32 @@ void setCur(int x, int y) {
   gfx->setCursor(x, y + gFontAscent * gTextSize);
 }
 
+// Fija la fuente del idioma activo. Es el UNICO sitio que la toca: el resto del
+// codigo dibuja igual para todos los idiomas gracias a textW()/setCur().
+//
+// El ascenso se mide en vez de codificarlo: getTextBounds() devuelve y1 como
+// desplazamiento del borde superior respecto al cursor, negativo con las fuentes
+// U8g2 (que anclan en la linea base). Asi setCur() puede seguir tratando la Y
+// como "arriba" sea cual sea la fuente, sin constantes magicas por fuente.
+void applyLangFont() {
+  gCjkFont = LANG_IS_CJK(gLang);
+  if (!gCjkFont) {
+    gfx->setFont();            // 5x7 clasica, CP437: la Y ya es el borde superior
+    gfx->setUTF8Print(false);
+    gFontAscent = 0;
+    return;
+  }
+  gfx->setFont(u8g2_font_unifont_t_japanese1);
+  gfx->setUTF8Print(true);     // las cadenas japonesas son UTF-8 multibyte
+  int16_t x1, y1;
+  uint16_t w, h;
+  uint8_t antes = gTextSize;
+  gfx->setTextSize(1);
+  gfx->getTextBounds("A", 0, 0, &x1, &y1, &w, &h);
+  gFontAscent = -y1;           // y1 negativo: subir desde la linea base
+  gfx->setTextSize(antes);
+}
+
 // ---------- medida de texto (preparado para fuentes CJK) ----------
 // La fuente clasica de Arduino_GFX avanza 6 px por caracter a tamano 1, y la UI
 // centraba con strlen(s)*6*n a pelo. Eso solo vale para un byte por caracter y
@@ -1385,7 +1413,7 @@ void drawClockBtn(int x, int y, const char *l) {
 #define LANG_PILL_H 30
 #define LANG_PILL_X 336          // pildora de idioma (cicla los 6 al tocar)
 #define LANG_PILL_W 96
-static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT" };
+static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA" };
 
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
@@ -1468,6 +1496,7 @@ void clockTap(int16_t x, int16_t y) {
     }
     if (x >= LANG_PILL_X && x < LANG_PILL_X + LANG_PILL_W) {  // cicla idioma
       setLang((Lang)((gLang + 1) % LANG_COUNT));
+      applyLangFont();  // la fuente cambia con el idioma
       sfxPlay(SFX_TAP);
       return;
     }
