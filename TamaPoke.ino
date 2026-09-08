@@ -862,9 +862,16 @@ void renderStarterSelect() {
 uint8_t gTextSize = 1;
 int gFontAscent = 0;  // px del borde superior a la linea base, 0 = fuente clasica
 
+// La fuente clasica mide 8 px de alto a escala 1; la unifont CJK mide 16. Con la
+// misma escala el texto japones salia AL DOBLE de tamano, muy visible en las
+// pantallas que usan escalas altas. Se divide para compensar, con minimo 1.
+#define CJK_SIZE_DIV 2
+
 void setSize(uint8_t n) {
-  gTextSize = n;
-  gfx->setTextSize(n);
+  // gTextSize guarda la escala REALMENTE aplicada, no la pedida: setCur()
+  // multiplica el ascenso por ella y tiene que cuadrar con lo que se pinta.
+  gTextSize = gCjkFont ? (n >= CJK_SIZE_DIV ? n / CJK_SIZE_DIV : 1) : n;
+  gfx->setTextSize(gTextSize);
 }
 
 void setCur(int x, int y) {
