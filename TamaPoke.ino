@@ -862,10 +862,20 @@ void renderStarterSelect() {
 uint8_t gTextSize = 1;
 int gFontAscent = 0;  // px del borde superior a la linea base, 0 = fuente clasica
 
-// La fuente clasica mide 8 px de alto a escala 1; la unifont CJK mide 16. Con la
-// misma escala el texto japones salia AL DOBLE de tamano, muy visible en las
-// pantallas que usan escalas altas. Se divide para compensar, con minimo 1.
-#define CJK_SIZE_DIV 2
+// --- ajuste de la fuente CJK (los dos valores van juntos) ---
+// La fuente clasica mide 8 px de alto a escala 1. Si la CJK mide mas, hay que
+// dividir la escala para que los tamanos cuadren... pero dividir ADELGAZA el
+// trazo: a escala 1 la unifont pinta lineas de 1 px mientras el latino a escala
+// 2 las pinta de 2, y el japones se ve tenue aunque mida igual.
+//
+// Por eso conviene una fuente base pequena Y EN NEGRITA (_b_), que permita usar
+// la MISMA escala que el latino: asi el grosor coincide y no hay que dividir.
+//
+//   b10_b (10px, negrita) + DIV 1 -> mismo grosor, 25% mas alto que el latino
+//   b12_b (12px, negrita) + DIV 1 -> mismo grosor, 50% mas alto
+//   unifont (16px)        + DIV 2 -> altura exacta en escalas pares, trazo fino
+#define CJK_FONT u8g2_font_b10_b_t_japanese1
+#define CJK_SIZE_DIV 1
 
 void setSize(uint8_t n) {
   // gTextSize guarda la escala REALMENTE aplicada, no la pedida: setCur()
@@ -893,7 +903,7 @@ void applyLangFont() {
     gFontAscent = 0;
     return;
   }
-  gfx->setFont(u8g2_font_unifont_t_japanese1);
+  gfx->setFont(CJK_FONT);
   gfx->setUTF8Print(true);     // las cadenas japonesas son UTF-8 multibyte
   int16_t x1, y1;
   uint16_t w, h;

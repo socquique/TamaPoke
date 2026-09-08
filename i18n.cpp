@@ -222,7 +222,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
 
     "きろく %u",
 
-    "せいちょう", "Lv.%u", "Lv.%uまで %uふん", "しんか", "さいしゅうけい",
+    "せいちょう", "Lv.%u", "あと%uふんで Lv.%u", "しんか", "さいしゅうけい",
 
     "しんかできる！", "ぜんぶ40でしんか",
 

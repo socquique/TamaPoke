@@ -175,8 +175,9 @@ static const DexEntry DEX_TBL[DEX_COUNT + 1] = {
   { "MEW", 0, 0, R_LEGENDARIO, 0xD28F, 100, 100, 100, 100, 0 },  // 151 psiquico
 };
 
-// Nombres oficiales de FR y DE (en gen 1 son los unicos que difieren del
-// ingles; ES/IT/PT usan el de DEX_TBL). nullptr = sin nombre propio.
+// Nombres oficiales por idioma. FR y DE son los unicos latinos que difieren
+// del ingles en gen 1 (ES/IT/PT usan el de DEX_TBL); JA va en katakana UTF-8,
+// que se pinta con la fuente U8g2. nullptr = sin nombre propio.
 static const char *const DEX_NAME_FR[DEX_COUNT + 1] = {
   nullptr, "BULBIZARRE", "HERBIZARRE", "FLORIZARRE",
   "SALAMECHE", "REPTINCEL", "DRACAUFEU", "CARAPUCE",
@@ -259,12 +260,54 @@ static const char *const DEX_NAME_DE[DEX_COUNT + 1] = {
   "DRAGONIR", "DRAGORAN", "MEWTU", nullptr,
 };
 
+static const char *const DEX_NAME_JA[DEX_COUNT + 1] = {
+  nullptr, "フシギダネ", "フシギソウ", "フシギバナ",
+  "ヒトカゲ", "リザード", "リザードン", "ゼニガメ",
+  "カメール", "カメックス", "キャタピー", "トランセル",
+  "バタフリー", "ビードル", "コクーン", "スピアー",
+  "ポッポ", "ピジョン", "ピジョット", "コラッタ",
+  "ラッタ", "オニスズメ", "オニドリル", "アーボ",
+  "アーボック", "ピカチュウ", "ライチュウ", "サンド",
+  "サンドパン", "ニドラン♀", "ニドリーナ", "ニドクイン",
+  "ニドラン♂", "ニドリーノ", "ニドキング", "ピッピ",
+  "ピクシー", "ロコン", "キュウコン", "プリン",
+  "プクリン", "ズバット", "ゴルバット", "ナゾノクサ",
+  "クサイハナ", "ラフレシア", "パラス", "パラセクト",
+  "コンパン", "モルフォン", "ディグダ", "ダグトリオ",
+  "ニャース", "ペルシアン", "コダック", "ゴルダック",
+  "マンキー", "オコリザル", "ガーディ", "ウインディ",
+  "ニョロモ", "ニョロゾ", "ニョロボン", "ケーシィ",
+  "ユンゲラー", "フーディン", "ワンリキー", "ゴーリキー",
+  "カイリキー", "マダツボミ", "ウツドン", "ウツボット",
+  "メノクラゲ", "ドククラゲ", "イシツブテ", "ゴローン",
+  "ゴローニャ", "ポニータ", "ギャロップ", "ヤドン",
+  "ヤドラン", "コイル", "レアコイル", "カモネギ",
+  "ドードー", "ドードリオ", "パウワウ", "ジュゴン",
+  "ベトベター", "ベトベトン", "シェルダー", "パルシェン",
+  "ゴース", "ゴースト", "ゲンガー", "イワーク",
+  "スリープ", "スリーパー", "クラブ", "キングラー",
+  "ビリリダマ", "マルマイン", "タマタマ", "ナッシー",
+  "カラカラ", "ガラガラ", "サワムラー", "エビワラー",
+  "ベロリンガ", "ドガース", "マタドガス", "サイホーン",
+  "サイドン", "ラッキー", "モンジャラ", "ガルーラ",
+  "タッツー", "シードラ", "トサキント", "アズマオウ",
+  "ヒトデマン", "スターミー", "バリヤード", "ストライク",
+  "ルージュラ", "エレブー", "ブーバー", "カイロス",
+  "ケンタロス", "コイキング", "ギャラドス", "ラプラス",
+  "メタモン", "イーブイ", "シャワーズ", "サンダース",
+  "ブースター", "ポリゴン", "オムナイト", "オムスター",
+  "カブト", "カブトプス", "プテラ", "カビゴン",
+  "フリーザー", "サンダー", "ファイヤー", "ミニリュウ",
+  "ハクリュー", "カイリュー", "ミュウツー", "ミュウ",
+};
+
 // Nombre de la especie en el idioma activo (cae al de DEX_TBL si ese
 // idioma no tiene nombre propio para ella).
 static inline const char *dexName(int16_t dex) {
   if (dex < 1 || dex > DEX_COUNT) return DEX_TBL[0].name;
   const char *n = (gLang == LANG_FR)   ? DEX_NAME_FR[dex]
                   : (gLang == LANG_DE) ? DEX_NAME_DE[dex]
+                  : (gLang == LANG_JA) ? DEX_NAME_JA[dex]
                                        : nullptr;
   return n ? n : DEX_TBL[dex].name;
 }
