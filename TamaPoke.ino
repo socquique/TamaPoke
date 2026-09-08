@@ -2489,12 +2489,35 @@ void drawBars() {
   drawBar(244, 346, T(S_BAR_HYG), pet.hygiene);
 }
 
+// Separacion entre la etiqueta y su barra en la fila de necesidades. Estaba fija
+// en 48 px, justo lo que ocupan 4 letras latinas a escala 2, sin margen. Las
+// etiquetas japonesas son mas anchas (ごきげん son 4 kana, ~64 px) y se metian
+// dentro de la barra. Se deriva de la etiqueta mas larga, con el 48 de suelo
+// para que en los idiomas latinos no cambie nada.
+// Requiere el tamano de texto 2 ya puesto, porque textW() lo necesita.
+static int barLabelGap() {
+  const StrId ids[] = { S_BAR_FOOD, S_BAR_JOY, S_BAR_ENE, S_BAR_HYG };
+  int ancho = 0;
+  for (StrId id : ids) {
+    int w = textW(T(id), 2);
+    if (w > ancho) ancho = w;
+  }
+  // por debajo del umbral original se deja EXACTAMENTE 48, para no mover nada en
+  // los idiomas latinos; por encima se anade aire para que la etiqueta respire
+  return ancho <= 48 ? 48 : ancho + 8;
+}
+
 void drawBar(int x, int y, const char *label, uint8_t val) {
   gfx->setTextColor(inkColor());
   setSize(2);
   setCur(x, y);
   printT(label);
-  int bx = x + 48, bw = 100, bh = 15;  // +48: deja sitio a etiquetas de 4 letras (EN)
+  int gap = barLabelGap();
+  // las dos columnas empiezan en 78 y 244: la barra de la primera tiene que
+  // acabar antes de la etiqueta de la segunda, y ambas se pintan igual de anchas
+  int bw = 232 - (78 + gap);
+  if (bw > 100) bw = 100;   // con etiquetas latinas sale 100, como estaba
+  int bx = x + gap, bh = 15;
   uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= 25) ? UI_BAR_WARN : UI_BAR_BAD;
   gfx->fillRoundRect(bx, y, bw, bh, 4, UI_TRACK);
   int fw = (bw - 4) * val / 100;
