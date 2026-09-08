@@ -826,8 +826,8 @@ void renderStarterSelect() {
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   const char *t = T(S_CHOOSE_STARTER);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(t, 2), 68);
+  setSize(2);
+  setCur(centerX(t, 2), 68);
   gfx->print(t);
   for (int i = 0; i < 3; i++) {
     int16_t d = STARTER_DEX[i];
@@ -838,11 +838,35 @@ void renderStarterSelect() {
     const uint8_t *th = thumbs.get(d);     // miniatura del inicial (si la SD esta lista)
     if (th) drawThumb(th, 76, ry - 5, 3, false);
     gfx->setTextColor(UI_INK);
-    gfx->setTextSize(3);
-    gfx->setCursor(178, ry + 24);
+    setSize(3);
+    setCur(178, ry + 24);
     gfx->print(dexName(d));
   }
   gfx->flush();
+}
+
+// ---------- texto: tamano y cursor (preparado para fuentes CJK) ----------
+// La fuente clasica ancla el cursor en la ESQUINA SUPERIOR del texto, y las 74
+// coordenadas Y del codigo estan escritas asi. Las fuentes U8g2 lo anclan en la
+// LINEA BASE (drawChar hace curY = y - baseline*size), asi que al cambiar de
+// fuente todo el texto subiria. setCur() compensa esa diferencia en un solo
+// sitio, para que la Y siga significando "arriba" con cualquier fuente.
+//
+// setSize() existe solo porque la libreria tiene textsize_x protegido y setCur()
+// necesita saber la escala activa para multiplicar el ascenso.
+//
+// Con la fuente clasica gFontAscent es 0, asi que setCur(x,y) es exactamente
+// setCur(x,y): esto no mueve un pixel en los seis idiomas actuales.
+uint8_t gTextSize = 1;
+int gFontAscent = 0;  // px del borde superior a la linea base, 0 = fuente clasica
+
+void setSize(uint8_t n) {
+  gTextSize = n;
+  gfx->setTextSize(n);
+}
+
+void setCur(int x, int y) {
+  gfx->setCursor(x, y + gFontAscent * gTextSize);
 }
 
 // ---------- medida de texto (preparado para fuentes CJK) ----------
@@ -922,16 +946,16 @@ void render() {
     if (pet.eggRarity() >= R_RARO) {
       const char *rar = (pet.eggRarity() == R_LEGENDARIO) ? T(S_EGG_LEGEND) : T(S_EGG_RARE);
       gfx->setTextColor(pet.eggRarity() == R_LEGENDARIO ? UI_BAR_WARN : 0x4C98);
-      gfx->setTextSize(2);
-      gfx->setCursor(centerX(rar, 2), 316);
+      setSize(2);
+      setCur(centerX(rar, 2), 316);
       gfx->print(rar);
     }
     char reg[24];
     snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount());
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     gfx->setTextColor(inkColor());
-    gfx->setTextSize(2);
-    gfx->setCursor(centerX(reg, 2), 348);
+    setSize(2);
+    setCur(centerX(reg, 2), 348);
     gfx->print(reg);
   } else {
     const DexEntry &d = DEX_TBL[pet.speciesId];
@@ -955,8 +979,8 @@ void render() {
 
   if (pet.sleeping) {
     gfx->setTextColor(UI_INK_NIGHT);
-    gfx->setTextSize(3);
-    gfx->setCursor(320, 130);
+    setSize(3);
+    setCur(320, 130);
     gfx->print("Zz");
   }
 
@@ -984,15 +1008,15 @@ void render() {
       char q[28];
       snprintf(q, sizeof(q), T(S_RELEASE_FMT), dexName(pet.speciesId));
       gfx->setTextColor(UI_INK);
-      gfx->setTextSize(2);
-      gfx->setCursor(centerX(q, 2), 196);
+      setSize(2);
+      setCur(centerX(q, 2), 196);
       gfx->print(q);
       gfx->fillRoundRect(118, 252, 100, 52, 12, UI_BAR_OK);
       gfx->setTextColor(UI_WHITE);
-      gfx->setCursor(118 + (100 - textW(T(S_YES), 2)) / 2, 270);
+      setCur(118 + (100 - textW(T(S_YES), 2)) / 2, 270);
       gfx->print(T(S_YES));
       gfx->fillRoundRect(248, 252, 100, 52, 12, UI_BAR_BAD);
-      gfx->setCursor(248 + (100 - textW(T(S_NO), 2)) / 2, 270);
+      setCur(248 + (100 - textW(T(S_NO), 2)) / 2, 270);
       gfx->print(T(S_NO));
     }
   }
@@ -1131,25 +1155,25 @@ void renderSack() {
     char b[20];
     snprintf(b, sizeof(b), T(S_HITS_FMT), sackHits);
     gfx->setTextColor(ink);
-    gfx->setTextSize(4);
-    gfx->setCursor(centerX(b, 4), 150);
+    setSize(4);
+    setCur(centerX(b, 4), 150);
     gfx->print(b);
     char g[18];
     snprintf(g, sizeof(g), T(S_STR_GAIN_FMT), sackGain);
     gfx->setTextColor(UI_BAR_BAD);
-    gfx->setTextSize(3);
-    gfx->setCursor(centerX(g, 3), 210);
+    setSize(3);
+    setCur(centerX(g, 3), 210);
     gfx->print(g);
-    gfx->setTextSize(2);
+    setSize(2);
     if (sackNewHi && sackHits > 0) {
       gfx->setTextColor(UI_BAR_WARN);
-      gfx->setCursor(centerX(T(S_NEW_RECORD), 2), 256);
+      setCur(centerX(T(S_NEW_RECORD), 2), 256);
       gfx->print(T(S_NEW_RECORD));
     } else {
       char r[18];
       snprintf(r, sizeof(r), T(S_RECORD_FMT), pet.strHi);
       gfx->setTextColor(ink);
-      gfx->setCursor(centerX(r, 2), 256);
+      setCur(centerX(r, 2), 256);
       gfx->print(r);
     }
     gfx->flush();
@@ -1181,12 +1205,12 @@ void renderSack() {
   char buf[8];
   snprintf(buf, sizeof(buf), "%u", sackHits);
   gfx->setTextColor(ink);
-  gfx->setTextSize(6);
-  gfx->setCursor(centerX(buf, 6), 268);
+  setSize(6);
+  setCur(centerX(buf, 6), 268);
   gfx->print(buf);
 
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(T(S_HIT_FAST), 2), 322);
+  setSize(2);
+  setCur(centerX(T(S_HIT_FAST), 2), 322);
   gfx->print(T(S_HIT_FAST));
 
   // barra de tiempo
@@ -1234,24 +1258,24 @@ void renderGame() {
     char buf[22];
     snprintf(buf, sizeof(buf), T(S_SCORE_FMT), gameScore);
     gfx->setTextColor(ink);
-    gfx->setTextSize(4);
-    gfx->setCursor(centerX(buf, 4), 160);
+    setSize(4);
+    setCur(centerX(buf, 4), 160);
     gfx->print(buf);
-    gfx->setTextSize(2);
+    setSize(2);
     if (gameNewHi && gameScore > 0) {
       gfx->setTextColor(UI_BAR_WARN);
-      gfx->setCursor(centerX(T(S_NEW_RECORD), 2), 214);
+      setCur(centerX(T(S_NEW_RECORD), 2), 214);
       gfx->print(T(S_NEW_RECORD));
     } else {
       char rec[20];
       snprintf(rec, sizeof(rec), T(S_RECORD_FMT), pet.gameHi);
       gfx->setTextColor(ink);
-      gfx->setCursor(centerX(rec, 2), 214);
+      setCur(centerX(rec, 2), 214);
       gfx->print(rec);
     }
     const char *msg = gameScore >= 10 ? T(S_GREAT_JOY) : T(S_PLUS_JOY);
     gfx->setTextColor(ink);
-    gfx->setCursor(centerX(msg, 2), 250);
+    setCur(centerX(msg, 2), 250);
     gfx->print(msg);
     gfx->flush();
     return;
@@ -1264,13 +1288,13 @@ void renderGame() {
   char buf[8];
   snprintf(buf, sizeof(buf), "%u", gameScore);
   gfx->setTextColor(ink);
-  gfx->setTextSize(4);
-  gfx->setCursor(centerX(buf, 4), 30);
+  setSize(4);
+  setCur(centerX(buf, 4), 30);
   gfx->print(buf);
   char rec[12];
   snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameHi);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(rec, 2), 76);
+  setSize(2);
+  setCur(centerX(rec, 2), 76);
   gfx->print(rec);
   for (int i = 0; i < 3; i++) {
     if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
@@ -1314,12 +1338,12 @@ void renderGame() {
 
 void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color) {
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(96, y);
+  setSize(2);
+  setCur(96, y);
   gfx->print(label);
   char num[8];
   snprintf(num, sizeof(num), "%u", val);
-  gfx->setCursor(330, y);
+  setCur(330, y);
   gfx->print(num);
   int bw = 160;
   int fw = (int)val * bw / maxBar;
@@ -1351,8 +1375,8 @@ void drawClockBtn(int x, int y, const char *l) {
   gfx->fillRoundRect(x, y, 58, 58, 12, UI_WHITE);
   gfx->drawRoundRect(x, y, 58, 58, 12, UI_INK);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(4);
-  gfx->setCursor(x + 17, y + 15);
+  setSize(4);
+  setCur(x + 17, y + 15);
   gfx->print(l);
 }
 
@@ -1367,25 +1391,25 @@ void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(3);
-  gfx->setCursor(centerX(T(S_SET_TIME), 3), 44);
+  setSize(3);
+  setCur(centerX(T(S_SET_TIME), 3), 44);
   gfx->print(T(S_SET_TIME));
 
   char t[8];
   snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
-  gfx->setTextSize(7);
-  gfx->setCursor(CX - 105, 108);
+  setSize(7);
+  setCur(CX - 105, 108);
   gfx->print(t);
 
   drawClockBtn(104, 190, "-");  // hora -
   drawClockBtn(170, 190, "+");  // hora +
   drawClockBtn(252, 190, "-");  // min -
   drawClockBtn(318, 190, "+");  // min +
-  gfx->setTextSize(2);
+  setSize(2);
   gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(120, 256);
+  setCur(120, 256);
   gfx->print(T(S_HOUR));
-  gfx->setCursor(276, 256);
+  setCur(276, 256);
   gfx->print(T(S_MIN));
 
   // interruptor de sonido (izquierda de la fila de idioma)
@@ -1394,8 +1418,8 @@ void renderClock() {
   gfx->fillRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, snd ? UI_BAR_OK : UI_WHITE);
   gfx->drawRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, UI_INK);
   gfx->setTextColor(snd ? UI_BG_DAY : UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(34 + (96 - textW(sl, 2)) / 2, LANG_PILL_Y + 8);
+  setSize(2);
+  setCur(34 + (96 - textW(sl, 2)) / 2, LANG_PILL_Y + 8);
   gfx->print(sl);
 
   // selector de idioma: una pildora que cicla los 6 idiomas al tocar
@@ -1404,26 +1428,26 @@ void renderClock() {
   char lp[10];
   snprintf(lp, sizeof(lp), "%s >", LANG_CODES[gLang]);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
+  setSize(2);
+  setCur(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
   gfx->print(lp);
 
   gfx->fillRoundRect(133, 340, 200, 48, 14, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
-  gfx->setTextSize(3);
-  gfx->setCursor(CX - 18, 352);
+  setSize(3);
+  setCur(CX - 18, 352);
   gfx->print("OK");
 
   gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(T(S_CLOCK_CANCEL), 2), 410);
+  setSize(2);
+  setCur(centerX(T(S_CLOCK_CANCEL), 2), 410);
   gfx->print(T(S_CLOCK_CANCEL));
 
   // version del firmware (discreta, abajo del todo)
   char ver[20];
   snprintf(ver, sizeof(ver), "TamaPoke v%s", FW_VERSION);
-  gfx->setTextSize(1);
-  gfx->setCursor(centerX(ver, 1), 436);
+  setSize(1);
+  setCur(centerX(ver, 1), 436);
   gfx->print(ver);
   gfx->flush();
 }
@@ -1460,8 +1484,8 @@ void drawStreakBadge() {
   char s[6];
   snprintf(s, sizeof(s), "%u", pet.streak);
   gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(x + 22, y + 2);
+  setSize(2);
+  setCur(x + 22, y + 2);
   gfx->print(s);
 }
 
@@ -1482,11 +1506,11 @@ void drawCelebration() {
   gfx->fillRoundRect(73, 150, 320, 96, 16, UI_BAR_WARN);
   gfx->drawRoundRect(73, 150, 320, 96, 16, UI_INK);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(3);
-  gfx->setCursor(centerX(l1, 3), 176);
+  setSize(3);
+  setCur(centerX(l1, 3), 176);
   gfx->print(l1);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(l2, 2), 212);
+  setSize(2);
+  setCur(centerX(l2, 2), 212);
   gfx->print(l2);
 }
 
@@ -1496,8 +1520,8 @@ void drawMedalBadge(int x, int y, int i) {
   gfx->fillRoundRect(x, y, 100, 24, 6, got ? UI_BAR_OK : UI_TRACK);
   if (!got) gfx->drawRoundRect(x, y, 100, 24, 6, UI_TRACK);
   gfx->setTextColor(got ? UI_BG_DAY : 0x9492);
-  gfx->setTextSize(2);
-  gfx->setCursor(x + (100 - textW(medalLabel(i), 2)) / 2, y + 5);
+  setSize(2);
+  setCur(x + (100 - textW(medalLabel(i), 2)) / 2, y + 5);
   gfx->print(medalLabel(i));
 }
 
@@ -1512,14 +1536,14 @@ void renderCardProfile() {
   // arriba de la pantalla redonda, asi que se cortaban por el borde
   int hlen = strlen(head);
   int hts = (hlen <= 11) ? 3 : 2;
-  gfx->setTextSize(hts);
-  gfx->setCursor(CX - hlen * (hts == 3 ? 9 : 6), hts == 3 ? 34 : 40);
+  setSize(hts);
+  setCur(CX - hlen * (hts == 3 ? 9 : 6), hts == 3 ? 34 : 40);
   gfx->print(head);
   if (pet.nick[0]) {  // especie real bajo el apodo
     const char *sp = dexName(pet.speciesId);
     gfx->setTextColor(UI_TRACK);
-    gfx->setTextSize(2);
-    gfx->setCursor(CX - (strlen(sp) + 2) * 6, 64);
+    setSize(2);
+    setCur(CX - (strlen(sp) + 2) * 6, 64);
     gfx->printf("(%s)", sp);
   }
 
@@ -1533,8 +1557,8 @@ void renderCardProfile() {
   char rl[30];
   snprintf(rl, sizeof(rl), T(S_STREAK_FMT), pet.streak, pet.bestStreak);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(sx + 24, sy + 2);
+  setSize(2);
+  setCur(sx + 24, sy + 2);
   gfx->print(rl);
 
   drawCardStat(258, T(S_VIN), pet.bond, 100, C565(0xd4, 0x52, 0x7e));
@@ -1547,20 +1571,20 @@ void renderCardProfile() {
   snprintf(info, sizeof(info), T(S_INFO_FMT), berry,
            (unsigned long)(pet.ageMinutes / 1440));
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(info, 2), 296);
+  setSize(2);
+  setCur(centerX(info, 2), 296);
   gfx->print(info);
 
   gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(centerX(T(S_RENAME_HINT), 2), 332);
+  setCur(centerX(T(S_RENAME_HINT), 2), 332);
   gfx->print(T(S_RENAME_HINT));
 }
 
 // pagina 1: combate (4 barras + boton de entrenar)
 void renderCardStats() {
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(3);
-  gfx->setCursor(centerX(T(S_BATTLE), 3), 48);
+  setSize(3);
+  setCur(centerX(T(S_BATTLE), 3), 48);
   gfx->print(T(S_BATTLE));
 
   drawCardStat(118, T(S_STAT_ATK), pet.atkStat(), 260, UI_BAR_BAD);
@@ -1571,8 +1595,8 @@ void renderCardStats() {
   // boton: saco de entrenamiento de fuerza
   gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
   gfx->setTextColor(UI_BG_DAY);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(T(S_TRAIN_STR), 2), 311);
+  setSize(2);
+  setCur(centerX(T(S_TRAIN_STR), 2), 311);
   gfx->print(T(S_TRAIN_STR));
 }
 
@@ -1584,8 +1608,8 @@ void renderCardMedals() {
   char head[20];
   snprintf(head, sizeof(head), T(S_MEDALS_FMT), got, MED_COUNT);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(3);
-  gfx->setCursor(centerX(head, 3), 48);
+  setSize(3);
+  setCur(centerX(head, 3), 48);
   gfx->print(head);
 
   for (int i = 0; i < MED_COUNT; i++) {
@@ -1595,13 +1619,13 @@ void renderCardMedals() {
     if (g) {  // marca de conseguida
       gfx->fillCircle(x + 22, y + 22, 11, UI_BG_DAY);
       gfx->setTextColor(UI_BAR_OK);
-      gfx->setTextSize(2);
-      gfx->setCursor(x + 16, y + 13);
+      setSize(2);
+      setCur(x + 16, y + 13);
       gfx->print("v");
     }
     gfx->setTextColor(g ? UI_BG_DAY : 0x8410);
-    gfx->setTextSize(2);
-    gfx->setCursor(x + 44, y + 14);
+    setSize(2);
+    setCur(x + 44, y + 14);
     gfx->print(medalDesc(i));
   }
 }
@@ -1611,15 +1635,15 @@ void renderCardMedals() {
 void renderCardProgress() {
   const DexEntry &d = DEX_TBL[pet.speciesId];
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(3);
-  gfx->setCursor(centerX(T(S_PROGRESS), 3), 44);
+  setSize(3);
+  setCur(centerX(T(S_PROGRESS), 3), 44);
   gfx->print(T(S_PROGRESS));
 
   // nivel grande
   char lv[10];
   snprintf(lv, sizeof(lv), T(S_LVL_FMT), pet.level());
-  gfx->setTextSize(5);
-  gfx->setCursor(centerX(lv, 5), 86);
+  setSize(5);
+  setCur(centerX(lv, 5), 86);
   gfx->print(lv);
 
   // barra de progreso al siguiente nivel (1 nivel = 60 min de juego)
@@ -1631,13 +1655,13 @@ void renderCardProgress() {
   char nx[26];
   snprintf(nx, sizeof(nx), T(S_NEXT_LVL_FMT), MINUTES_PER_LEVEL - into, pet.level() + 1);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(nx, 2), by + 32);
+  setSize(2);
+  setCur(centerX(nx, 2), by + 32);
   gfx->print(nx);
 
   // estado de evolucion
   gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(centerX(T(S_EVO_LABEL), 2), 230);
+  setCur(centerX(T(S_EVO_LABEL), 2), 230);
   gfx->print(T(S_EVO_LABEL));
   char evoBuf[28];
   const char *evo;
@@ -1655,14 +1679,14 @@ void renderCardProgress() {
     }
   }
   gfx->setTextColor(evoCol);
-  gfx->setCursor(centerX(evo, 2), 256);
+  setCur(centerX(evo, 2), 256);
   gfx->print(evo);
 
   // descuidos (retrasan la evolucion)
   char ms[24];
   snprintf(ms, sizeof(ms), T(S_MISTAKES_FMT), pet.careMistakes);
   gfx->setTextColor(pet.careMistakes > 0 ? UI_BAR_BAD : UI_INK);
-  gfx->setCursor(centerX(ms, 2), 312);
+  setCur(centerX(ms, 2), 312);
   gfx->print(ms);
 }
 
@@ -1680,8 +1704,8 @@ void renderCard() {
     else gfx->drawCircle(194 + i * 26, 374, 4, UI_INK);
   }
   gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(T(S_BACK), 2), 398);
+  setSize(2);
+  setCur(centerX(T(S_BACK), 2), 398);
   gfx->print(T(S_BACK));
   gfx->flush();
 }
@@ -1706,14 +1730,14 @@ void renderKeyboard() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(T(S_NAME), 2), 56);
+  setSize(2);
+  setCur(centerX(T(S_NAME), 2), 56);
   gfx->print(T(S_NAME));
   // buffer actual
   gfx->fillRoundRect(83, 84, 300, 40, 8, UI_WHITE);
   gfx->drawRoundRect(83, 84, 300, 40, 8, UI_INK);
-  gfx->setTextSize(3);
-  gfx->setCursor(95, 94);
+  setSize(3);
+  setCur(95, 94);
   gfx->print(nameLen ? nameBuf : "_");
 
   for (int i = 0; i < 30; i++) {
@@ -1722,13 +1746,13 @@ void renderKeyboard() {
     gfx->fillRoundRect(x, y, KB_W - 6, KB_H - 6, 6, special ? UI_BAR_WARN : UI_WHITE);
     gfx->drawRoundRect(x, y, KB_W - 6, KB_H - 6, 6, UI_INK);
     gfx->setTextColor(UI_INK);
-    gfx->setTextSize(2);
+    setSize(2);
     if (i < 28) {
-      gfx->setCursor(x + KB_W / 2 - 9, y + KB_H / 2 - 10);
+      setCur(x + KB_W / 2 - 9, y + KB_H / 2 - 10);
       gfx->print(KB_KEYS[i]);
     } else {
       const char *lab = (i == 28) ? "<-" : "OK";
-      gfx->setCursor(x + KB_W / 2 - 15, y + KB_H / 2 - 10);
+      setCur(x + KB_W / 2 - 15, y + KB_H / 2 - 10);
       gfx->print(lab);
     }
   }
@@ -1790,8 +1814,8 @@ void renderGallery() {
     gfx->setTextColor(reg ? d.accent : UI_INK);
     int glen = strlen(head);
     int gts = (glen <= 13) ? 3 : 2;  // auto-encoge nombres largos (no caben a t3)
-    gfx->setTextSize(gts);
-    gfx->setCursor(CX - glen * (gts == 3 ? 9 : 6), gts == 3 ? 56 : 60);
+    setSize(gts);
+    setCur(CX - glen * (gts == 3 ? 9 : 6), gts == 3 ? 56 : 60);
     gfx->print(head);
     if (galleryPmd.loaded) {
       // animado y a color si esta registrado; silueta estatica si no (estilo "?")
@@ -1801,8 +1825,8 @@ void renderGallery() {
       if (t) drawThumb(t, CX - GAL_CELL, 135, 4, !reg);
     }
     gfx->setTextColor(UI_INK);
-    gfx->setTextSize(2);
-    gfx->setCursor(centerX(T(S_DETAIL_BACK), 2), 408);
+    setSize(2);
+    setCur(centerX(T(S_DETAIL_BACK), 2), 408);
     gfx->print(T(S_DETAIL_BACK));
     gfx->flush();
     return;
@@ -1816,8 +1840,8 @@ void renderGallery() {
   char head[24];
   snprintf(head, sizeof(head), T(S_POKEDEX_FMT), pet.registeredCount());
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(3);
-  gfx->setCursor(centerX(head, 3), 36);
+  setSize(3);
+  setCur(centerX(head, 3), 36);
   gfx->print(head);
 
   for (int r = 0; r < 4; r++) {
@@ -1830,16 +1854,16 @@ void renderGallery() {
         drawThumb(t, x, y, 2, !pet.isRegistered(dex));
         if (pet.isShinyRegistered(dex)) {
           gfx->setTextColor(UI_BAR_WARN);
-          gfx->setTextSize(2);
-          gfx->setCursor(x + 62, y + 4);
+          setSize(2);
+          setCur(x + 62, y + 4);
           gfx->print("*");
         }
       } else {
         char num[6];
         snprintf(num, sizeof(num), "%d", dex);
         gfx->setTextColor(UI_TRACK);
-        gfx->setTextSize(2);
-        gfx->setCursor(x + 24, y + 32);
+        setSize(2);
+        setCur(x + 24, y + 32);
         gfx->print(num);
       }
     }
@@ -1900,12 +1924,12 @@ void drawBattery() {
 void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
   drawBattery();
   gfx->setTextColor(nameColor);
-  gfx->setTextSize(3);
-  gfx->setCursor(centerX(name, 3), 52);
+  setSize(3);
+  setCur(centerX(name, 3), 52);
   gfx->print(name);
   gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(msg, 2), 90);
+  setSize(2);
+  setCur(centerX(msg, 2), 90);
   gfx->print(msg);
 }
 
@@ -1983,16 +2007,16 @@ void drawChoiceDialog() {
   gfx->fillRoundRect(73, 156, 320, 188, 16, UI_WHITE);
   gfx->drawRoundRect(73, 156, 320, 188, 16, UI_INK);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(q, 2), 176);
+  setSize(2);
+  setCur(centerX(q, 2), 176);
   gfx->print(q);
   gfx->fillRoundRect(93, 206, 280, 52, 12, c1);     // boton accion
   gfx->setTextColor(t1);
-  gfx->setCursor(centerX(o1, 2), 224);
+  setCur(centerX(o1, 2), 224);
   gfx->print(o1);
   gfx->fillRoundRect(93, 268, 280, 52, 12, c2);     // boton mantener/quedaros
   gfx->setTextColor(t2);
-  gfx->setCursor(centerX(o2, 2), 286);
+  setCur(centerX(o2, 2), 286);
   gfx->print(o2);
 }
 
@@ -2005,9 +2029,9 @@ void drawEvolveButton() {
   gfx->drawRoundRect(x, y, w, h, 18, UI_WHITE);
   gfx->drawRoundRect(x + 2, y + 2, w - 4, h - 4, 16, UI_WHITE);
   gfx->setTextColor(UI_WHITE);
-  gfx->setTextSize(3);
+  setSize(3);
   const char *t = T(S_EVO_TAP);
-  gfx->setCursor(centerX(t, 3), y + h / 2 - 11);
+  setCur(centerX(t, 3), y + h / 2 - 11);
   gfx->print(t);
 }
 
@@ -2022,8 +2046,8 @@ void drawFarewellButton() {
   const char *nm = pet.nick[0] ? pet.nick : dexName(pet.speciesId);
   snprintf(buf, sizeof(buf), T(S_FAREWELL_BTN), nm);
   gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(buf, 2), y + h / 2 - 8);
+  setSize(2);
+  setCur(centerX(buf, 2), y + h / 2 - 8);
   gfx->print(buf);
 }
 
@@ -2039,8 +2063,8 @@ void drawRunawayButton() {
   const char *nm = pet.nick[0] ? pet.nick : dexName(pet.speciesId);
   snprintf(buf, sizeof(buf), T(S_RUNAWAY_BTN), nm);
   gfx->setTextColor(C565(0xc8, 0xd2, 0xe0));
-  gfx->setTextSize(2);
-  gfx->setCursor(centerX(buf, 2), y + h / 2 - 8);
+  setSize(2);
+  setCur(centerX(buf, 2), y + h / 2 - 8);
   gfx->print(buf);
 }
 
@@ -2093,15 +2117,15 @@ void drawPet() {
   if (fi < 0) {
     // sin SD y sin sprite de flash: aviso claro de que faltan sprites
     gfx->setTextColor(inkColor());
-    gfx->setTextSize(6);
-    gfx->setCursor(CX - 18, PET_CY - 80);
+    setSize(6);
+    setCur(CX - 18, PET_CY - 80);
     gfx->print("?");
-    gfx->setTextSize(2);
+    setSize(2);
     const char *l1 = T(S_NO_SPRITES);
-    gfx->setCursor(centerX(l1, 2), PET_CY - 4);
+    setCur(centerX(l1, 2), PET_CY - 4);
     gfx->print(l1);
     const char *l2 = T(S_LOAD_SPRITES);
-    gfx->setCursor(centerX(l2, 2), PET_CY + 20);
+    setCur(centerX(l2, 2), PET_CY + 20);
     gfx->print(l2);
     return;
   }
@@ -2382,8 +2406,8 @@ void drawBars() {
 
 void drawBar(int x, int y, const char *label, uint8_t val) {
   gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(x, y);
+  setSize(2);
+  setCur(x, y);
   gfx->print(label);
   int bx = x + 48, bw = 100, bh = 15;  // +48: deja sitio a etiquetas de 4 letras (EN)
   uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= 25) ? UI_BAR_WARN : UI_BAR_BAD;
