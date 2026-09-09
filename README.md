@@ -28,7 +28,7 @@ behind a decision dialog), bred-Pokédex with gallery, battle stats (genes +
 training), retention hooks (streak / bond / medals / name), biome + real-time
 backgrounds, ball minigame, training bag, animated bath, RTC with offline
 progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
-**sound (ES8311)**, **6 UI languages (English default)**, **starter choice on
+**sound (ES8311)**, **7 UI languages (English default)**, **starter choice on
 first run**, and a one-click **web installer**.
 
 Pending: wild encounters / battle (designed, not implemented), 3D case, soak
@@ -140,7 +140,7 @@ SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the r
 | GFX Library for Arduino (`Arduino_GFX`) | moononournation | CO5300 over QSPI + framebuffer in PSRAM |
 | SensorLib | Lewis He | CST9217 touch + PCF85063 RTC |
 | XPowersLib | Lewis He | AXP2101 PMU (battery, brightness, PWR button) |
-| U8g2 | olikraus | CJK glyphs (Japanese); only the font data is used, not its display driver |
+| U8g2 | olikraus | CJK glyphs (`unifont_t_japanese3`, the only Japanese subset that also carries `！？。、「」`); only the font data is used, not its display driver |
 | ESP_I2S (bundled in the ESP32 core) | Espressif | I2S to the ES8311 codec |
 
 ## IDE setup / build
@@ -298,9 +298,10 @@ a farewell and punished by a runaway. Legendaries only with 25+ registered.
 **Languages:** the UI ships in 7 languages — English (default), Spanish, French,
 German, Italian, Portuguese and Japanese — switchable from the settings screen
 (swipe down).
-**Pokémon names are localized too**: French and German show the official names
-(Bulbizarre, Bisasam...); the other languages use the English ones, which is what
-those regions officially use for gen 1.
+**Pokémon names are localized too**: French, German and Japanese show the
+official names (Bulbizarre, Bisasam, フシギダネ...). Spanish, Italian and
+Portuguese use the English ones, which is what those regions officially use for
+gen 1.
 
 ## Backgrounds: biome + real time
 
@@ -315,7 +316,7 @@ beach, forest, volcano, mountain, snow). Sleeping forces night.
 - `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
 - `rtcbat.h` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
 - `audio.h` / `audio.cpp` — ES8311 + I2S + Game-Boy-style tone synth (non-blocking task)
-- `i18n.h` / `i18n.cpp` — the 6-language string tables
+- `i18n.h` / `i18n.cpp` — the 7-language string tables
 - `dex.h` — GENERATED (`gen_dex.py`): the 151 table
 - `species.h` — GENERATED (`sprites.py`): fallback sprites, UI icons, colours
 - `pin_config.h` — the board's official pins

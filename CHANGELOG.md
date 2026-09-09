@@ -31,6 +31,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   over ニドラン(女)/(男) as closer to a species name and shorter on a small
   round screen.
 
+Both confirmed on hardware by @usakomint, who also — without knowing it —
+supplied the evidence for the first one: the missing `！` was visible in a
+photo he posted of the v1.15 main screen.
+
 ## [1.15] - 2026-09-08
 
 ### Added
