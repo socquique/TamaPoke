@@ -25,7 +25,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.15"
+#define FW_VERSION "1.16"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -875,7 +875,13 @@ int gFontAscent = 0;  // px del borde superior a la linea base, 0 = fuente clasi
 // trazos se juntan y los kana pierden detalle, ilegibles incluso para un lector
 // nativo. Se vuelve a la unifont, que es la mas legible, y el trazo fino se
 // compensa en printT() repintando 1 px desplazado (pseudo-negrita).
-#define CJK_FONT u8g2_font_unifont_t_japanese1
+// japanese3 y no japanese1: los subconjuntos 1 y 2 traen kana y kanji pero
+// NINGUNA puntuacion CJK, y Arduino_GFX no dibuja nada cuando le falta el
+// glifo (ni avanza el cursor), asi que los 25 signos ！ y ？ de las cadenas
+// desaparecian. Es la misma familia unifont: cabecera de metricas identica y
+// superconjunto estricto, comprobado glifo a glifo sobre los 226 codepoints
+// que usa el firmware. Cuesta 102 KB mas de flash y no mueve un pixel.
+#define CJK_FONT u8g2_font_unifont_t_japanese3
 #define CJK_SIZE_DIV 2
 
 void setSize(uint8_t n) {

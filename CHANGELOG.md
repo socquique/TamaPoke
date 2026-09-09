@@ -6,6 +6,31 @@ bottom of the clock/settings screen (swipe down) and `web/manifest.json`.
 Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 **without** ticking "Erase device" keeps your Pokémon.
 
+## [1.16] - 2026-09-09
+
+### Fixed
+
+- **Japanese was silently dropping every `！` and `？`.** 21 exclamation marks
+  and 4 question marks — a quarter of the Japanese strings, including the mood
+  line on the main screen (`ごきげん！` rendered as `ごきげん`). The cause is that
+  `u8g2_font_unifont_t_japanese1` carries kana and kanji but no CJK punctuation
+  at all — no `！？。、「」` — and `Arduino_GFX` draws nothing for a glyph it can't
+  find, without even advancing the cursor, so the loss is invisible in the
+  source and on screen. Switched to `japanese3`, the only U8g2 Japanese font
+  that has them. Same unifont family: the metrics header is byte-identical and
+  all 226 codepoints the firmware uses have byte-identical bitmaps, so nothing
+  moves. Costs 102 KB of flash (705 KB → 810 KB, 22% → 25% of the app
+  partition); RAM is unchanged.
+- **Nidoran♀ and Nidoran♂ both showed as ニドラン in Japanese**, leaving #29
+  and #32 indistinguishable in the Pokédex. No U8g2 unifont subset carries
+  ♀ (U+2640) or ♂ (U+2642) — not `japanese*`, `korean*` or `chinese*` — and
+  `Arduino_GFX` draws nothing for a glyph it can't find, without even
+  advancing the cursor. `gen_names.py` already substituted F and M on the
+  Latin path; it now does the same on the UTF-8 one, so the names read
+  ニドランF and ニドランM. Convention chosen by @usakomint, who preferred it
+  over ニドラン(女)/(男) as closer to a species name and shorter on a small
+  round screen.
+
 ## [1.15] - 2026-09-08
 
 ### Added

@@ -17,9 +17,20 @@ LANGS = ('fr', 'de')
 LANGS_UTF8 = ('ja-hrkt',)  # CJK: van tal cual en UTF-8, no en octal ASCII
 
 
+def sin_genero(s):
+    """Nidoran hembra/macho: ♀ y ♂ no existen en ninguna fuente que usemos.
+
+    Ni la tabla CP437 de glcdfont.h los tiene en una posicion imprimible, ni
+    los trae ningun subconjunto unifont de U8g2 (japanese*, korean*, chinese*).
+    Y Arduino_GFX no dibuja nada cuando le falta el glifo, ni siquiera avanza
+    el cursor, asi que sin esto los dos Nidoran salen con el mismo nombre.
+    """
+    return s.replace('♀', 'F').replace('♂', 'M')
+
+
 def ascii_up(s):
     """'Salamèche' -> 'SALAMECHE'; conserva los simbolos de genero como f/m."""
-    s = s.replace('♀', 'F').replace('♂', 'M')  # Nidoran hembra/macho
+    s = sin_genero(s)
     s = unicodedata.normalize('NFD', s)
     s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
     return s.upper()
@@ -50,7 +61,9 @@ def main():
         for lg in LANGS_UTF8:
             v = names.get(lg)
             if v:
-                dif[lg.split('-')[0]] = v  # 'ja-hrkt' -> 'ja', sin tocar el UTF-8
+                # 'ja-hrkt' -> 'ja'; el UTF-8 se respeta salvo ♀/♂, que la
+                # fuente no tiene (ver sin_genero)
+                dif[lg.split('-')[0]] = sin_genero(v)
         if dif:
             out[num] = dif
         if num % 25 == 0:
