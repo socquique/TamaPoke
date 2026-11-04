@@ -12,11 +12,15 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
+#include "pin_config.h"  // pines + capacidades de placa (board/); antes que el driver de tactil
+#if TOUCH_POLLING
+#include "TouchDrvGT911.hpp"
+#else
 #include "TouchDrvCSTXXX.hpp"
+#endif
 #include <U8g2lib.h>  // fuentes CJK (japones); ver applyLangFont()
 #include <esp_sleep.h>
 #include <driver/gpio.h>
-#include "pin_config.h"
 #include "species.h"
 #include "dex.h"
 #include "pet.h"
@@ -31,18 +35,54 @@
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
 #define FW_VERSION "1.18"
 
+#if defined(BOARD_GUITION_4848S040)
+// ST7701S: la secuencia de init viaja por SPI de 3 hilos y los pixels por el
+// bus paralelo RGB (DMA). Cableado y porches copiados literalmente de la
+// propia config de Arduino_GFX para este modulo (ESP32_4848S040_86BOX_GUITION
+// en examples/PDQgraphicstest/Arduino_GFX_dev_device.h); init st7701_type9,
+// la probada en el 4848S040.
+Arduino_DataBus *bus = new Arduino_SWSPI(
+    GFX_NOT_DEFINED /* DC */, LCD_CS, LCD_SCLK, LCD_MOSI, GFX_NOT_DEFINED /* MISO */);
+Arduino_ESP32RGBPanel *rgbpanel = new Arduino_ESP32RGBPanel(
+    RGB_DE, RGB_VSYNC, RGB_HSYNC, RGB_PCLK,
+    RGB_R0, RGB_R1, RGB_R2, RGB_R3, RGB_R4,
+    RGB_G0, RGB_G1, RGB_G2, RGB_G3, RGB_G4, RGB_G5,
+    RGB_B0, RGB_B1, RGB_B2, RGB_B3, RGB_B4,
+    1 /*hsync pol*/, 10 /*front*/, 8 /*pulso*/, 50 /*back*/,
+    1 /*vsync pol*/, 10 /*front*/, 8 /*pulso*/, 20 /*back*/,
+    0 /*pclk activo flanco pos*/, RGB_PCLK_HZ /*prefer_speed*/, false /*big endian*/);
+// rotation 0 = orientacion nativa del modulo (cuadrada, tactil alineado); si
+// el montaje fisico gira la pantalla, ajustar aqui y el swapXY del GT911
+Arduino_RGB_Display *panel = new Arduino_RGB_Display(
+    LCD_WIDTH, LCD_HEIGHT, rgbpanel, 0 /*rotation*/, true /*auto flush*/,
+    bus, GFX_NOT_DEFINED /*RST*/, st7701_type9_init_operations, sizeof(st7701_type9_init_operations));
+// retroiluminacion del IPS: pin 38, PWM (el CO5300 la lleva interna)
+void displaySetBrightness(uint8_t v) {
+  static bool attached = false;
+  if (!attached) {
+    ledcAttach(LCD_BL, 5000, 8);
+    attached = true;
+  }
+  ledcWrite(LCD_BL, v);
+}
+#else
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
 Arduino_CO5300 *panel = new Arduino_CO5300(
   bus, LCD_RESET, 0 /*rotation*/, LCD_WIDTH, LCD_HEIGHT, 6, 0, 0, 0);
+void displaySetBrightness(uint8_t v) { panel->setBrightness(v); }
+#endif
 // Framebuffer completo en PSRAM: dibujamos todo y hacemos flush() (sin parpadeo)
 Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
 
+#if TOUCH_POLLING
+TouchDrvGT911 touch;
+#else
 TouchDrvCST92xx touch;
+#endif
 // fuente CJK activa: de momento siempre false, la carga llegara con el
 // soporte de japones/coreano/chino (ver PR #13)
 bool gCjkFont = false;
-#define TOUCH_ADDR 0x5A  // CST9217
 Pet pet;
 
 // sprite animado de la SD para la especie actual (si existe el archivo)
@@ -186,21 +226,38 @@ void setup() {
   // handleTouch).
   Wire.setTimeOut(50);
 
+#if HAS_PMU
   // CRITICO: encender la alimentacion del panel (BLDO1=OLED VDD 3.3V) ANTES de
   // inicializar el display. Si el PMU se reseteo (drenaje total), este rail
   // queda OFF y la pantalla se ve negra aunque el resto de la placa funcione.
   pmuEnablePanel();
+#endif
 
-  // QSPI a 80MHz (por defecto 40): el flush del framebuffer es el cuello de
-  // botella del fps (~56ms a 40MHz). Si el panel mostrara basura, bajar a 40M.
-  if (!gfx->begin(80000000)) Serial.println("gfx->begin() fallo");
-  panel->setBrightness(180);
+  // QSPI a 80MHz en la Waveshare (por defecto 40): el flush del framebuffer es
+  // el cuello de botella del fps (~56ms a 40MHz). El panel RGB usa el
+  // prefer_speed del rgbpanel (RGB_PCLK_HZ). Si mostrara basura, bajarlo.
+  if (!gfx->begin(DISPLAY_BEGIN_HZ)) Serial.println("gfx->begin() fallo");
+  displaySetBrightness(180);
   applyLangFont();  // fuente del idioma guardado (clasica salvo CJK)
 
+#if TOUCH_POLLING
+  // GT911: el modulo no saca INT ni RESET (piernas a nivel fijo), se sondea por
+  // I2C desde handleTouch. begin() solo comprueba presencia y lee la resolucion.
+  bool touchOk = false;
+  for (int i = 0; i < 3 && !touchOk; i++) {  // a veces falla al primer intento
+    touchOk = touch.begin(Wire, TOUCH_ADDR, IIC_SDA, IIC_SCL);
+    if (!touchOk) delay(150);
+  }
+  if (!touchOk) Serial.println("GT911 no detectado");
+  touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
+  // orientacion nativa del modulo; si el montaje gira el tactil, ajustar
+  // (setMirrorXY / setSwapXY) tras probar en la placa
+  touch.setMirrorXY(false, false);
+#else
   touch.setPins(TP_RESET, TP_INT);
   bool touchOk = false;
   for (int i = 0; i < 3 && !touchOk; i++) {  // a veces falla al primer intento
-    touchOk = touch.begin(Wire, 0x5A, IIC_SDA, IIC_SCL);
+    touchOk = touch.begin(Wire, TOUCH_ADDR, IIC_SDA, IIC_SCL);
     if (!touchOk) delay(150);
   }
   if (!touchOk) Serial.println("CST9217 no detectado");
@@ -212,6 +269,7 @@ void setup() {
   // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
   pinMode(TP_INT, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+#endif
 
   pet.begin();
   sdBegin();
@@ -305,7 +363,7 @@ void loop() {
   // celda baje mas; el RTC conserva la hora
   if (batShouldShutdown() && !usbPresent()) {
     pet.flushSave();
-    panel->setBrightness(0);
+    displaySetBrightness(0);
     batPowerOff();
   }
 
@@ -396,7 +454,7 @@ void updateBrightness(uint32_t now) {
   static uint8_t current = 255;
   if (target != current) {
     current = target;
-    panel->setBrightness(target);
+    displaySetBrightness(target);
   }
 }
 
@@ -405,6 +463,7 @@ void updateBrightness(uint32_t now) {
 // 200 ms: despierta por el temporizador o por un toque (el INT del tactil baja). Con USB no, para
 // no perder el puerto serie de la tarjeta SD: se mira sin cache, por si se acaba de enchufar.
 void idleWait(PowerCtx c) {
+#if !TOUCH_POLLING
   // no se duerme justo tras dibujar (el volcado DMA del frame sigue en marcha) ni con un aviso sonando
   if (lightSleepAllowed(c) && millis() - lastRender >= 100 && !audioBusy()) {
     c.usb = usbPresentNow();
@@ -427,6 +486,7 @@ void idleWait(PowerCtx c) {
     if (digitalRead(TP_INT) == LOW) gTouchIrq = true;
     return;
   }
+#endif
   delay(idleDelayMs(c));
 }
 
@@ -551,6 +611,11 @@ void handleTouch() {
   // solo tocamos el bus si el chip aviso por INT o si el dedo sigue abajo (hay
   // que detectar el levantamiento). Leer el CST9217 dormido se colgaba ~1s y
   // congelaba el loop entero; SensorLib no respeta el timeout de Wire.
+#if TOUCH_POLLING
+  // GT911: sin linea INT no hay aviso; se sondea cada pase (arriba ya esta
+  // estrangulado a 50 Hz y sin toque la lectura es 1 byte por I2C)
+  gTouchIrq = true;
+#endif
   if (!gTouchIrq && !wasPressed) return;
   gTouchIrq = false;
   // Un ciclo de solo direccion antes de leer. Sin esto, getPoint() se colgaba

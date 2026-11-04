@@ -33,6 +33,16 @@ jobs:
           --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
           .
 
+      # Guition/Sunton 4848S040 (ST7701S RGB 480x480 + GT911): mismo codigo,
+      # la capa board/ elige placa con un flag de compilacion. Se compila aqui
+      # para que la compatibilidad no se oxide.
+      - name: Compile (Guition 4848S040)
+        run: >
+          arduino-cli compile --warnings=all
+          --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
+          --build-property "compiler.cpp.extra_flags=-DBOARD_GUITION_4848S040"
+          .
+
   generated:
     name: Generated headers up to date
     runs-on: ubuntu-latest

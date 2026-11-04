@@ -1,16 +1,22 @@
 #include "batcurve.h"
 #include "rtcbat.h"
-#include "pin_config.h"  // define XPOWERS_CHIP_AXP2101
+#include "pin_config.h"  // define XPOWERS_CHIP_AXP2101 y capacidades (HAS_RTC/HAS_PMU)
 #include <Wire.h>
 #include <time.h>
+
+#if HAS_RTC
 #include <SensorPCF85063.hpp>
-#include <XPowersLib.h>
-
 static SensorPCF85063 rtc;
-static XPowersPMU pmu;
 static bool rtcOk = false;
-static bool pmuOk = false;
+#endif
 
+#if HAS_PMU
+#include <XPowersLib.h>
+static XPowersPMU pmu;
+static bool pmuOk = false;
+#endif
+
+#if HAS_RTC
 bool rtcBegin() {
   rtcOk = rtc.begin(Wire, IIC_SDA, IIC_SCL);
   if (!rtcOk) Serial.println("PCF85063 no detectado");
@@ -40,7 +46,16 @@ void rtcSetEpoch(uint32_t e) {
   rtc.setDateTime(RTC_DateTime(tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
                                tmv.tm_hour, tmv.tm_min, tmv.tm_sec));
 }
+#else
+// placa sin PCF85063 (p. ej. Guition 4848S040): sin hora persistente entre
+// arranques; el juego degrada a reloj del ultimo guardado (sin RTC no hay
+// progreso offline de mas, pero tampoco se peta nada)
+bool rtcBegin() { return false; }
+uint32_t rtcEpoch() { return 0; }
+void rtcSetEpoch(uint32_t) {}
+#endif
 
+#if HAS_PMU
 bool batBegin() {
   pmuOk = pmu.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL);
   if (!pmuOk) { Serial.println("AXP2101 no detectado"); return false; }
@@ -120,3 +135,19 @@ bool pwrShortPressed() {
   if (hit) pmu.clearIrqStatus();
   return hit;
 }
+#else
+// placa sin AXP2101 ni bateria (Guition 4848S040: alimentacion USB-C): toda la
+// gestion de energia es no-op; se comporta como siempre enchufado
+bool batBegin() { return false; }
+void pmuEnablePanel() {}
+void batSetPollMs(uint32_t) {}
+int batPercent() { return -1; }
+bool batCharging() { return false; }
+int batMillivolts() { return 0; }
+bool batShouldShutdown() { return false; }
+void batPowerOff() {}
+bool usbPresent() { return true; }
+bool usbPresentNow() { return true; }
+void pwrSetup() {}
+bool pwrShortPressed() { return false; }
+#endif

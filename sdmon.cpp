@@ -141,6 +141,7 @@ const uint8_t *SdThumbs::get(int16_t dex) const {
 }
 
 bool sdBegin() {
+#if HAS_SD
   SD_MMC.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_DATA);
   sdReady = SD_MMC.begin("/sdcard", true /* modo 1-bit */, true /* formatea si no monta */);
   if (sdReady) {
@@ -150,6 +151,13 @@ bool sdBegin() {
     Serial.println("SD no detectada (el juego usa los sprites de flash)");
   }
   return sdReady;
+#else
+  // placa sin ranura SDMMC (Guition 4848S040): el slot es SPI (CS 42, CLK 48,
+  // MOSI 47, MISO 41, compartido con la pantalla) y se habilitara en una tarea
+  // aparte; de momento el juego va solo con los sprites de flash
+  Serial.println("SD no disponible en esta placa (el juego usa los sprites de flash)");
+  return false;
+#endif
 }
 
 bool SdMon::load(uint8_t dexNum, bool shiny) {

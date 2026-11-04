@@ -158,6 +158,23 @@ arduino-cli compile --fqbn "$FQBN" .
 arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn "$FQBN" .
 ```
 
+### Alternative board: Guition / Sunton ESP32-S3-4848S040
+
+The firmware also targets the **ESP32-S3-4848S040** panel (4.0" IPS 480×480,
+**ST7701S** RGB + **GT911** capacitive touch). Select it with a build flag —
+the pin/capability layer in `board/` swaps the QSPI/CO5300 display and the
+CST9217 for the RGB panel and the GT911:
+
+```bash
+arduino-cli compile --fqbn "$FQBN" \
+  --build-property "compiler.cpp.extra_flags=-DBOARD_GUITION_4848S040" .
+```
+
+This board has no AXP2101, no battery, no PCF85063 RTC, no ES8311 and no SDMMC
+slot, so those features degrade to no-ops (clock comes from the last save,
+sound off, sprites come from flash only). In the Arduino IDE set the same flag
+under *Extra ESP32 compile flags*. Details in `board/board_guition_4848s040.h`.
+
 ### Easiest install: the web installer
 
 `web/index.html` flashes the firmware (ESP Web Tools) and pushes the sprites to
