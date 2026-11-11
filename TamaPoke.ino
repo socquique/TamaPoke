@@ -26,6 +26,7 @@
 #include "audio.h"
 #include "blit.h"
 #include "power.h"
+#include <Preferences.h>
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
@@ -71,6 +72,7 @@ int galleryPage = 0;        // 10 paginas de 16
 int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 
 bool screenOff = false;       // pulsacion corta del boton PWR
+uint8_t userDim = 0;          // nivel de brillo de ajustes (power.h): 0 alto, 1 medio, 2 bajo
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
@@ -194,6 +196,12 @@ void setup() {
   // QSPI a 80MHz (por defecto 40): el flush del framebuffer es el cuello de
   // botella del fps (~56ms a 40MHz). Si el panel mostrara basura, bajar a 40M.
   if (!gfx->begin(80000000)) Serial.println("gfx->begin() fallo");
+  {  // nivel de brillo guardado (ajustes)
+    Preferences p;
+    p.begin("tamapoke", true);
+    userDim = p.getUChar("bri", 0) % BRIGHT_LEVELS;
+    p.end();
+  }
   panel->setBrightness(180);
   applyLangFont();  // fuente del idioma guardado (clasica salvo CJK)
 
@@ -368,6 +376,7 @@ PowerCtx powerCtx(uint32_t now) {
   c.usb = usbPresent();
   c.charging = batCharging();
   c.batPct = batPercent();
+  c.userDim = userDim;
   return c;
 }
 
@@ -1062,6 +1071,7 @@ static uint32_t screenKey() {
   } else if (clockOpen) {
     h = mixKey(h, clockH * 60 + clockM);
     h = mixKey(h, audioEnabled());
+    h = mixKey(h, userDim);
     h = mixKey(h, gLang);
   } else if (cardOpen) {
     for (uint32_t v : { (uint32_t)pet.speciesId, (uint32_t)pet.shiny, (uint32_t)pet.ageMinutes, (uint32_t)pet.streak,
@@ -1608,6 +1618,8 @@ void drawClockBtn(int x, int y, const char *l) {
 #define LANG_PILL_H 30
 #define LANG_PILL_X 336          // pildora de idioma (cicla LANG_COUNT al tocar)
 #define LANG_PILL_W 96
+#define BRI_PILL_X 183          // pildora de brillo, centrada (cicla los niveles al tocar)
+#define BRI_PILL_W 100
 static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA", "KO" };
 
 void renderClock() {
@@ -1644,6 +1656,25 @@ void renderClock() {
   setSize(2);
   setCur(34 + (96 - textW(sl, 2)) / 2, LANG_PILL_Y + 8);
   printT(sl);
+
+  // nivel de brillo (centro de la fila): un sol y tres barras, las encendidas son el nivel
+  gfx->fillRoundRect(BRI_PILL_X, LANG_PILL_Y, BRI_PILL_W, LANG_PILL_H, 8, UI_WHITE);
+  gfx->drawRoundRect(BRI_PILL_X, LANG_PILL_Y, BRI_PILL_W, LANG_PILL_H, 8, UI_INK);
+  {
+    int sx = BRI_PILL_X + 26, sy = LANG_PILL_Y + LANG_PILL_H / 2;
+    gfx->fillCircle(sx, sy, 5, UI_INK);
+    static const int8_t RAY[8][2] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1} };
+    for (int i = 0; i < 8; i++) {
+      int k = i < 4 ? 8 : 6, e = i < 4 ? 11 : 9;  // las diagonales algo mas cortas
+      gfx->drawLine(sx + RAY[i][0] * k, sy + RAY[i][1] * k, sx + RAY[i][0] * e, sy + RAY[i][1] * e, UI_INK);
+    }
+    int lit = BRIGHT_LEVELS - userDim;
+    for (int i = 0; i < BRIGHT_LEVELS; i++) {
+      int bh = 8 + i * 5, bx = BRI_PILL_X + 52 + i * 14, by = LANG_PILL_Y + LANG_PILL_H - 6 - bh;
+      if (i < lit) gfx->fillRect(bx, by, 9, bh, UI_BAR_OK);
+      gfx->drawRect(bx, by, 9, bh, UI_INK);
+    }
+  }
 
   // selector de idioma: una pildora que cicla los 6 idiomas al tocar
   gfx->fillRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_WHITE);
@@ -1687,6 +1718,15 @@ void clockTap(int16_t x, int16_t y) {
     if (x >= 34 && x < 130) {                  // interruptor de sonido
       audioSetEnabled(!audioEnabled());
       if (audioEnabled()) sfxPlay(SFX_TAP);    // confirma al encender
+      return;
+    }
+    if (x >= BRI_PILL_X && x < BRI_PILL_X + BRI_PILL_W) {  // cicla brillo: alto, medio, bajo
+      userDim = (userDim + 1) % BRIGHT_LEVELS;
+      Preferences p;
+      p.begin("tamapoke", false);
+      p.putUChar("bri", userDim);
+      p.end();
+      sfxPlay(SFX_TAP);
       return;
     }
     if (x >= LANG_PILL_X && x < LANG_PILL_X + LANG_PILL_W) {  // cicla idioma

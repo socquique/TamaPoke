@@ -159,3 +159,33 @@ TEST(power, con_la_pantalla_apagada_y_sin_usb_el_bucle_despierta_cinco_veces_por
   CHECK(lightSleepAllowed(c));
   CHECK_EQ(1000 / POWER_SLEEP_MS, 5);                  // antes: 1000 despertares por segundo
 }
+
+TEST(power, el_nivel_de_ajustes_escala_el_brillo_y_respeta_el_orden) {
+  PowerCtx c = ctx(0);
+  c.userDim = 1;
+  CHECK_EQ((int)brightnessFor(c), 87);         // 145 al 60 %
+  c.userDim = 2;
+  CHECK_EQ((int)brightnessFor(c), 43);         // 145 al 30 %
+  c.usb = true;
+  CHECK_EQ((int)brightnessFor(c), 54);
+  // en bajo, cada escalon sigue por debajo del anterior y nunca llega a 0
+  c = ctx(0);
+  c.userDim = 2;
+  uint8_t awake = brightnessFor(c);
+  c.idleMs = 100000;
+  uint8_t low = brightnessFor(c);
+  c.sleeping = true;
+  uint8_t lowSleep = brightnessFor(c);
+  c.idleMs = 400000;
+  uint8_t off = brightnessFor(c);
+  CHECK(awake > low);
+  CHECK(low > lowSleep);
+  CHECK(lowSleep >= 2);
+  CHECK(off >= 2);
+  c.screenOff = true;
+  CHECK_EQ((int)brightnessFor(c), 0);          // apagada con PWR sigue siendo 0
+  c = ctx(0);
+  c.batPct = 5;
+  c.userDim = 2;
+  CHECK_EQ((int)brightnessFor(c), 18);         // tope de bateria critica y luego el nivel
+}

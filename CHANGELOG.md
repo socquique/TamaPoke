@@ -6,6 +6,16 @@ bottom of the clock/settings screen (swipe down) and `web/manifest.json`.
 Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 **without** ticking "Erase device" keeps your Pokémon.
 
+## [Unreleased]
+
+### Added
+
+- **Brightness setting** (#34). The clock/settings screen has a new button in
+  the middle of the sound/language row: a sun and three bars. Tapping it cycles
+  high (as before), medium (60 %) and low (30 %). The level scales every
+  brightness the pet uses (awake, asleep, dimmed after a while untouched,
+  low-battery caps) and is saved, so it survives a restart or update.
+
 ## [1.18] - 2026-10-27
 
 Three contributions from **ViezeVingertjes** (PRs #25, #26 and #27), merged together.
