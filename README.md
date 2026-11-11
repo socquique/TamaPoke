@@ -379,6 +379,7 @@ To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in
 
 - **[TamaPoke — Expanded](https://github.com/ShadowEnemyx/TamaPoke/tree/tamapoke-expanded-update)** by **ShadowEnemy** — a substantial community fork (different author/branch): a full **type-matchup battle system**, all **151 + shinies** with a **Pokédex / collection box** and daily goals, **6 UI languages**, **ES8311 sound**, starter choice and a one-click web installer. Worth a look. 🎮
 - **[TamaPoke](https://github.com/DylanPDao/TamaPoke)** by **DylanPDao** — another substantial fork: **gym battles** and **LAN battles** between two devices, **movesets**, a **party + box** system, an **EV/IV** stat system, and coverage extended **up to Gen 3 (386)**. Keeps the PMD sprite pipeline. 🏆
+- **[TamaPoke — Life sim](https://github.com/Mu-Muu/TamaPoke)** by **Mu-Muu** — a gentle, battle-free fork: **all 1025 species** with regions that unlock in order, evolution by age, natures and sickness, real **weather** and a **standby clock**, a farm and album, **English + 简体中文**, points from **chess.com** games, optional **Stack-chan** voice control, and its own web installer. 🌱
 
 ## Credits
 
