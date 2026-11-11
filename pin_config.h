@@ -1,39 +1,57 @@
 #pragma once
 
-// Pines oficiales de la Waveshare ESP32-S3-Touch-AMOLED-1.75
-// Fuente: github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75 (libraries/Mylibrary/pin_config.h)
+// Pin map for the Waveshare ESP32-S3-Touch-AMOLED-1.75 family.
+// Original 1.75: official hardware reference + pin_config.h in
+//   github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75
+// 1.75C: official pin_config.h + schematic in
+//   github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75C
+//   (examples/arduino/libraries/board_config/pin_config.h)
+
+#include "board.h"
 
 #define XPOWERS_CHIP_AXP2101
 
-// Pantalla AMOLED 466x466, driver CO5300 por QSPI
+// Shared: 466x466 CO5300 over QSPI, CST9217 over I2C, ES8311 + amp, AXP2101
 #define LCD_SDIO0 4
 #define LCD_SDIO1 5
 #define LCD_SDIO2 6
 #define LCD_SDIO3 7
-#define LCD_SCLK 38
-#define LCD_CS 12
-#define LCD_RESET 39
-#define LCD_WIDTH 466
+#define LCD_SCLK  38
+#define LCD_CS    12
+#define LCD_WIDTH  466
 #define LCD_HEIGHT 466
 
-// Táctil capacitivo CST9217 por I2C
 #define IIC_SDA 15
 #define IIC_SCL 14
-#define TP_INT 11
-#define TP_RESET 40
+#define TP_INT  11
 
-// Audio ES8311. NOTA: el MCLK real es GPIO42 (verificado en placa con el
-// proyecto PlaneRadar2.0); el 16 que figuraba era erroneo. Aun asi el codec se
-// configura con reloj derivado del BCLK, asi que el MCLK apenas importa.
-#define I2S_MCK_IO 42
 #define I2S_BCK_IO 9
-#define I2S_DI_IO 10
-#define I2S_WS_IO 45
-#define I2S_DO_IO 8
-#define PA 46
+#define I2S_DI_IO  10
+#define I2S_WS_IO  45
+#define I2S_DO_IO  8
+#define PA         46
 
-// Ranura TF (no usada todavía)
-#define SDMMC_CLK 2
-#define SDMMC_CMD 1
-#define SDMMC_DATA 3
-#define SDMMC_CS 41
+#if BOARD_AMOLED_175C
+  // 1.75C — verified against Waveshare pin_config.h and the official schematic
+  #define LCD_RESET  1
+  #define TP_RESET   2
+  #define I2S_MCK_IO 16
+  // PWR button: Key2 → AXP2101 PWRON (4 s hardware power-off) and SYS_OUT → GPIO3
+  // (high while pressed, low while released; 10k pull-up on the board).
+  // BOOT / Key1 is GPIO0 (active-low strapping pin; input only at runtime).
+  #define BOOT_BUTTON_PIN   0
+  #define PWR_SENSE_PIN     3
+  #define PWR_SENSE_PRESSED HIGH
+  #define BOARD_NAME "ESP32-S3-Touch-AMOLED-1.75C"
+#else
+  // Original 1.75 — official Waveshare pins. I2S MCLK is GPIO42 (the "16" in
+  // Waveshare's older Arduino pin_config.h is wrong; see HARDWARE_REFERENCE.md).
+  #define LCD_RESET  39
+  #define TP_RESET   40
+  #define I2S_MCK_IO 42
+  #define SDMMC_CLK  2
+  #define SDMMC_CMD  1
+  #define SDMMC_DATA 3
+  #define SDMMC_CS   41
+  #define BOARD_NAME "ESP32-S3-Touch-AMOLED-1.75"
+#endif

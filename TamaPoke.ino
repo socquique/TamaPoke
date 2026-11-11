@@ -1,11 +1,16 @@
 // TamaPoke - tamagotchi pixel art inspirado en la gen 1
-// para Waveshare ESP32-S3-Touch-AMOLED-1.75
+// para Waveshare ESP32-S3-Touch-AMOLED-1.75 (por defecto)
+// y, como soporte experimental, la ESP32-S3-Touch-AMOLED-1.75C (-DBOARD_AMOLED_175C=1)
 //
 // Librerias (Library Manager o repo de Waveshare):
 //   - "GFX Library for Arduino" (moononournation), con soporte CO5300 QSPI
 //   - "SensorLib" (Lewis He), driver tactil CST9217
 //
-// Placa: ESP32S3 Dev Module | Flash 16MB | PSRAM: OPI PSRAM | USB CDC On Boot: Enabled
+// Original 1.75: ESP32S3 Dev Module | Flash 16MB | PSRAM OPI | CDC On Boot
+//                Partition 16M Flash (3MB APP/9MB FATFS)
+// 1.75C:         ESP32S3 Dev Module | Flash 32MB | PSRAM OPI | CDC On Boot
+//                -DBOARD_AMOLED_175C=1 + boards/175c/partitions.csv
+//                (tools/build_175c.sh). See PORTING.md and board.h.
 //
 // Los sprites y la tabla de especies se generan con tools/sprites.py (emit).
 
@@ -26,6 +31,9 @@
 #include "audio.h"
 #include "blit.h"
 #include "power.h"
+#include "bootbutton.h"
+#include "screenlock.h"
+#include "trainingcapture.h"
 #include <Preferences.h>
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
@@ -71,7 +79,7 @@ bool galleryDirty = false;
 int galleryPage = 0;        // 10 paginas de 16
 int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 
-bool screenOff = false;       // pulsacion corta del boton PWR
+bool screenOff = false;       // original 1.75: single PWR; 1.75C: triple-press lock
 uint8_t userDim = 0;          // nivel de brillo de ajustes (power.h): 0 alto, 1 medio, 2 bajo
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
@@ -157,7 +165,26 @@ static const int16_t STARTER_DEX[3] = { 1, 4, 7 };
 // el CST9217 avisa por el pin INT cuando hay datos tactiles; lo usamos para no
 // leer el bus I2C mientras el chip esta dormido (esa lectura se colgaba ~1s)
 volatile bool gTouchIrq = false;
+#if BOARD_AMOLED_175C
+static portMUX_TYPE touchIrqMux = portMUX_INITIALIZER_UNLOCKED;
+void IRAM_ATTR touchIsr() {
+  portENTER_CRITICAL_ISR(&touchIrqMux);
+  gTouchIrq = true;
+  portEXIT_CRITICAL_ISR(&touchIrqMux);
+}
+static bool takeTouchIrq() {
+  portENTER_CRITICAL(&touchIrqMux);
+  bool pending = gTouchIrq;
+  gTouchIrq = false;
+  portEXIT_CRITICAL(&touchIrqMux);
+  return pending;
+}
+static TrainingCapture trainingCapture;
+static bool trainingCaptureReady = false;
+static bool trainingNeedsRelease = false;
+#else
 void IRAM_ATTR touchIsr() { gTouchIrq = true; }
+#endif
 uint32_t lastRender = 0;
 uint32_t sdEpoch = 0;  // +1 cada vez que se recarga la SD (las miniaturas cambian)
 // proteccion del AMOLED: atenuado por inactividad
@@ -172,6 +199,151 @@ int16_t tX0, tY0, tXl, tYl; // gesto en curso (inicio y ultima posicion)
 uint32_t tStart = 0;
 bool holdFired = false;
 
+// BOOT controls and small overlay; all UI/pet changes stay on the loop task.
+#if BOARD_AMOLED_175C
+BootButton bootButton;
+PwrButton pwrButton;
+ScreenLock screenLock;
+static bool panelSleeping = false;
+static bool touchNeedsRelease = false;
+#endif
+static uint8_t panelBrightness = 255;  // ultimo brillo enviado al panel (255 = forzar el primero)
+#if BOARD_AMOLED_175C
+static char controlToast[48] = "";
+static uint32_t controlToastUntil = 0;
+static bool controlToastVisible = false;
+#endif
+
+bool screenIsLocked() {
+#if BOARD_AMOLED_175C
+  return screenLock.locked();
+#else
+  return false;
+#endif
+}
+
+#if BOARD_AMOLED_175C
+void showControlToast(const char *text, uint32_t duration = 1200) {
+  if (screenIsLocked()) return;  // sync/pet/serial feedback cannot wake a pocketed device
+  snprintf(controlToast, sizeof(controlToast), "%s", text);
+  controlToastUntil = millis() + duration;
+  controlToastVisible = true;
+  galleryDirty = true;
+  screenOff = false;
+  wakeUI();
+}
+
+// Every renderer flushes through this so hints work on settings/gallery too.
+void flushUI() {
+#if BOARD_AMOLED_175C
+  if (screenLock.blank(millis())) return;  // no QSPI frames after the lock hint
+#endif
+  bool lockHint = screenIsLocked();
+  const char *hint = lockHint ? "Locked" : controlToast;
+  if (lockHint || (controlToastVisible && (int32_t)(controlToastUntil - millis()) > 0)) {
+    gfx->fillRoundRect(43, 272, 380, 56, 10, RGB565_BLACK);
+    gfx->drawRoundRect(43, 272, 380, 56, 10, RGB565_WHITE);
+    gfx->setTextColor(RGB565_WHITE);
+    setSize(2);
+    setCur(centerX(hint, 2), 284);
+    printT(hint);
+  }
+  gfx->flush();
+#if BOARD_AMOLED_175C
+  screenLock.frameShown(millis());
+#endif
+}
+#else
+// Original board: no overlays, the flush is exactly the old one.
+inline void flushUI() { gfx->flush(); }
+#endif
+
+#if BOARD_AMOLED_175C
+// BOOT double / long press. Free in the board port; a build with time sync
+// hooks these up to resync and Bluetooth pairing.
+void bootDoublePress() { Serial.println("BOOT double: no action in this build"); }
+void bootLongPress() { Serial.println("BOOT long: no action in this build"); }
+#endif
+
+void pollBootButton() {
+#if BOARD_AMOLED_175C
+  if (screenLock.locked()) return;
+  BootButton::Action action = bootButton.update(digitalRead(BOOT_BUTTON_PIN) == LOW, millis());
+  if (bootButton.active()) { screenOff = false; wakeUI(); }
+  if (action == BootButton::SINGLE) {
+    audioSetEnabled(!audioEnabled());  // existing NVS tamapoke/snd setting
+    Serial.printf("BOOT single: sound %s (saved)\n", audioEnabled() ? "on" : "muted");
+    showControlToast(audioEnabled() ? "Sound on" : "Muted");
+    if (audioEnabled()) sfxPlay(SFX_TAP);
+  } else if (action == BootButton::DOUBLE) {
+    bootDoublePress();
+  } else if (action == BootButton::LONG) {
+    bootLongPress();
+  }
+#endif
+}
+
+// Poll every loop (not the old 250 ms PMU poll, which misses quick presses).
+void pollPwrButton() {
+#if BOARD_AMOLED_175C
+  if (!pwrButton.update(digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED, millis())) return;
+  bool locked = screenLock.toggle();
+  // Discard both a partly-entered BOOT gesture and a finger already on the glass.
+  bootButton.begin(digitalRead(BOOT_BUTTON_PIN) == LOW, millis());
+  wasPressed = false;
+  trainingCapture.reset(true);  // discard hits/exit holds across a lock transition
+  trainingNeedsRelease = false;
+  holdStart = 0;
+  holdFired = false;
+  swallowGesture = true;
+  gTouchIrq = false;
+  controlToastVisible = false;
+  if (locked) {
+    detachInterrupt(digitalPinToInterrupt(TP_INT));
+    screenOff = false;  // render only the 600 ms hint, then blank via powerCtx()
+    galleryDirty = true;
+    lastInteract = millis();
+    Serial.println("PWR triple: Locked");
+  } else {
+    if (panelSleeping) {
+      panel->displayOn();  // CO5300 DISPON + SLPOUT, library's 120 ms delays
+      panelSleeping = false;
+    }
+    screenOff = false;
+    pinMode(TP_INT, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+    touchNeedsRelease = true;
+    gTouchIrq = true;  // one initial sample: swallow any finger held through unlock
+    showControlToast("Unlocked");
+    Serial.println("PWR triple: Unlocked");
+  }
+#else
+  // Keep the original board's PEK short-press behaviour unchanged.
+  static uint32_t lastPwr = 0;
+  uint32_t now = millis();
+  if (now - lastPwr > 250) {
+    lastPwr = now;
+    if (pwrShortPressed()) {
+      screenOff = !screenOff;
+      if (!screenOff) wakeUI();
+    }
+  }
+#endif
+}
+
+void updateScreenLock(uint32_t now) {
+#if BOARD_AMOLED_175C
+  // Leave time for the preceding canvas QSPI DMA to finish before sending commands.
+  if (screenLock.blank(now) && !panelSleeping && now - lastRender >= 100) {
+    panel->setBrightness(0);
+    panelBrightness = 0;
+    panel->displayOff();  // CO5300 DISPOFF (0x28), SLPIN (0x10); NOT shared DCDC1
+    panelSleeping = true;
+    Serial.println("Screen lock: CO5300 off/asleep; touch and BOOT ignored");
+  }
+#endif
+}
+
 void setup() {
   Serial.setRxBufferSize(8192);  // la transferencia a SD llega en bloques de 2 KB
   Serial.begin(115200);
@@ -179,7 +351,7 @@ void setup() {
   // monitor serie abierto en el host (el bufer TX del USB CDC se llena
   // y nadie lo vacia) -> con timeout 0 los mensajes se descartan
   Serial.setTxTimeoutMs(0);
-  Serial.printf("TamaPoke fw v%s\n", FW_VERSION);
+  Serial.printf("TamaPoke fw v%s (%s)\n", FW_VERSION, BOARD_NAME);
   loadLang();  // idioma guardado (ES por defecto)
   Wire.begin(IIC_SDA, IIC_SCL);
   // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
@@ -216,7 +388,7 @@ void setup() {
   // hace falta un reset por hardware para que vuelva a reportar toques
   touch.reset();
   touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
-  touch.setMirrorXY(true, true);  // el panel esta montado girado 180 grados
+  touch.setMirrorXY(true, true);  // panel montado 180 deg; same on official 1.75C widgets demo
   // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
   pinMode(TP_INT, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
@@ -249,6 +421,15 @@ void setup() {
 
   audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
 
+#if BOARD_AMOLED_175C
+  pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
+  bootButton.begin(digitalRead(BOOT_BUTTON_PIN) == LOW, millis());
+  pwrButton.begin(digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED, millis());
+  Serial.println("PWR GPIO3 active high: triple=lock/unlock gap=350ms tap<600ms debounce=25ms; hold 4s=hardware off");
+  Serial.println("BOOT GPIO0 ready: debounce=25ms single=mute");
+  trainingCaptureReady = touchOk && trainingCapture.begin(readTrainingTouch);
+  if (!trainingCaptureReady) Serial.println("Strength training: touch capture unavailable");
+#endif
   lastInteract = millis();
 }
 
@@ -293,19 +474,21 @@ void loop() {
   if (runReady && !wasRunReady) sfxPlay(SFX_DENY);
   wasRunReady = runReady;
 
+#if BOARD_AMOLED_175C
+  pollPwrButton();  // lock input before handling touch/BOOT in this pass
+#endif
   handleTouch();
   handleSerial();
+#if BOARD_AMOLED_175C
+  pollBootButton();
+#endif
   ensureMon();
-
-  // pulsacion corta del PWR: pantalla on/off
-  static uint32_t lastPwr = 0;
-  if (now - lastPwr > 250) {
-    lastPwr = now;
-    if (pwrShortPressed()) {
-      screenOff = !screenOff;
-      if (!screenOff) wakeUI();
-    }
-  }
+#if BOARD_AMOLED_175C
+  updateScreenLock(now);
+  now = millis();  // panel sleep/wake commands include controller settling delays
+#else
+  pollPwrButton();  // original board: same PEK short press as before
+#endif
 
   updateBrightness(now);
 
@@ -322,7 +505,11 @@ void loop() {
   // y aqui no hay animacion que se corte ni dedo esperando respuesta. Con 90s
   // de inactividad la pantalla ya atenua, asi que se vuelca enseguida; el uso
   // activo persiste igual por los guardados de cada accion (comer/jugar/...).
-  if (pet.savePending() && (screenOff || dimStage >= 1 || pet.sleeping)) {
+  bool lockBlank = false;
+#if BOARD_AMOLED_175C
+  lockBlank = screenLock.blank(millis());
+#endif
+  if (pet.savePending() && (screenOff || lockBlank || dimStage >= 1 || pet.sleeping)) {
     pet.flushSave();
   }
 
@@ -338,10 +525,17 @@ void loop() {
   static uint32_t lastHealth = 0;
   if (now - lastHealth > 300000) {
     lastHealth = now;
+#if BOARD_AMOLED_175C
+    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d locked=%d\n",
+                  (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
+                  batPercent(), batMillivolts(), batCharging() ? 1 : 0,
+                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0, screenIsLocked() ? 1 : 0);
+#else
     Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d\n",
                   (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
                   batPercent(), batMillivolts(), batCharging() ? 1 : 0,
                   usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0);
+#endif
   }
 
   // Ritmo de dibujo (power.h): 10 fps con el bicho en uso, menos cuanto mas rato sin tocar,
@@ -360,6 +554,10 @@ void loop() {
   if (interval && now - lastRender >= interval) {
     lastRender = now;
     drewFrame = render();
+#if BOARD_AMOLED_175C
+    // renderSack's capture worker has joined: only the loop changes hits/UI.
+    if (sackOpen && !screenIsLocked()) drainTrainingTouch();
+#endif
   }
   // cede la CPU en los pases que no dibujan: sin esto el loop gira a pleno rendimiento
   // entre frames; 1 ms no se nota en el tactil (se lee cada 20 ms) y el frame no se retrasa
@@ -371,6 +569,9 @@ PowerCtx powerCtx(uint32_t now) {
   PowerCtx c;
   c.idleMs = idleSince(now, lastInteract);
   c.screenOff = screenOff;
+#if BOARD_AMOLED_175C
+  c.screenOff = c.screenOff || screenLock.blank(now);
+#endif
   c.sleeping = pet.sleeping;
   c.gameOpen = gameOpen || sackOpen;
   c.usb = usbPresent();
@@ -383,6 +584,7 @@ PowerCtx powerCtx(uint32_t now) {
 // el usuario ha interactuado: vuelve el ritmo normal de dibujo (sin esperar al proximo
 // frame de un ritmo lento) y el amplificador se enciende antes de que suene nada
 void wakeUI() {
+  if (screenIsLocked()) return;
   uint32_t now = millis();
   uint32_t iv = frameIntervalMs(powerCtx(now));
   bool slow = !iv || iv > 100;  // pantalla apagada o ritmo lento: se dibuja ya, sin esperar al frame
@@ -394,6 +596,9 @@ void wakeUI() {
 
 // brillo segun sueno + inactividad (proteccion del AMOLED) y bateria
 void updateBrightness(uint32_t now) {
+#if BOARD_AMOLED_175C
+  if (panelSleeping) return;  // brightness/auto-dim must never wake a sleeping panel
+#endif
   // los eventos visibles despiertan la pantalla solos
   if (!screenOff && (pet.evolving() || pet.ceremony || pet.eating() || pet.showHeart())) {
     if (dimStageFor(idleSince(now, lastInteract)) != DIM_AWAKE) wakeUI();
@@ -402,9 +607,8 @@ void updateBrightness(uint32_t now) {
   PowerCtx c = powerCtx(now);
   dimStage = dimStageFor(c.idleMs);
   uint8_t target = brightnessFor(c);
-  static uint8_t current = 255;
-  if (target != current) {
-    current = target;
+  if (target != panelBrightness) {
+    panelBrightness = target;
     panel->setBrightness(target);
   }
 }
@@ -414,26 +618,45 @@ void updateBrightness(uint32_t now) {
 // 200 ms: despierta por el temporizador o por un toque (el INT del tactil baja). Con USB no, para
 // no perder el puerto serie de la tarjeta SD: se mira sin cache, por si se acaba de enchufar.
 void idleWait(PowerCtx c) {
-  // no se duerme justo tras dibujar (el volcado DMA del frame sigue en marcha) ni con un aviso sonando
-  if (lightSleepAllowed(c) && millis() - lastRender >= 100 && !audioBusy()) {
+  // no sleep during a gesture/radio operation or while QSPI DMA is in flight
+  bool locked = screenIsLocked();
+  bool controlsBusy = false;
+#if BOARD_AMOLED_175C
+  // PWR must wake at its FIRST edge, then stay awake through
+  // debounce/releases/the next-click window.
+  controlsBusy = pwrButton.active() || (!locked && bootButton.active());
+#endif
+  if (!controlsBusy && lightSleepAllowed(c) && millis() - lastRender >= 100 && !audioBusy()) {
     c.usb = usbPresentNow();
     if (!lightSleepAllowed(c)) { delay(idleDelayMs(c)); return; }
-    if (digitalRead(TP_INT) == LOW) { gTouchIrq = true; delay(1); return; }  // toque pendiente: no se duerme
+    if (!locked && digitalRead(TP_INT) == LOW) { gTouchIrq = true; delay(1); return; }
+#if BOARD_AMOLED_175C
+    if (digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED ||
+        (!locked && digitalRead(BOOT_BUTTON_PIN) == LOW)) { delay(1); return; }
+#endif
     uint32_t ms = POWER_SLEEP_MS;
     uint32_t iv = frameIntervalMs(c);
-    if (iv) {  // pantalla encendida: hasta el proximo frame
+    if (iv) {
       uint32_t due = lastRender + iv - millis();
       if ((int32_t)due < (int32_t)ms) ms = (int32_t)due > 1 ? due : 1;
     }
     esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000);
-    gpio_wakeup_enable((gpio_num_t)TP_INT, GPIO_INTR_LOW_LEVEL);
+    if (!locked) gpio_wakeup_enable((gpio_num_t)TP_INT, GPIO_INTR_LOW_LEVEL);
+#if BOARD_AMOLED_175C
+    gpio_wakeup_enable((gpio_num_t)PWR_SENSE_PIN, GPIO_INTR_HIGH_LEVEL);
+    if (!locked) gpio_wakeup_enable((gpio_num_t)BOOT_BUTTON_PIN, GPIO_INTR_LOW_LEVEL);
+#endif
     esp_sleep_enable_gpio_wakeup();
     esp_light_sleep_start();
-    // la interrupcion del tactil vuelve a ser por flanco (como la dejo attachInterrupt); un toque
-    // que ya haya bajado la linea se registra a mano
-    gpio_wakeup_disable((gpio_num_t)TP_INT);
-    gpio_set_intr_type((gpio_num_t)TP_INT, GPIO_INTR_NEGEDGE);
-    if (digitalRead(TP_INT) == LOW) gTouchIrq = true;
+#if BOARD_AMOLED_175C
+    gpio_wakeup_disable((gpio_num_t)PWR_SENSE_PIN);
+    if (!locked) gpio_wakeup_disable((gpio_num_t)BOOT_BUTTON_PIN);
+#endif
+    if (!locked) {
+      gpio_wakeup_disable((gpio_num_t)TP_INT);
+      gpio_set_intr_type((gpio_num_t)TP_INT, GPIO_INTR_NEGEDGE);
+      if (digitalRead(TP_INT) == LOW) gTouchIrq = true;
+    }
     return;
   }
   delay(idleDelayMs(c));
@@ -446,6 +669,14 @@ void handleSerial() {
   String line = Serial.readStringUntil('\n');
   line.trim();
   if (line.length() == 0) return;
+#if BOARD_AMOLED_175C
+  if (line == "LOCK?") {
+    Serial.printf("LOCK locked=%d panel_sleep=%d pwr=%d\n", screenLock.locked() ? 1 : 0,
+                  panelSleeping ? 1 : 0,
+                  digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED ? 1 : 0);
+    return;
+  }
+#endif
   if (sdSerialCommand(line)) return;
 
   if (line == "HATCH") {
@@ -525,6 +756,13 @@ void handleSerial() {
       if (pet.isRegistered(i)) Serial.printf(" %d", i);
     Serial.println();
     Serial.println("DONE");
+#if BOARD_AMOLED_175C
+  } else if (line == "TRAINTRACE ON" || line == "TRAINTRACE OFF" || line == "TRAINTRACE?") {
+    if (line != "TRAINTRACE?") trainingCapture.setTracing(line == "TRAINTRACE ON");
+    Serial.printf("TRAINTRACE %s poll=20ms trace_drops=%lu kind=0:error,1:contact,2:release,3:empty,4:cover\n",
+                  trainingCapture.tracing() ? "ON" : "OFF", (unsigned long)trainingCapture.traceDropped());
+    Serial.println("DONE");
+#endif
   } else if (line == "HEALTH") {
     Serial.printf("up=%lus heap=%u min=%u sd=%d mon=%d\n",
                   (unsigned long)(millis() / 1000), ESP.getFreeHeap(),
@@ -552,16 +790,107 @@ bool inPetZone(int16_t x, int16_t y) {
   return x > 110 && x < 356 && y > 95 && y < 310;
 }
 
+#if BOARD_AMOLED_175C
+// Retain the legacy getPoint() EMPTY -> no-contact behaviour and 20 ms
+// cadence. The 5 ms/strict-release experiment merged taps on real hardware.
+// Wire errors are still errors; no I2C or serial printing inside the ISR.
+TrainingReport readTrainingTouch() {
+  bool irq = takeTouchIrq();
+  if (!irq && !trainingCapture.down() && digitalRead(TP_INT) != LOW) return {};
+  TrainingReport failed;
+  failed.attempted = true; failed.irq = irq;
+  Wire.beginTransmission(TOUCH_ADDR);
+  if (Wire.endTransmission() != 0) return failed;
+  Wire.beginTransmission(TOUCH_ADDR);
+  Wire.write(0xD0); Wire.write(0x00);
+  if (Wire.endTransmission() != 0) return failed;
+  uint8_t b[15] = {};
+  size_t n = Wire.requestFrom((uint8_t)TOUCH_ADDR, (size_t)sizeof(b));
+  size_t got = Wire.readBytes(b, n > sizeof(b) ? sizeof(b) : n);
+  Wire.beginTransmission(TOUCH_ADDR);
+  Wire.write(0xD0); Wire.write(0x00); Wire.write(0xAB);
+  bool ackOk = Wire.endTransmission() == 0;
+  TrainingReport report = decodeTrainingReport(b, got);
+  report.irq = irq;
+  if (!ackOk || got != sizeof(b)) { report.valid = false; report.kind = TrainingReport::ERROR; }
+  return report;
+}
+
+// Optional bounded raw trace. Default OFF. Only the loop prints, after the
+// worker has joined. Serial TX already has timeout zero; logging cannot block.
+void drainTrainingTrace() {
+  TrainingTrace trace;
+  while (trainingCapture.nextTrace(trace)) {
+    const auto &r = trace.report;
+    Serial.printf("TRAINRAW ms=%lu irq=%u len=%u kind=%u press=%u xy=%d,%d action=%u raw=",
+                  (unsigned long)trace.at, r.irq, r.bytes, (unsigned)r.kind,
+                  r.pressed, r.x, r.y, (unsigned)trace.action);
+    for (uint8_t byte : r.raw) Serial.printf("%02X", byte);
+    Serial.println();
+  }
+}
+
+void leaveSack() {
+  bool held = trainingCapture.down();
+  sackOpen = false;
+  trainingCapture.reset(held);
+  wasPressed = false;
+  trainingNeedsRelease = held;
+  touchNeedsRelease = held;  // never leak an exit hold into the pet/menus
+  gTouchIrq = true;
+}
+
+void drainTrainingTouch() {
+  drainTrainingTrace();
+  TrainingEvent event;
+  while (trainingCapture.next(event)) {
+    wakeUI();
+    if (event.action == TrainingTouch::EXIT && !sackOverUntil &&
+        trainingBeforeDeadline(sackUntil, event.at)) { leaveSack(); return; }
+    // Use capture time, not render/drain time: don't lose a last-moment tap,
+    // or credit a tap that happened after the ten-second deadline.
+    if (event.action == TrainingTouch::HIT && !sackOverUntil &&
+        trainingBeforeDeadline(sackUntil, event.at)) {
+      ++sackHits;
+      sackShake = 16;
+    }
+  }
+  wasPressed = trainingCapture.down();
+}
+#endif
+
 // el toque se resuelve al LEVANTAR el dedo para distinguir tap de deslizar
 void handleTouch() {
+  if (screenIsLocked()) return;  // no touch I2C transactions or actions while locked
+#if BOARD_AMOLED_175C
+  if (trainingNeedsRelease && trainingCaptureReady) {
+    // Swallow the exit contact until the legacy reader reports no point.
+    trainingCapture.poll();
+    wasPressed = trainingCapture.down();
+    if (!trainingCapture.waitingRelease()) {
+      trainingNeedsRelease = false; touchNeedsRelease = false; wasPressed = false;
+    }
+    return;
+  }
+  if (sackOpen) {
+    trainingCapture.poll();  // legacy 20 ms; also serviced during QSPI rendering
+    if (!trainingCapture.waitingRelease()) touchNeedsRelease = false;
+    drainTrainingTouch();
+    return;
+  }
+#endif
   static uint32_t lastPoll = 0;
   if (millis() - lastPoll < 20) return;  // 50 Hz le sobra a un dedo
   lastPoll = millis();
   // solo tocamos el bus si el chip aviso por INT o si el dedo sigue abajo (hay
   // que detectar el levantamiento). Leer el CST9217 dormido se colgaba ~1s y
   // congelaba el loop entero; SensorLib no respeta el timeout de Wire.
+#if BOARD_AMOLED_175C
+  if (!takeTouchIrq() && !wasPressed) return;
+#else
   if (!gTouchIrq && !wasPressed) return;
   gTouchIrq = false;
+#endif
   // Un ciclo de solo direccion antes de leer. Sin esto, getPoint() se colgaba
   // exactamente 1000 ms (el timeout por defecto del driver I2C, que SensorLib no
   // acota) y congelaba el loop entero: es lo que se percibia como "el minijuego
@@ -578,8 +907,16 @@ void handleTouch() {
   if (Wire.endTransmission() != 0) return;  // no responde: se reintenta en 20 ms
   int16_t x, y;
   bool pressed = touch.getPoint(&x, &y, 1) > 0;
+#if BOARD_AMOLED_175C
+  if (touchNeedsRelease) {
+    wasPressed = pressed;
+    if (!pressed) touchNeedsRelease = false;
+    return;
+  }
+#endif
 
-  // saco de entrenamiento: cada toque cuenta al instante (aporrear rapido)
+#if !BOARD_AMOLED_175C
+  // Original board: retain its existing touch/exit policy.
   if (sackOpen) {
     if (pressed && !wasPressed) {
       wakeUI();
@@ -589,6 +926,7 @@ void handleTouch() {
     wasPressed = pressed;
     return;
   }
+#endif
 
   if (pressed && !wasPressed) {  // empieza el gesto
     tX0 = tXl = x;
@@ -927,7 +1265,7 @@ void renderStarterSelect() {
     setCur(178, ry + 24);
     printT(dexName(d));
   }
-  gfx->flush();
+  flushUI();
 }
 
 // ---------- texto: tamano y cursor (preparado para fuentes CJK) ----------
@@ -1090,6 +1428,14 @@ uint32_t lastScreenKey = 0;
 
 // Dibuja un frame y devuelve true si lo ha volcado al panel.
 bool render() {
+#if BOARD_AMOLED_175C
+  if (controlToastVisible || screenIsLocked()) {
+    screenKeyValid = false;
+    galleryDirty = true;
+    // Also invalidate on the first frame after expiry to erase the overlay.
+    if ((int32_t)(controlToastUntil - millis()) <= 0) controlToastVisible = false;
+  }
+#endif
   if (staticScreen()) {
     uint32_t k = screenKey();
     if (screenKeyValid && k == lastScreenKey) return false;
@@ -1139,7 +1485,7 @@ bool render() {
                                                       : T(S_GOODBYE);
     drawHeader(dexName(pet.speciesId), d.accent, msg);
     drawCeremony();
-    gfx->flush();
+    flushUI();
     return true;
   }
 
@@ -1239,7 +1585,7 @@ bool render() {
     else drawChoiceDialog();
   }
 
-  gfx->flush();
+  flushUI();
   return true;
 }
 
@@ -1340,6 +1686,10 @@ void stepGame() {
 
 void startSack() {
   if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+#if BOARD_AMOLED_175C
+  if (!trainingCaptureReady) { showControlToast("Touch capture unavailable"); return; }
+  trainingCapture.reset();
+#endif
   sackOpen = true;
   sackUntil = millis() + 10000;
   sackOverUntil = 0;
@@ -1364,7 +1714,14 @@ void renderSack() {
 
   // pantalla de resultado
   if (sackOverUntil) {
-    if (!timeLeft(sackOverUntil)) { sackOpen = false; return; }
+    if (!timeLeft(sackOverUntil)) {
+#if BOARD_AMOLED_175C
+      leaveSack();
+#else
+      sackOpen = false;
+#endif
+      return;
+    }
     char b[20];
     snprintf(b, sizeof(b), T(S_HITS_FMT), sackHits);
     gfx->setTextColor(ink);
@@ -1389,7 +1746,7 @@ void renderSack() {
       setCur(centerX(r, 2), 256);
       printT(r);
     }
-    gfx->flush();
+    flushUI();
     return;
   }
 
@@ -1397,12 +1754,22 @@ void renderSack() {
   if (!timeLeft(sackUntil)) {
     sackNewHi = (sackHits > pet.strHi);
     sackGain = pet.trainStrength(sackHits);
+#if BOARD_AMOLED_175C
+    Serial.printf("Strength training: hits=%u input_drops=%lu poll=20ms exit_hold=1000ms\n",
+                  sackHits, (unsigned long)trainingCapture.dropped());
+#endif
     sfxPlay(sackNewHi ? SFX_MEDAL : SFX_PLAY);
     sackOverUntil = now + 3500;
-    gfx->flush();
+    flushUI();
     return;
   }
 
+#if BOARD_AMOLED_175C
+  // Everything below is I2C-free. Snapshot policy state before starting the
+  // worker; RAII joins it on return, including the blocking QSPI flush.
+  uint32_t exitHeld = trainingCapture.exitHeldMs(now);
+  TrainingCapture::Frame captureFrame(trainingCapture, !screenIsLocked());
+#endif
   // aporreo activo
   sackShake *= 0.84f;
   int off = (int)(sackShake * sinf(now * 0.05f));
@@ -1431,8 +1798,21 @@ void renderSack() {
   int bw = 280, fw = (int)((uint32_t)bw * left / 10000);
   gfx->fillRoundRect(CX - bw / 2, 350, bw, 16, 5, UI_TRACK);
   if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 350, fw, 16, 5, UI_BAR_OK);
+#if BOARD_AMOLED_175C
+  // Visible, separated from the bag/count/time bar, fully inside the circle.
+  const int ex = TrainingTouch::EXIT_X, ey = TrainingTouch::EXIT_Y;
+  const int ew = TrainingTouch::EXIT_W, eh = TrainingTouch::EXIT_H;
+  gfx->fillRoundRect(ex, ey, ew, eh, 8, UI_TRACK);
+  int progress = (int)(ew * (exitHeld > 1000 ? 1000 : exitHeld) / 1000);
+  if (progress > 2) gfx->fillRoundRect(ex, ey, progress, eh, 8, UI_BAR_WARN);
+  gfx->drawRoundRect(ex, ey, ew, eh, 8, ink);
+  gfx->setTextColor(ink);
+  setSize(2);
+  setCur(centerX(T(S_HOLD_EXIT), 2), ey + 16);
+  printT(T(S_HOLD_EXIT));
+#endif
 
-  gfx->flush();
+  flushUI();
 }
 
 // fondo del minijuego: hatibat del bicho (cielo por hora + suelo del bioma)
@@ -1490,7 +1870,7 @@ void renderGame() {
     gfx->setTextColor(ink);
     setCur(centerX(msg, 2), 250);
     printT(msg);
-    gfx->flush();
+    flushUI();
     return;
   }
 
@@ -1546,7 +1926,7 @@ void renderGame() {
   // la pokeball
   drawMap(SPR_ICON_PLAY, 16, (int)ballX - 24, (int)ballY - 24, 3, false);
 
-  gfx->flush();
+  flushUI();
 }
 
 // ---------- ficha del bicho (deslizar vertical) ----------
@@ -1703,7 +2083,7 @@ void renderClock() {
   setSize(1);
   setCur(centerX(ver, 1), 436);
   printT(ver);
-  gfx->flush();
+  flushUI();
 }
 
 void clockTap(int16_t x, int16_t y) {
@@ -1979,7 +2359,7 @@ void renderCard() {
   setSize(2);
   setCur(centerX(T(S_BACK), 2), 398);
   printT(T(S_BACK));
-  gfx->flush();
+  flushUI();
 }
 
 // ---------- teclado para renombrar ----------
@@ -2028,7 +2408,7 @@ void renderKeyboard() {
       printT(lab);
     }
   }
-  gfx->flush();
+  flushUI();
 }
 
 void keyboardTap(int16_t x, int16_t y) {
@@ -2102,7 +2482,7 @@ void renderGallery() {
     setSize(2);
     setCur(centerX(T(S_DETAIL_BACK), 2), 408);
     printT(T(S_DETAIL_BACK));
-    gfx->flush();
+    flushUI();
     return;
   }
 
@@ -2147,7 +2527,7 @@ void renderGallery() {
     if (i == galleryPage) gfx->fillCircle(170 + i * 14, 436, 4, UI_INK);
     else gfx->drawCircle(170 + i * 14, 436, 3, UI_INK);
   }
-  gfx->flush();
+  flushUI();
 }
 
 void galleryTap(int16_t x, int16_t y) {

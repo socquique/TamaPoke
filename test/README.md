@@ -26,6 +26,9 @@ python3 test/test_tools.py    # solo las herramientas de tools/
 | `test_pet.cpp` | huevo y eleccion de inicial, comida, tick de estadisticas, sueno, descuidos, niveles, evolucion (incluida la rama de Eevee), stats de combate, entrenamiento y minijuego, racha y vinculo, medallas, ceremonias, progresion offline y guardado en NVS |
 | `test_dex.cpp` | integridad de la Pokedex: nombres ASCII, cadenas evolutivas sin bucles, toda especie alcanzable, ninguna linea imposible de completar, limites de los buffers de la UI |
 | `test_i18n.cpp` | los 6 idiomas completos, sin acentos (la fuente GFX es ASCII), y con los mismos `%u`/`%s` que le pasa el sketch en cada llamada |
+| `test_screenlock.cpp` | PWR triple-press, lock hint timing, unlocked reboot, BOOT gesture reset, render/brightness/sleep policy and rollover; `screenlock.cpp` also checks 22 gesture/lock scenarios at compile time |
+| `test_bootbutton.cpp` | 1.75C BOOT button: debounce, single/double/long press timing and edge cases |
+| `test_trainingtouch.cpp` | 1.75C strength training: tap target, hold-to-exit button, CST9217 report decoding |
 | `test_tools.py` | los scripts de `tools/` compilan, los datos de la Pokedex son coherentes y `dex.h` sigue coincidiendo con lo que genera `tools/gen_dex.py` |
 
 ## Como esta montado

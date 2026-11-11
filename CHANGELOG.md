@@ -6,6 +6,20 @@ bottom of the clock/settings screen (swipe down) and `web/manifest.json`.
 Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 **without** ticking "Erase device" keeps your Pokémon.
 
+## [Unreleased]
+
+### Added
+
+- **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
+  build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
+  `boards/175c/partitions.csv`). Sprites come from a LittleFS partition in flash
+  instead of the microSD slot it doesn't have, and time comes from a software
+  clock (no PCF85063). 1.75C only: triple-press PWR locks the screen and touch
+  for your pocket (hold 4 s still powers off), BOOT toggles sound, and strength
+  training counts taps anywhere on the screen with a 1-second "Hold to exit"
+  button. The default build is still the original 1.75 and is unchanged. See
+  `PORTING.md`.
+
 ## [1.19] - 2026-11-11
 
 ### Added

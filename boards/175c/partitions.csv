@@ -1,0 +1,11 @@
+# TamaPoke custom 32 MB map for the Waveshare ESP32-S3-Touch-AMOLED-1.75C.
+# 3 MB application (same budget as the original 16 MB scheme) and the rest
+# as LittleFS for the sprite pack. No second OTA slot — that space is used
+# for sprites (the full 151 + shinies cannot fit in 32 MB flash).
+#
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+app0,       app,  ota_0,    0x10000,  0x300000,
+storage,    data, littlefs, 0x310000, 0x1CE0000,
+coredump,   data, coredump, 0x1FF0000,0x10000,
