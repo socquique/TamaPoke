@@ -31,6 +31,9 @@
 #include "pet.h"
 #include "sdmon.h"
 #include "rtcbat.h"
+#include "nettime.h"
+#include "bttime.h"
+#include "clockzone.h"
 #include "i18n.h"
 #include "audio.h"
 #include "blit.h"
@@ -387,7 +390,89 @@ void updateScreenLock(uint32_t now) {
 #endif
 }
 
+// ---------- hora por red: Wi-Fi NTP y Bluetooth (nettime.h, bttime.h) ----------
+// Todo es opcional: sin credenciales Wi-Fi ni movil emparejado no se enciende
+// ninguna radio y el reloj funciona como siempre.
+enum ManualSyncState { SYNC_IDLE, SYNC_WAIT_BT_STOP, SYNC_BLE };
+static ManualSyncState manualSyncState = SYNC_IDLE;
+static uint32_t manualSyncStarted = 0, manualSyncBleCount = 0;
+static bool pairingFeedback = false;
+static uint32_t pairingBleCount = 0;
+
+// Progress of a manual sync (WIFISYNC / BTPAIR): a short status plus detail.
+// Serial only here; a board with an on-screen overlay can also show `status`
+// for `ms` milliseconds.
+void timeSyncNotice(const char *status, const char *detail, uint32_t ms) {
+  (void)ms;
+  Serial.printf("Time sync: %s (%s)\n", status, detail);
+}
+
+void requestTimeResync() {
+  if (manualSyncState != SYNC_IDLE) {
+    timeSyncNotice("Already syncing time", "already running", 1200);
+    return;
+  }
+  pairingFeedback = false;
+  manualSyncBleCount = btTimeAppliedCount();
+  manualSyncStarted = millis();
+  manualSyncState = SYNC_WAIT_BT_STOP;
+  btTimeStop();  // never run Wi-Fi concurrently with an existing BLE session
+  timeSyncNotice("Syncing time...", "queued Wi-Fi NTP, then BLE CTS if needed", 30000);
+}
+
+// BTPAIR: 120 s pairing window, existing bonds kept.
+void startTimePairing() {
+  manualSyncState = SYNC_IDLE;
+  pairingFeedback = true;
+  pairingBleCount = btTimeAppliedCount();
+  timeSyncNotice("Pairing: phone Bluetooth", "open Settings > Bluetooth on the phone", 5000);
+  btSerialCommand("BTPAIR");  // exactly the serial pairing path; preserves bonds
+}
+
+void pollManualTimeSync() {
+  if (manualSyncState == SYNC_WAIT_BT_STOP) {
+    // Let at least one UI frame (including DMA) complete before bounded NTP.
+    if (millis() - manualSyncStarted < 200) return;
+    if (btTimeBusy()) {
+      if (millis() - manualSyncStarted > 15000) {
+        manualSyncState = SYNC_IDLE;
+        timeSyncNotice("Sync failed", "BLE did not stop", 1500);
+      }
+      return;
+    }
+    bool ok = netTimeHasCreds() && netTimeSync();
+    if (ok) {
+      pet.syncClock(rtcEpoch());
+      manualSyncState = SYNC_IDLE;
+      timeSyncNotice("Time OK", "Wi-Fi NTP", 1500);
+    } else {
+      manualSyncBleCount = btTimeAppliedCount();
+      btTimeStart(45000, false);
+      manualSyncState = SYNC_BLE;
+      timeSyncNotice("Syncing time: Bluetooth", "Wi-Fi unavailable; BLE CTS fallback 45s", 60000);
+    }
+  } else if (manualSyncState == SYNC_BLE) {
+    if (btTimeAppliedCount() != manualSyncBleCount) {
+      manualSyncState = SYNC_IDLE;
+      timeSyncNotice("Time OK", "BLE", 1500);
+    } else if (!btTimeBusy()) {
+      manualSyncState = SYNC_IDLE;
+      timeSyncNotice("Sync failed", "Wi-Fi and BLE", 1500);
+    }
+  }
+  if (pairingFeedback) {
+    if (btTimeAppliedCount() != pairingBleCount) {
+      pairingFeedback = false;
+      timeSyncNotice("Bluetooth time OK", "paired phone", 1500);
+    } else if (!btTimeBusy()) {
+      pairingFeedback = false;
+      timeSyncNotice("Pairing window ended", "no time received", 1500);
+    }
+  }
+}
+
 void setup() {
+  clockZoneBegin();  // before RTC, NTP, BLE, pet dates, or any civil-time use
   Serial.setRxBufferSize(8192);  // la transferencia a SD llega en bloques de 2 KB
   Serial.begin(115200);
   // CRITICO: sin esto, Serial.print BLOQUEA el juego cuando no hay un
@@ -395,6 +480,9 @@ void setup() {
   // y nadie lo vacia) -> con timeout 0 los mensajes se descartan
   Serial.setTxTimeoutMs(0);
   Serial.printf("TamaPoke fw v%s (%s)\n", FW_VERSION, BOARD_NAME);
+  Serial.printf("Timezone %s, selftest=%s\n",
+                clockZoneName()[0] ? clockZoneName() : "(none, UTC pass-through)",
+                clockZoneSelfTest() ? "PASS" : "FAIL");
   loadLang();  // idioma guardado (ES por defecto)
   Wire.begin(IIC_SDA, IIC_SCL);
   // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
@@ -478,7 +566,20 @@ void setup() {
     Serial.printf("RTC sin hora: sembrado en %u%s\n", seed,
                   seen > 1767225600UL ? " (desde la ultima hora guardada)" : "");
   }
+  // Hora por red, solo si se ha configurado: con credenciales Wi-Fi en NVS se
+  // intenta NTP (timeouts duros) y se apaga la radio. Si falla y ya hay un movil
+  // emparejado por Bluetooth (BTPAIR), se anuncia 45 s en segundo plano para que
+  // ponga la hora. Sin nada de eso, el arranque es exactamente el de antes.
+  bool ntpOk = false;
+  if (netTimeHasCreds()) {
+    ntpOk = netTimeSync();
+    if (ntpOk) e = rtcEpoch();
+  }
   pet.syncClock(e);
+  if (!ntpOk && btTimeHasBond()) {
+    Serial.println("BLE time: advertising 45s for the paired phone (BTSYNC to retry)");
+    btTimeStart(45000, false);
+  }
 
   audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
 
@@ -543,6 +644,9 @@ void loop() {
 #if BOARD_AMOLED_175C
   pollBootButton();
 #endif
+  btTimePoll();
+  pollManualTimeSync();
+  now = millis();  // un NTP manual puede haber esperado (con timeouts acotados)
   ensureMon();
 #if BOARD_AMOLED_175C
   updateScreenLock(now);
@@ -688,7 +792,8 @@ void idleWait(PowerCtx c) {
   // debounce/releases/the next-click window.
   controlsBusy = pwrButton.active() || (!locked && bootButton.active());
 #endif
-  if (!controlsBusy && lightSleepAllowed(c) && millis() - lastRender >= 100 && !audioBusy()) {
+  bool syncBusy = manualSyncState != SYNC_IDLE || btTimeBusy();
+  if (!controlsBusy && !syncBusy && lightSleepAllowed(c) && millis() - lastRender >= 100 && !audioBusy()) {
     c.usb = usbPresentNow();
     if (!lightSleepAllowed(c)) { delay(idleDelayMs(c)); return; }
     if (!locked && digitalRead(TP_INT) == LOW) { gTouchIrq = true; delay(1); return; }
@@ -741,6 +846,14 @@ void handleSerial() {
   }
 #endif
   if (sdSerialCommand(line)) return;
+  if (clockZoneSerialCommand(line)) return;
+  if (netSerialCommand(line)) return;
+  if (line == "BTPAIR") { startTimePairing(); return; }
+  if (line == "BTSYNC" || line == "BTCLR") {
+    manualSyncState = SYNC_IDLE;
+    pairingFeedback = false;
+  }
+  if (btSerialCommand(line)) return;
 
   if (line == "HATCH") {
     pet.eggTap(); pet.eggTap(); pet.eggTap();
@@ -767,7 +880,13 @@ void handleSerial() {
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
   } else if (line == "TIME") {
-    Serial.printf("rtc=%u\n", rtcEpoch());
+    uint32_t epoch = rtcEpoch();
+    struct tm local = {};
+    char stamp[32] = "invalid";
+    if (clockLocalTime(epoch, local)) strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &local);
+    Serial.printf("rtc=%lu local=%s tz=%s scene_hour=%d age_min=%lu clock_selftest=%s fw=%s\n",
+                  (unsigned long)epoch, stamp, clockZoneName()[0] ? clockZoneName() : "none", sceneHour(),
+                  (unsigned long)pet.ageMinutes, clockZoneSelfTest() ? "PASS" : "FAIL", FW_VERSION);
     Serial.println("DONE");
   } else if (line == "GAL") {
     galleryOpen = !galleryOpen;
@@ -1216,7 +1335,8 @@ uint16_t lerp565(uint16_t a, uint16_t b, int i, int n) {
 // hora del dia 0-23 (de la hora real cacheada cada 30s; 13 si no hay reloj)
 int sceneHour() {
   uint32_t e = pet.lastSeenEpoch;
-  return e ? (int)((e / 3600) % 24) : 13;
+  struct tm local = {};
+  return clockLocalTime(e, local) ? local.tm_hour : 13;  // hora local (sin zona: la de siempre)
 }
 
 // suelo de cada bioma de dia (de noche se mezcla hacia el azul nocturno)
@@ -2050,19 +2170,25 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
 }
 
 // ---------- ajuste de hora en pantalla (deslizar abajo) ----------
-// El usuario pone su hora LOCAL a ojo; el firmware la usa tal cual, asi que
-// no hay que gestionar zona horaria. Preserva el dia (no rompe racha/edad).
+// El usuario pone su hora LOCAL. Sin zona horaria (lo normal) se usa tal cual,
+// como siempre; con una zona puesta (TZ) se convierte a UTC con mktime.
+// Preserva el dia local (no rompe racha/edad) y no aplica envejecimiento.
 
 void openClock() {
   uint32_t e = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
-  clockH = (e / 3600) % 24;
-  clockM = (e / 60) % 60;
+  struct tm local = {};
+  if (clockLocalTime(e, local)) { clockH = local.tm_hour; clockM = local.tm_min; }
   clockOpen = true;
 }
 
 void applyClock() {
   uint32_t base = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
-  uint32_t e = (base / 86400) * 86400 + (uint32_t)clockH * 3600 + (uint32_t)clockM * 60;
+  struct tm local = {};
+  if (!clockLocalTime(base, local)) return;
+  local.tm_hour = clockH; local.tm_min = clockM; local.tm_sec = 0; local.tm_isdst = -1;
+  time_t converted = mktime(&local);
+  if (converted <= 0 || (uint64_t)converted > 0xFFFFFFFFULL) return;
+  uint32_t e = (uint32_t)converted;
   rtcSetEpoch(e);
   pet.setClock(e);
   clockOpen = false;

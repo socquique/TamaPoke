@@ -7,6 +7,14 @@ bool rtcBegin();
 uint32_t rtcEpoch();             // segundos unix; 0 si el RTC no es valido
 void rtcSetEpoch(uint32_t e);
 
+// Compile-date floor used by NTP and BLE: __DATE__/__TIME__ treated as UTC,
+// minus two days so a TZ skew cannot reject a valid stamp. An epoch at or
+// above this is "real" (the 2026-01-01 boot seed is below it).
+uint32_t rtcCompileFloorEpoch();
+bool rtcEpochIsPlausible(uint32_t e);
+// Civil date-time as UTC Unix seconds (Howard Hinnant days_from_civil).
+uint32_t rtcCivilToEpoch(int year, int mon, int day, int hour, int min, int sec);
+
 // PMU AXP2101: estado de la bateria
 bool batBegin();
 void pmuEnablePanel();           // enciende BLDO1 (OLED VDD 3.3V); llamar antes de gfx->begin()

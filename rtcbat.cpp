@@ -1,8 +1,11 @@
 #include "batcurve.h"
 #include "rtcbat.h"
+#include "clockzone.h"
 #include "pin_config.h"  // define XPOWERS_CHIP_AXP2101 y capacidades (HAS_RTC/HAS_PMU)
 #include <Wire.h>
 #include <time.h>
+#include <stdio.h>
+#include <string.h>
 
 #if HAS_RTC
 #include <SensorPCF85063.hpp>
@@ -16,6 +19,36 @@ static XPowersPMU pmu;
 static bool pmuOk = false;
 #endif
 
+uint32_t rtcCivilToEpoch(int year, int mon, int day, int hour, int min, int sec) {
+  return clockCivilEpoch(year, mon, day, hour, min, sec);
+}
+
+uint32_t rtcCompileFloorEpoch() {
+  static uint32_t cached = 0;
+  if (cached) return cached;
+  const char *months = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  char mon[4] = {0};
+  int d = 0, y = 0, H = 0, M = 0, S = 0;
+  if (sscanf(__DATE__, "%3s %d %d", mon, &d, &y) != 3) {
+    cached = 1767225600UL + 30UL * 86400UL;  // fallback: a month after the seed
+    return cached;
+  }
+  sscanf(__TIME__, "%d:%d:%d", &H, &M, &S);
+  const char *p = strstr(months, mon);
+  int mon1 = p ? (int)(p - months) / 3 + 1 : 1;
+  int64_t sec = (int64_t)rtcCivilToEpoch(y, mon1, d, H, M, S);
+  // __DATE__/__TIME__ are the build machine's local clock; treat as UTC and
+  // subtract two days so a TZ skew cannot reject a valid stamp.
+  sec -= (int64_t)2 * 86400;
+  if (sec < 0) sec = 0;
+  cached = (uint32_t)sec;
+  return cached;
+}
+
+bool rtcEpochIsPlausible(uint32_t e) {
+  return e >= rtcCompileFloorEpoch();
+}
+
 #if HAS_RTC
 bool rtcBegin() {
   rtcOk = rtc.begin(Wire, IIC_SDA, IIC_SCL);
@@ -27,15 +60,12 @@ uint32_t rtcEpoch() {
   if (!rtcOk) return 0;
   RTC_DateTime t = rtc.getDateTime();
   if (t.getYear() < 2025 || t.getYear() > 2120) return 0;  // sin hora valida
-  struct tm tmv = {};
-  tmv.tm_year = t.getYear() - 1900;
-  tmv.tm_mon = t.getMonth() - 1;
-  tmv.tm_mday = t.getDay();
-  tmv.tm_hour = t.getHour();
-  tmv.tm_min = t.getMinute();
-  tmv.tm_sec = t.getSecond();
-  time_t e = mktime(&tmv);  // TZ por defecto = UTC, consistente con gmtime_r
-  return e > 0 ? (uint32_t)e : 0;
+  // El PCF guarda UTC (rtcSetEpoch escribe con gmtime_r). Conversion
+  // independiente de TZ: con TZ sin poner da lo mismo que el mktime de antes,
+  // y con una zona horaria puesta no resta la diferencia dos veces.
+  uint32_t e = rtcCivilToEpoch(t.getYear(), t.getMonth(), t.getDay(),
+                               t.getHour(), t.getMinute(), t.getSecond());
+  return e;
 }
 
 void rtcSetEpoch(uint32_t e) {
