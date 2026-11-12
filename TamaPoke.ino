@@ -797,7 +797,7 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
   if (feedMenuUntil) {       // selector de comida
-    if (timeLeft(feedMenuUntil) && y >= 288 && y <= 352 && x >= 101 + UI_DX && x <= 365 + UI_DX) {
+    if (timeLeft(feedMenuUntil) && y >= 288 && y <= 352 && x >= 101 + UI_DX && x < 365 + UI_DX) {
       int item = (x - 101 - UI_DX) / 66;
       if (item == 3) pet.feedCandy();
       else pet.feedBerry(item);
@@ -1317,7 +1317,7 @@ void startGame() {
 }
 
 void respawnBall() {
-  ballX = 150 + random(166);
+  ballX = 150 + UI_DX + random(166);
   ballY = 96;
   float sp = 1.6f + gameScore * 0.05f;  // mas viva segun avanzas
   if (sp > 4.0f) sp = 4.0f;
