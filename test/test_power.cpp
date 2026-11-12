@@ -1,6 +1,7 @@
 // Politica de consumo (power.h).
 #include "framework.h"
 #include "../power.h"
+#include "../audio.h"
 
 static PowerCtx ctx(uint32_t idle) {
   PowerCtx c = {};
@@ -188,4 +189,12 @@ TEST(power, el_nivel_de_ajustes_escala_el_brillo_y_respeta_el_orden) {
   c.batPct = 5;
   c.userDim = 2;
   CHECK_EQ((int)brightnessFor(c), 18);         // tope de bateria critica y luego el nivel
+}
+
+TEST(power, los_niveles_de_volumen_bajan_y_el_alto_es_el_de_siempre) {
+  CHECK_EQ((int)sfxAmp(0), 5000);
+  CHECK(sfxAmp(1) < sfxAmp(0));
+  CHECK(sfxAmp(2) < sfxAmp(1));
+  CHECK(sfxAmp(2) > 0);
+  CHECK_EQ((int)sfxAmp(7), (int)sfxAmp(2));   // un valor raro guardado no sube el volumen
 }

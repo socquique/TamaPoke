@@ -20,6 +20,7 @@ static I2SClass i2s;
 static bool gReady = false;
 static bool gOn = true;
 static bool gSleeping = false;
+static uint8_t gVol = 0;           // nivel de volumen (audio.h): 0 alto, 1 medio, 2 bajo
 static bool gIdle = false;          // sin interaccion reciente (ver power.h): el amplificador consume en reposo
 static uint32_t gAmpHoldUntil = 0;  // un efecto pedido en reposo mantiene el amplificador encendido hasta aqui
 static bool gAmpHold = false;       // (indicador aparte: asi la comparacion no falla al dar la vuelta millis())
@@ -125,7 +126,7 @@ static int16_t buf[256 * 2];  // estéreo intercalado (L=R)
 static void playTone(uint16_t f, uint16_t ms) {
   int total = SAMPLE_RATE * ms / 1000;
   int half = f ? (SAMPLE_RATE / (2 * f)) : 0;  // medio periodo en muestras
-  const int16_t amp = 5000;
+  const int16_t amp = sfxAmp(gVol);
   int phase = 0, done = 0;
   bool high = true;
   while (done < total) {
@@ -176,6 +177,7 @@ void audioBegin() {
   Preferences p;
   p.begin("tamapoke", true);
   gOn = p.getBool("snd", true);
+  gVol = p.getUChar("vol", 0) % VOL_LEVELS;
   p.end();
 
   gReady = true;
@@ -207,6 +209,15 @@ void audioSetEnabled(bool on) {
   p.end();
 }
 bool audioEnabled() { return gOn; }
+
+void audioSetVolume(uint8_t level) {
+  gVol = level % VOL_LEVELS;
+  Preferences p;
+  p.begin("tamapoke", false);
+  p.putUChar("vol", gVol);
+  p.end();
+}
+uint8_t audioVolume() { return gVol; }
 
 void audioSetSleeping(bool sleeping) {
   if (gSleeping == sleeping) return;

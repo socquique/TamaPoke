@@ -19,6 +19,9 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   training counts taps anywhere on the screen with a 1-second "Hold to exit"
   button. The default build is still the original 1.75 and is unchanged. See
   `PORTING.md`.
+- **Volume levels** (#21). The sound button on the clock/settings screen now
+  shows a speaker with three bars and cycles **high** (as before), **medium**,
+  **low** and **off**. The level is saved, so it survives a restart or update.
 
 ## [1.19] - 2026-11-11
 

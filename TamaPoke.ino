@@ -1409,6 +1409,7 @@ static uint32_t screenKey() {
   } else if (clockOpen) {
     h = mixKey(h, clockH * 60 + clockM);
     h = mixKey(h, audioEnabled());
+    h = mixKey(h, audioVolume());
     h = mixKey(h, userDim);
     h = mixKey(h, gLang);
   } else if (cardOpen) {
@@ -1998,9 +1999,20 @@ void drawClockBtn(int x, int y, const char *l) {
 #define LANG_PILL_H 30
 #define LANG_PILL_X 336          // pildora de idioma (cicla LANG_COUNT al tocar)
 #define LANG_PILL_W 96
+#define SND_PILL_X 34           // pildora de sonido (cicla alto, medio, bajo y apagado)
+#define SND_PILL_W 96
 #define BRI_PILL_X 183          // pildora de brillo, centrada (cicla los niveles al tocar)
 #define BRI_PILL_W 100
 static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA", "KO" };
+
+// tres barras crecientes (brillo, volumen); las `lit` primeras van rellenas
+static void drawLevelBars(int x, int lit) {
+  for (int i = 0; i < 3; i++) {
+    int bh = 8 + i * 5, bx = x + i * 14, by = LANG_PILL_Y + LANG_PILL_H - 6 - bh;
+    if (i < lit) gfx->fillRect(bx, by, 9, bh, UI_BAR_OK);
+    gfx->drawRect(bx, by, 9, bh, UI_INK);
+  }
+}
 
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
@@ -2027,15 +2039,23 @@ void renderClock() {
   setCur(276, 256);
   printT(T(S_MIN));
 
-  // interruptor de sonido (izquierda de la fila de idioma)
-  bool snd = audioEnabled();
-  const char *sl = snd ? T(S_SND_ON) : T(S_SND_OFF);
-  gfx->fillRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, snd ? UI_BAR_OK : UI_WHITE);
-  gfx->drawRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, UI_INK);
-  gfx->setTextColor(snd ? UI_BG_DAY : UI_INK);
-  setSize(2);
-  setCur(34 + (96 - textW(sl, 2)) / 2, LANG_PILL_Y + 8);
-  printT(sl);
+  // sonido (izquierda de la fila): un altavoz y tres barras con el volumen, o una X si esta apagado
+  gfx->fillRoundRect(SND_PILL_X, LANG_PILL_Y, SND_PILL_W, LANG_PILL_H, 8, UI_WHITE);
+  gfx->drawRoundRect(SND_PILL_X, LANG_PILL_Y, SND_PILL_W, LANG_PILL_H, 8, UI_INK);
+  {
+    int sx = SND_PILL_X + 18, sy = LANG_PILL_Y + LANG_PILL_H / 2;
+    gfx->fillRect(sx, sy - 4, 5, 8, UI_INK);                           // cuerpo del altavoz
+    gfx->fillTriangle(sx + 4, sy, sx + 12, sy - 9, sx + 12, sy + 9, UI_INK);  // bocina
+    if (audioEnabled()) {
+      drawLevelBars(SND_PILL_X + 46, VOL_LEVELS - audioVolume());
+    } else {
+      int xx = SND_PILL_X + 58;
+      for (int d = -1; d <= 1; d++) {  // X de 3 px de grueso
+        gfx->drawLine(xx - 7 + d, sy - 7, xx + 7 + d, sy + 7, UI_BAR_BAD);
+        gfx->drawLine(xx - 7 + d, sy + 7, xx + 7 + d, sy - 7, UI_BAR_BAD);
+      }
+    }
+  }
 
   // nivel de brillo (centro de la fila): un sol y tres barras, las encendidas son el nivel
   gfx->fillRoundRect(BRI_PILL_X, LANG_PILL_Y, BRI_PILL_W, LANG_PILL_H, 8, UI_WHITE);
@@ -2048,12 +2068,7 @@ void renderClock() {
       int k = i < 4 ? 8 : 6, e = i < 4 ? 11 : 9;  // las diagonales algo mas cortas
       gfx->drawLine(sx + RAY[i][0] * k, sy + RAY[i][1] * k, sx + RAY[i][0] * e, sy + RAY[i][1] * e, UI_INK);
     }
-    int lit = BRIGHT_LEVELS - userDim;
-    for (int i = 0; i < BRIGHT_LEVELS; i++) {
-      int bh = 8 + i * 5, bx = BRI_PILL_X + 52 + i * 14, by = LANG_PILL_Y + LANG_PILL_H - 6 - bh;
-      if (i < lit) gfx->fillRect(bx, by, 9, bh, UI_BAR_OK);
-      gfx->drawRect(bx, by, 9, bh, UI_INK);
-    }
+    drawLevelBars(BRI_PILL_X + 52, BRIGHT_LEVELS - userDim);
   }
 
   // selector de idioma: una pildora que cicla los 6 idiomas al tocar
@@ -2095,9 +2110,16 @@ void clockTap(int16_t x, int16_t y) {
     return;
   }
   if (y >= LANG_PILL_Y && y <= LANG_PILL_Y + LANG_PILL_H) {
-    if (x >= 34 && x < 130) {                  // interruptor de sonido
-      audioSetEnabled(!audioEnabled());
-      if (audioEnabled()) sfxPlay(SFX_TAP);    // confirma al encender
+    if (x >= SND_PILL_X && x < SND_PILL_X + SND_PILL_W) {  // cicla sonido: alto, medio, bajo, apagado
+      if (!audioEnabled()) {
+        audioSetVolume(0);
+        audioSetEnabled(true);
+      } else if (audioVolume() + 1 < VOL_LEVELS) {
+        audioSetVolume(audioVolume() + 1);
+      } else {
+        audioSetEnabled(false);
+      }
+      if (audioEnabled()) sfxPlay(SFX_TAP);    // se oye el nivel nuevo
       return;
     }
     if (x >= BRI_PILL_X && x < BRI_PILL_X + BRI_PILL_W) {  // cicla brillo: alto, medio, bajo
