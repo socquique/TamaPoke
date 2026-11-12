@@ -151,6 +151,9 @@ int flashIdxForDex(int16_t dex) {
 
 #define CX (LCD_WIDTH / 2)  // centro de la pantalla redonda
 #define CY (LCD_HEIGHT / 2)
+// desplazamiento horizontal de la UI respecto al diseno original de 466 px (centro 233):
+// 0 en Waveshare, 7 en 480x480. Se suma a toda x literal de cajas, botones y zonas tactiles
+#define UI_DX (CX - 233)
 #define PET_CY 202  // centro vertical del sprite
 
 static const uint16_t INK_K = 0x18C4;  // spriteColor('k')
@@ -162,10 +165,10 @@ struct Btn {
   const char *const *icon;
 };
 Btn buttons[4] = {
-  { 140, 390, SPR_ICON_FOOD },   // comer
-  { 202, 404, SPR_ICON_PLAY },   // jugar
-  { 264, 404, SPR_ICON_LIGHT },  // luz
-  { 326, 390, SPR_ICON_CLEAN },  // bano
+  { 140 + UI_DX, 390, SPR_ICON_FOOD },   // comer
+  { 202 + UI_DX, 404, SPR_ICON_PLAY },   // jugar
+  { 264 + UI_DX, 404, SPR_ICON_LIGHT },  // luz
+  { 326 + UI_DX, 390, SPR_ICON_CLEAN },  // bano
 };
 #define BTN_HALF 26  // boton de 52x52
 #define BTN_HIT 36   // radio tactil (un poco mas generoso)
@@ -600,7 +603,7 @@ void handleSerial() {
 // ---------- entrada tactil ----------
 
 bool inPetZone(int16_t x, int16_t y) {
-  return x > 110 && x < 356 && y > 95 && y < 310;
+  return x > 110 + UI_DX && x < 356 + UI_DX && y > 95 && y < 310;
 }
 
 // el toque se resuelve al LEVANTAR el dedo para distinguir tap de deslizar
@@ -738,7 +741,7 @@ void onTap(int16_t x, int16_t y) {
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial
     for (int i = 0; i < 3; i++) {
       int ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP);
-      if (x >= 70 && x <= 396 && y >= ry && y <= ry + STARTER_ROW_H) {
+      if (x >= 70 + UI_DX && x <= 396 + UI_DX && y >= ry && y <= ry + STARTER_ROW_H) {
         pet.chooseStarter(STARTER_DEX[i]);
         sfxPlay(SFX_TAP);
         break;
@@ -761,7 +764,7 @@ void onTap(int16_t x, int16_t y) {
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
     if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
-    else if (cardPage == 1 && y >= 300 && y <= 340 && x >= 96 && x <= 370) {
+    else if (cardPage == 1 && y >= 300 && y <= 340 && x >= 96 + UI_DX && x <= 370 + UI_DX) {
       cardOpen = false;            // boton ENTRENAR FUERZA
       startSack();
     } else {
@@ -774,8 +777,8 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
   if (choiceKind) {          // dialogo de decision: boton accion (arriba) / mantener (abajo)
-    bool b1 = (x >= 93 && x <= 373 && y >= 206 && y <= 258);  // accion
-    bool b2 = (x >= 93 && x <= 373 && y >= 268 && y <= 320);  // mantener / quedaros
+    bool b1 = (x >= 93 + UI_DX && x <= 373 + UI_DX && y >= 206 && y <= 258);  // accion
+    bool b2 = (x >= 93 + UI_DX && x <= 373 + UI_DX && y >= 268 && y <= 320);  // mantener / quedaros
     if (choiceKind == 1) {                 // evolucion
       if (b1) { int16_t old = pet.speciesId; pet.evolve(); evoPmd.load(old, pet.shiny); }
       else if (b2) pet.declineEvolve();
@@ -787,15 +790,15 @@ void onTap(int16_t x, int16_t y) {
     return;
   }
   if (confirmUntil) {        // dialogo "soltar?": SI / NO
-    if (timeLeft(confirmUntil) && x >= 118 && x <= 218 && y >= 252 && y <= 304) {
+    if (timeLeft(confirmUntil) && x >= 118 + UI_DX && x <= 218 + UI_DX && y >= 252 && y <= 304) {
       pet.release();
     }
     confirmUntil = 0;
     return;
   }
   if (feedMenuUntil) {       // selector de comida
-    if (timeLeft(feedMenuUntil) && y >= 288 && y <= 352 && x >= 101 && x <= 365) {
-      int item = (x - 101) / 66;
+    if (timeLeft(feedMenuUntil) && y >= 288 && y <= 352 && x >= 101 + UI_DX && x <= 365 + UI_DX) {
+      int item = (x - 101 - UI_DX) / 66;
       if (item == 3) pet.feedCandy();
       else pet.feedBerry(item);
       sfxPlay(SFX_EAT);
@@ -974,13 +977,13 @@ void renderStarterSelect() {
     int16_t d = STARTER_DEX[i];
     const DexEntry &de = DEX_TBL[d];
     int ry = STARTER_ROW_Y + i * (STARTER_ROW_H + STARTER_ROW_GAP);
-    gfx->fillRoundRect(70, ry, 326, STARTER_ROW_H, 14, lerp565(de.accent, UI_WHITE, 6, 8));
-    gfx->drawRoundRect(70, ry, 326, STARTER_ROW_H, 14, de.accent);
+    gfx->fillRoundRect(70 + UI_DX, ry, 326, STARTER_ROW_H, 14, lerp565(de.accent, UI_WHITE, 6, 8));
+    gfx->drawRoundRect(70 + UI_DX, ry, 326, STARTER_ROW_H, 14, de.accent);
     const uint8_t *th = thumbs.get(d);     // miniatura del inicial (si la SD esta lista)
-    if (th) drawThumb(th, 76, ry - 5, 3, false);
+    if (th) drawThumb(th, 76 + UI_DX, ry - 5, 3, false);
     gfx->setTextColor(UI_INK);
     setSize(3);
-    setCur(178, ry + 24);
+    setCur(178 + UI_DX, ry + 24);
     printT(dexName(d));
   }
   gfx->flush();
@@ -1183,7 +1186,7 @@ bool render() {
   }
   int h = sceneHour();
   gNight = pet.sleeping || h < 6 || h >= 20;
-  // drawScene cubre los 466x466 completos: sin fillScreen(NEGRO) previo para
+  // drawScene cubre la pantalla completa (LCD_WIDTH x LCD_HEIGHT): sin fillScreen(NEGRO) previo para
   // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo)
   drawScene(pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome, millis(), gNight);
 
@@ -1243,7 +1246,7 @@ bool render() {
   if (pet.sleeping) {
     gfx->setTextColor(UI_INK_NIGHT);
     setSize(3);
-    setCur(320, 130);
+    setCur(320 + UI_DX, 130);
     printT("Zz");
   }
 
@@ -1252,12 +1255,12 @@ bool render() {
     if (!timeLeft(feedMenuUntil)) {
       feedMenuUntil = 0;
     } else {
-      gfx->fillRoundRect(101, 288, 264, 64, 14, UI_WHITE);
-      gfx->drawRoundRect(101, 288, 264, 64, 14, inkColor());
-      drawMap(SPR_ICON_FOOD, 16, 110, 296, 3, false);
-      drawMap(SPR_ICON_BERRY_B, 16, 176, 296, 3, false);
-      drawMap(SPR_ICON_BERRY_G, 16, 242, 296, 3, false);
-      drawMap(SPR_ICON_CANDY, 16, 308, 296, 3, false);
+      gfx->fillRoundRect(101 + UI_DX, 288, 264, 64, 14, UI_WHITE);
+      gfx->drawRoundRect(101 + UI_DX, 288, 264, 64, 14, inkColor());
+      drawMap(SPR_ICON_FOOD, 16, 110 + UI_DX, 296, 3, false);
+      drawMap(SPR_ICON_BERRY_B, 16, 176 + UI_DX, 296, 3, false);
+      drawMap(SPR_ICON_BERRY_G, 16, 242 + UI_DX, 296, 3, false);
+      drawMap(SPR_ICON_CANDY, 16, 308 + UI_DX, 296, 3, false);
     }
   }
 
@@ -1266,8 +1269,8 @@ bool render() {
     if (!timeLeft(confirmUntil)) {
       confirmUntil = 0;
     } else {
-      gfx->fillRoundRect(94, 168, 278, 152, 16, UI_WHITE);
-      gfx->drawRoundRect(94, 168, 278, 152, 16, UI_INK);
+      gfx->fillRoundRect(94 + UI_DX, 168, 278, 152, 16, UI_WHITE);
+      gfx->drawRoundRect(94 + UI_DX, 168, 278, 152, 16, UI_INK);
       // 48 y no 28: el buffer se dimensiono cuando toda cadena era de un byte
       // por caracter. Con una fila UTF-8, "%s 놓아줄까요?" mas el nombre pasa
       // de 28 y snprintf corta a mitad de una secuencia de 3 bytes, que la
@@ -1278,12 +1281,12 @@ bool render() {
       setSize(2);
       setCur(centerX(q, 2), 196);
       printT(q);
-      gfx->fillRoundRect(118, 252, 100, 52, 12, UI_BAR_OK);
+      gfx->fillRoundRect(118 + UI_DX, 252, 100, 52, 12, UI_BAR_OK);
       gfx->setTextColor(UI_WHITE);
-      setCur(118 + (100 - textW(T(S_YES), 2)) / 2, 270);
+      setCur(118 + UI_DX + (100 - textW(T(S_YES), 2)) / 2, 270);
       printT(T(S_YES));
-      gfx->fillRoundRect(248, 252, 100, 52, 12, UI_BAR_BAD);
-      setCur(248 + (100 - textW(T(S_NO), 2)) / 2, 270);
+      gfx->fillRoundRect(248 + UI_DX, 252, 100, 52, 12, UI_BAR_BAD);
+      setCur(248 + UI_DX + (100 - textW(T(S_NO), 2)) / 2, 270);
       printT(T(S_NO));
     }
   }
@@ -1511,7 +1514,7 @@ void drawGameScene() {
 }
 
 void renderGame() {
-  // sin fillScreen(NEGRO): drawGameScene cubre los 466x466 completos. Si el
+  // sin fillScreen(NEGRO): drawGameScene cubre la pantalla completa (LCD_WIDTH x LCD_HEIGHT). Si el
   // DMA del flush anterior aun lee el buffer, vera contenido valido (no negro
   // a medio pintar), que era el parpadeo a 25 fps.
   bool night = sceneHour() < 6 || sceneHour() >= 20;
@@ -1568,8 +1571,8 @@ void renderGame() {
   setCur(centerX(rec, 2), 76);
   printT(rec);
   for (int i = 0; i < 3; i++) {
-    if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
-    else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
+    if (i < 3 - gameMisses) gfx->fillCircle(180 + UI_DX + i * 28, 104, 6, UI_BAR_BAD);
+    else gfx->drawCircle(180 + UI_DX + i * 28, 104, 6, UI_TRACK);
   }
 
   if (pmd.loaded) {
@@ -1619,21 +1622,21 @@ static int statBarX() {
     int w = textW(T(id), 2);
     if (w > ancho) ancho = w;
   }
-  int x = 96 + ancho + 12;   // 12 px de aire entre etiqueta y barra
-  return x < 150 ? 150 : x;
+  int x = 96 + UI_DX + ancho + 12;   // 12 px de aire entre etiqueta y barra
+  return x < 150 + UI_DX ? 150 + UI_DX : x;
 }
 
 void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color) {
   gfx->setTextColor(UI_INK);
   setSize(2);
-  setCur(96, y);
+  setCur(96 + UI_DX, y);
   printT(label);
   char num[8];
   snprintf(num, sizeof(num), "%u", val);
-  setCur(330, y);
+  setCur(330 + UI_DX, y);
   printT(num);
   int bx = statBarX();
-  int bw = 310 - bx;   // la barra siempre acaba en 310, dejando aire hasta el numero
+  int bw = 310 + UI_DX - bx;   // la barra siempre acaba en 310, dejando aire hasta el numero
   int fw = (int)val * bw / maxBar;
   if (fw > bw) fw = bw;
   gfx->fillRoundRect(bx, y + 2, bw, 11, 3, UI_TRACK);
@@ -1671,8 +1674,9 @@ void drawClockBtn(int x, int y, const char *l) {
 // pildoras de idioma centradas en y; rellena la activa
 #define LANG_PILL_Y 296
 #define LANG_PILL_H 30
-#define LANG_PILL_X 336          // pildora de idioma (cicla LANG_COUNT al tocar)
+#define LANG_PILL_X (336 + UI_DX)          // pildora de idioma (cicla LANG_COUNT al tocar)
 #define LANG_PILL_W 96
+#define SND_PILL_X (34 + UI_DX)  // interruptor de sonido (simetrico a LANG_PILL_X)
 static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA", "KO" };
 
 void renderClock() {
@@ -1689,25 +1693,25 @@ void renderClock() {
   setCur(CX - 105, 108);
   printT(t);
 
-  drawClockBtn(104, 190, "-");  // hora -
-  drawClockBtn(170, 190, "+");  // hora +
-  drawClockBtn(252, 190, "-");  // min -
-  drawClockBtn(318, 190, "+");  // min +
+  drawClockBtn(104 + UI_DX, 190, "-");  // hora -
+  drawClockBtn(170 + UI_DX, 190, "+");  // hora +
+  drawClockBtn(252 + UI_DX, 190, "-");  // min -
+  drawClockBtn(318 + UI_DX, 190, "+");  // min +
   setSize(2);
   gfx->setTextColor(UI_TRACK);
-  setCur(120, 256);
+  setCur(120 + UI_DX, 256);
   printT(T(S_HOUR));
-  setCur(276, 256);
+  setCur(276 + UI_DX, 256);
   printT(T(S_MIN));
 
   // interruptor de sonido (izquierda de la fila de idioma)
   bool snd = audioEnabled();
   const char *sl = snd ? T(S_SND_ON) : T(S_SND_OFF);
-  gfx->fillRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, snd ? UI_BAR_OK : UI_WHITE);
-  gfx->drawRoundRect(34, LANG_PILL_Y, 96, LANG_PILL_H, 8, UI_INK);
+  gfx->fillRoundRect(SND_PILL_X, LANG_PILL_Y, 96, LANG_PILL_H, 8, snd ? UI_BAR_OK : UI_WHITE);
+  gfx->drawRoundRect(SND_PILL_X, LANG_PILL_Y, 96, LANG_PILL_H, 8, UI_INK);
   gfx->setTextColor(snd ? UI_BG_DAY : UI_INK);
   setSize(2);
-  setCur(34 + (96 - textW(sl, 2)) / 2, LANG_PILL_Y + 8);
+  setCur(SND_PILL_X + (96 - textW(sl, 2)) / 2, LANG_PILL_Y + 8);
   printT(sl);
 
   // selector de idioma: una pildora que cicla los 6 idiomas al tocar
@@ -1720,7 +1724,7 @@ void renderClock() {
   setCur(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
   printT(lp);
 
-  gfx->fillRoundRect(133, 340, 200, 48, 14, UI_BAR_OK);
+  gfx->fillRoundRect(133 + UI_DX, 340, 200, 48, 14, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   setSize(3);
   setCur(CX - 18, 352);
@@ -1742,14 +1746,14 @@ void renderClock() {
 
 void clockTap(int16_t x, int16_t y) {
   if (y >= 190 && y <= 248) {  // fila de botones +/-
-    if (x >= 104 && x < 162) clockH = (clockH + 23) % 24;
-    else if (x >= 170 && x < 228) clockH = (clockH + 1) % 24;
-    else if (x >= 252 && x < 310) clockM = (clockM + 59) % 60;
-    else if (x >= 318 && x < 376) clockM = (clockM + 1) % 60;
+    if (x >= 104 + UI_DX && x < 162 + UI_DX) clockH = (clockH + 23) % 24;
+    else if (x >= 170 + UI_DX && x < 228 + UI_DX) clockH = (clockH + 1) % 24;
+    else if (x >= 252 + UI_DX && x < 310 + UI_DX) clockM = (clockM + 59) % 60;
+    else if (x >= 318 + UI_DX && x < 376 + UI_DX) clockM = (clockM + 1) % 60;
     return;
   }
   if (y >= LANG_PILL_Y && y <= LANG_PILL_Y + LANG_PILL_H) {
-    if (x >= 34 && x < 130) {                  // interruptor de sonido
+    if (x >= SND_PILL_X && x < SND_PILL_X + 96) {                  // interruptor de sonido
       audioSetEnabled(!audioEnabled());
       if (audioEnabled()) sfxPlay(SFX_TAP);    // confirma al encender
       return;
@@ -1761,7 +1765,7 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
   }
-  if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
+  if (y >= 340 && y <= 388 && x >= 133 + UI_DX && x <= 333 + UI_DX) { applyClock(); return; }
 }
 
 // llama + numero de racha arriba a la izquierda
@@ -1794,8 +1798,8 @@ void drawCelebration() {
     l2 = buf;
   }
   if (!l1) return;
-  gfx->fillRoundRect(73, 150, 320, 96, 16, UI_BAR_WARN);
-  gfx->drawRoundRect(73, 150, 320, 96, 16, UI_INK);
+  gfx->fillRoundRect(73 + UI_DX, 150, 320, 96, 16, UI_BAR_WARN);
+  gfx->drawRoundRect(73 + UI_DX, 150, 320, 96, 16, UI_INK);
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(l1, 3), 176);
@@ -1848,7 +1852,7 @@ void renderCardProfile() {
   if (pmd.loaded) drawPmdAct(PMD_IDLE, CX, 206, millis(), true, false, 4);
 
   // racha con llama
-  int sx = 138, sy = 224;
+  int sx = 138 + UI_DX, sy = 224;
   gfx->fillTriangle(sx + 8, sy, sx + 1, sy + 18, sx + 15, sy + 18, UI_BAR_BAD);
   gfx->fillTriangle(sx + 8, sy + 7, sx + 4, sy + 18, sx + 12, sy + 18, UI_BAR_WARN);
   char rl[40];  // en japones pierde cifras con 30 a partir de 100 dias
@@ -1890,7 +1894,7 @@ void renderCardStats() {
   drawCardStat(244, T(S_STAT_WGT), pet.weight, 100, 0xB3C8);
 
   // boton: saco de entrenamiento de fuerza
-  gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
+  gfx->fillRoundRect(96 + UI_DX, 300, 274, 40, 12, UI_BAR_BAD);
   gfx->setTextColor(UI_BG_DAY);
   setSize(2);
   setCur(centerX(T(S_TRAIN_STR), 2), 311);
@@ -1910,7 +1914,7 @@ void renderCardMedals() {
   printT(head);
 
   for (int i = 0; i < MED_COUNT; i++) {
-    int x = 28 + (i % 2) * 206, y = 104 + (i / 2) * 54;
+    int x = 28 + UI_DX + (i % 2) * 206, y = 104 + (i / 2) * 54;
     bool g = pet.hasMedal(1 << i);
     gfx->fillRoundRect(x, y, 196, 44, 10, g ? UI_BAR_OK : UI_TRACK);
     if (g) {  // marca de conseguida
@@ -1945,7 +1949,7 @@ void renderCardProgress() {
 
   // barra de progreso al siguiente nivel (1 nivel = 60 min de juego)
   uint8_t into = pet.ageMinutes % MINUTES_PER_LEVEL;
-  int bx = 93, bw = 280, by = 158, bh = 22;
+  int bx = 93 + UI_DX, bw = 280, by = 158, bh = 22;
   gfx->fillRoundRect(bx, by, bw, bh, 6, UI_TRACK);
   int fw = (bw - 4) * into / MINUTES_PER_LEVEL;
   if (fw > 0) gfx->fillRoundRect(bx + 2, by + 2, fw, bh - 4, 5, UI_BAR_OK);
@@ -1997,8 +2001,8 @@ void renderCard() {
 
   // indicador de 4 paginas + ayuda
   for (int i = 0; i < 4; i++) {
-    if (i == cardPage) gfx->fillCircle(194 + i * 26, 374, 5, UI_INK);
-    else gfx->drawCircle(194 + i * 26, 374, 4, UI_INK);
+    if (i == cardPage) gfx->fillCircle(194 + UI_DX + i * 26, 374, 5, UI_INK);
+    else gfx->drawCircle(194 + UI_DX + i * 26, 374, 4, UI_INK);
   }
   gfx->setTextColor(UI_TRACK);
   setSize(2);
@@ -2011,7 +2015,7 @@ void renderCard() {
 
 static const char KB_KEYS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-";  // 28 + DEL + OK = 30
 #define KB_COLS 6
-#define KB_X 40
+#define KB_X (40 + UI_DX)
 #define KB_Y 150
 #define KB_W 64
 #define KB_H 52
@@ -2031,10 +2035,10 @@ void renderKeyboard() {
   setCur(centerX(T(S_NAME), 2), 56);
   printT(T(S_NAME));
   // buffer actual
-  gfx->fillRoundRect(83, 84, 300, 40, 8, UI_WHITE);
-  gfx->drawRoundRect(83, 84, 300, 40, 8, UI_INK);
+  gfx->fillRoundRect(83 + UI_DX, 84, 300, 40, 8, UI_WHITE);
+  gfx->drawRoundRect(83 + UI_DX, 84, 300, 40, 8, UI_INK);
   setSize(3);
-  setCur(95, 94);
+  setCur(95 + UI_DX, 94);
   printT(nameLen ? nameBuf : "_");
 
   for (int i = 0; i < 30; i++) {
@@ -2078,7 +2082,7 @@ void keyboardTap(int16_t x, int16_t y) {
 
 // ---------- galeria pokedex ----------
 
-#define GAL_X 73
+#define GAL_X (73 + UI_DX)
 #define GAL_Y 84
 #define GAL_CELL 80
 
@@ -2169,8 +2173,8 @@ void renderGallery() {
   }
   // puntos de pagina
   for (int i = 0; i < 10; i++) {
-    if (i == galleryPage) gfx->fillCircle(170 + i * 14, 436, 4, UI_INK);
-    else gfx->drawCircle(170 + i * 14, 436, 3, UI_INK);
+    if (i == galleryPage) gfx->fillCircle(170 + UI_DX + i * 14, 436, 4, UI_INK);
+    else gfx->drawCircle(170 + UI_DX + i * 14, 436, 3, UI_INK);
   }
   gfx->flush();
 }
@@ -2246,7 +2250,7 @@ void drawCeremony() {
     // final triste: penumbra azulada + lluvia
     for (int i = 0; i < 46; i++) {
       int rx = (i * 47 + now / 3) % LCD_WIDTH;
-      int ry = (i * 91 + now / 2) % 470;
+      int ry = (i * 91 + now / 2) % (LCD_HEIGHT + 4);
       gfx->drawLine(rx, ry, rx - 3, ry + 12, C565(0x6a, 0x84, 0xb0));
     }
     bool fade = false;
@@ -2303,17 +2307,17 @@ void drawChoiceDialog() {
     q = T(S_FAR_Q); o1 = T(S_FAR_GO); o2 = T(S_FAR_STAY);
     c1 = UI_BAR_WARN; t1 = UI_INK; c2 = UI_BAR_OK; t2 = UI_WHITE;
   }
-  gfx->fillRoundRect(73, 156, 320, 188, 16, UI_WHITE);
-  gfx->drawRoundRect(73, 156, 320, 188, 16, UI_INK);
+  gfx->fillRoundRect(73 + UI_DX, 156, 320, 188, 16, UI_WHITE);
+  gfx->drawRoundRect(73 + UI_DX, 156, 320, 188, 16, UI_INK);
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(centerX(q, 2), 176);
   printT(q);
-  gfx->fillRoundRect(93, 206, 280, 52, 12, c1);     // boton accion
+  gfx->fillRoundRect(93 + UI_DX, 206, 280, 52, 12, c1);     // boton accion
   gfx->setTextColor(t1);
   setCur(centerX(o1, 2), 224);
   printT(o1);
-  gfx->fillRoundRect(93, 268, 280, 52, 12, c2);     // boton mantener/quedaros
+  gfx->fillRoundRect(93 + UI_DX, 268, 280, 52, 12, c2);     // boton mantener/quedaros
   gfx->setTextColor(t2);
   setCur(centerX(o2, 2), 286);
   printT(o2);
@@ -2571,7 +2575,7 @@ void behNext() {
   int r = random(100);
   if (r < 35 && (pmd.has(PMD_WALKL) || pmd.has(PMD_WALKR))) {
     beh.mode = 1;  // paseo
-    beh.targetX = 150 + random(176);
+    beh.targetX = 150 + UI_DX + random(176);
     beh.until = now + 15000;
   } else if (r < 60) {
     // gesto aleatorio entre los disponibles
@@ -2700,10 +2704,10 @@ void drawPoops() {
 }
 
 void drawBars() {
-  drawBar(78, 318, T(S_BAR_FOOD), pet.fullness);
-  drawBar(244, 318, T(S_BAR_JOY), pet.joy);
-  drawBar(78, 346, T(S_BAR_ENE), pet.energy);
-  drawBar(244, 346, T(S_BAR_HYG), pet.hygiene);
+  drawBar(78 + UI_DX, 318, T(S_BAR_FOOD), pet.fullness);
+  drawBar(244 + UI_DX, 318, T(S_BAR_JOY), pet.joy);
+  drawBar(78 + UI_DX, 346, T(S_BAR_ENE), pet.energy);
+  drawBar(244 + UI_DX, 346, T(S_BAR_HYG), pet.hygiene);
 }
 
 // Separacion entre la etiqueta y su barra en la fila de necesidades. Estaba fija
