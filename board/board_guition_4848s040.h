@@ -73,6 +73,7 @@
 #define HAS_PMU 0
 #define HAS_RTC 0
 #define HAS_AUDIO 0
+#define BOARD_NAME "Guition 4848S040"
 #define HAS_SD 1
 #define SD_SPI 1
 #define SD_SPI_CS 42
