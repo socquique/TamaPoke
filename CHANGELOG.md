@@ -10,6 +10,18 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
+  build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
+  `boards/175c/partitions.csv`). Sprites come from a LittleFS partition in flash
+  instead of the microSD slot it doesn't have, and time comes from a software
+  clock (no PCF85063). 1.75C only: triple-press PWR locks the screen and touch
+  for your pocket (hold 4 s still powers off), BOOT toggles sound, and strength
+  training counts taps anywhere on the screen with a 1-second "Hold to exit"
+  button. The default build is still the original 1.75 and is unchanged. See
+  `PORTING.md`.
+- **Volume levels** (#21). The sound button on the clock/settings screen now
+  shows a speaker with three bars and cycles **high** (as before), **medium**,
+  **low** and **off**. The level is saved, so it survives a restart or update.
 - **Guition / Sunton ESP32-S3-4848S040** (4.0" IPS 480×480, ST7701S RGB panel
   + GT911 touch) is now a supported build target: build with
   `-DBOARD_GUITION_4848S040`. Pins and per-board capabilities live in the new
@@ -21,6 +33,16 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   the sprite loaders and the `LS`/`PUT`/`SDINFO` protocol work there. The card
   must be FAT32: it is never auto-formatted on this board. Sprite loads are
   slower than SDMMC. Untested on hardware.
+
+## [1.19] - 2026-11-11
+
+### Added
+
+- **Brightness setting** (#34). The clock/settings screen has a new button in
+  the middle of the sound/language row: a sun and three bars. Tapping it cycles
+  high (as before), medium (60 %) and low (30 %). The level scales every
+  brightness the pet uses (awake, asleep, dimmed after a while untouched,
+  low-battery caps) and is saved, so it survives a restart or update.
 
 ## [1.18] - 2026-10-27
 

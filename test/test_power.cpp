@@ -1,6 +1,7 @@
 // Politica de consumo (power.h).
 #include "framework.h"
 #include "../power.h"
+#include "../audio.h"
 
 static PowerCtx ctx(uint32_t idle) {
   PowerCtx c = {};
@@ -183,4 +184,42 @@ TEST(power, un_suelo_distinto_de_cero_sube_lo_oscuro_pero_no_la_pantalla_apagada
   CHECK_EQ((int)brightnessForFloor(c, 80), 80);    // el suelo gana al tope de bateria baja (60)
   c.screenOff = true;
   CHECK_EQ((int)brightnessForFloor(c, 80), 0);     // apagada sigue siendo 0
+}
+
+TEST(power, el_nivel_de_ajustes_escala_el_brillo_y_respeta_el_orden) {
+  PowerCtx c = ctx(0);
+  c.userDim = 1;
+  CHECK_EQ((int)brightnessFor(c), 87);         // 145 al 60 %
+  c.userDim = 2;
+  CHECK_EQ((int)brightnessFor(c), 43);         // 145 al 30 %
+  c.usb = true;
+  CHECK_EQ((int)brightnessFor(c), 54);
+  // en bajo, cada escalon sigue por debajo del anterior y nunca llega a 0
+  c = ctx(0);
+  c.userDim = 2;
+  uint8_t awake = brightnessFor(c);
+  c.idleMs = 100000;
+  uint8_t low = brightnessFor(c);
+  c.sleeping = true;
+  uint8_t lowSleep = brightnessFor(c);
+  c.idleMs = 400000;
+  uint8_t off = brightnessFor(c);
+  CHECK(awake > low);
+  CHECK(low > lowSleep);
+  CHECK(lowSleep >= 2);
+  CHECK(off >= 2);
+  c.screenOff = true;
+  CHECK_EQ((int)brightnessFor(c), 0);          // apagada con PWR sigue siendo 0
+  c = ctx(0);
+  c.batPct = 5;
+  c.userDim = 2;
+  CHECK_EQ((int)brightnessFor(c), 18);         // tope de bateria critica y luego el nivel
+}
+
+TEST(power, los_niveles_de_volumen_bajan_y_el_alto_es_el_de_siempre) {
+  CHECK_EQ((int)sfxAmp(0), 5000);
+  CHECK(sfxAmp(1) < sfxAmp(0));
+  CHECK(sfxAmp(2) < sfxAmp(1));
+  CHECK(sfxAmp(2) > 0);
+  CHECK_EQ((int)sfxAmp(7), (int)sfxAmp(2));   // un valor raro guardado no sube el volumen
 }

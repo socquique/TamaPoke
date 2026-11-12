@@ -1,14 +1,17 @@
 #include "sdmon.h"
 #include "pin_config.h"
 #include <FS.h>
-#if HAS_SD && SD_SPI
+#if BOARD_AMOLED_175C
+#include <LittleFS.h>
+static fs::FS &SpriteFS = LittleFS;
+#elif HAS_SD && SD_SPI
 #include <SPI.h>
 #include <SD.h>
 static SPIClass sdSpi(FSPI);
-static fs::SDFS &sdcard = SD;
+static fs::FS &SpriteFS = SD;
 #else
 #include <SD_MMC.h>
-static fs::SDMMCFS &sdcard = SD_MMC;
+static fs::FS &SpriteFS = SD_MMC;
 #endif
 
 bool sdReady = false;
@@ -21,10 +24,10 @@ bool PmdMon::load(uint8_t dexNum, bool shiny) {
 
   char path[28];
   snprintf(path, sizeof(path), "/mons/p%s%03u.bin", shiny ? "s" : "", dexNum);
-  File f = sdcard.open(path, FILE_READ);
+  File f = SpriteFS.open(path, FILE_READ);
   if (!f && shiny) {  // sin shiny PMD: usa el normal
     snprintf(path, sizeof(path), "/mons/p%03u.bin", dexNum);
-    f = sdcard.open(path, FILE_READ);
+    f = SpriteFS.open(path, FILE_READ);
   }
   if (!f) return false;
 
@@ -103,7 +106,7 @@ void SdThumbs::unload() {
 bool SdThumbs::load() {
   unload();  // recargar sin fugar el blob anterior
   if (!sdReady) return false;
-  File f = sdcard.open("/mons/thumbs.bin", FILE_READ);
+  File f = SpriteFS.open("/mons/thumbs.bin", FILE_READ);
   if (!f) {
     Serial.println("sin thumbs.bin (galeria sin miniaturas)");
     return false;
@@ -149,7 +152,22 @@ const uint8_t *SdThumbs::get(int16_t dex) const {
 }
 
 bool sdBegin() {
-#if HAS_SD && SD_SPI
+#if BOARD_AMOLED_175C
+  // Do not auto-format: a failed mount almost always means the LittleFS image
+  // has not been flashed yet, and formatting would wipe a later write.
+  // Partition label "storage" matches boards/175c/partitions.csv. Mount at "/littlefs"
+  // (ESP-IDF VFS rejects "/") ; fs::FS paths like /mons/... are relative to
+  // that mount point, so SpriteFS.open() does not need a prefix.
+  sdReady = LittleFS.begin(false, "/littlefs", 10, "storage");
+  if (sdReady) {
+    Serial.printf("LittleFS montado: %llu KB usados de %llu KB\n",
+                  LittleFS.usedBytes() / 1024ULL, LittleFS.totalBytes() / 1024ULL);
+    LittleFS.mkdir("/mons");
+  } else {
+    Serial.println("LittleFS no montado (flashea tools/flash_175c.sh --fs o el .img)");
+  }
+  return sdReady;
+#elif HAS_SD && SD_SPI
   // Debe correr despues de gfx->begin(): SCK/MOSI son los del bus 3-wire de la
   // pantalla, que solo se usa dentro de begin(). El ST7701S se deja deseleccionado
   // (CS alto) o tomaria el trafico del SD como comandos.
@@ -160,19 +178,19 @@ bool sdBegin() {
   sdReady = SD.begin(SD_SPI_CS, sdSpi, SD_SPI_HZ, "/sdcard", 5, false);
   if (!sdReady) sdReady = SD.begin(SD_SPI_CS, sdSpi, 4000000, "/sdcard", 5, false);
   if (sdReady) {
-    Serial.printf("SD montada: %llu MB\n", sdcard.cardSize() / (1024ULL * 1024ULL));
-    Serial.printf("SD tipo: %d\n", (int)SD.cardType());
-    sdcard.mkdir("/mons");
+    Serial.printf("SD montada: %llu MB\n", SD.cardSize() / (1024ULL * 1024ULL));
+    Serial.printf("SD tipo: %d\n", (int)SD.cardType());
+    SD.mkdir("/mons");
   } else {
     Serial.println("SD no detectada (el juego usa los sprites de flash)");
   }
   return sdReady;
 #elif HAS_SD
-  sdcard.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_DATA);
-  sdReady = sdcard.begin("/sdcard", true /* modo 1-bit */, true /* formatea si no monta */);
+  SD_MMC.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_DATA);
+  sdReady = SD_MMC.begin("/sdcard", true /* modo 1-bit */, true /* formatea si no monta */);
   if (sdReady) {
-    Serial.printf("SD montada: %llu MB\n", sdcard.cardSize() / (1024ULL * 1024ULL));
-    sdcard.mkdir("/mons");
+    Serial.printf("SD montada: %llu MB\n", SD_MMC.cardSize() / (1024ULL * 1024ULL));
+    SD_MMC.mkdir("/mons");
   } else {
     Serial.println("SD no detectada (el juego usa los sprites de flash)");
   }
@@ -190,10 +208,10 @@ bool SdMon::load(uint8_t dexNum, bool shiny) {
 
   char path[24];
   snprintf(path, sizeof(path), "/mons/%s%03u.bin", shiny ? "s" : "", dexNum);
-  File f = sdcard.open(path, FILE_READ);
+  File f = SpriteFS.open(path, FILE_READ);
   if (!f && shiny) {  // sin variante shiny: usa la normal
     snprintf(path, sizeof(path), "/mons/%03u.bin", dexNum);
-    f = sdcard.open(path, FILE_READ);
+    f = SpriteFS.open(path, FILE_READ);
   }
   if (!f) {
     Serial.printf("no existe %s\n", path);
@@ -257,7 +275,7 @@ void SdMon::unload() {
 }
 
 // ---------------------------------------------------------------------------
-// Protocolo de carga por USB (para llenar la SD sin sacarla de la placa):
+// Protocolo de carga por USB (para llenar el almacenamiento de sprites (SD o LittleFS) por USB):
 //   PUT <ruta> <bytes>\n  + datos crudos   -> "OK" ... "DONE"
 //   LS\n                                   -> listado de /mons
 // Usar con tools/send_sd.py
@@ -285,8 +303,8 @@ bool sdSerialCommand(const String &line) {
     // que quedo a medias lo alargaba en vez de reemplazarlo: quedaba un sprite
     // corrupto y mas grande que el original. Importa mas desde que el instalador
     // reanuda transferencias cortadas, porque reintenta justo los que fallaron.
-    if (sdcard.exists(path)) sdcard.remove(path);
-    File f = sdcard.open(path, FILE_WRITE);
+    if (SpriteFS.exists(path)) SpriteFS.remove(path);
+    File f = SpriteFS.open(path, FILE_WRITE);
     if (!f) {
       Serial.println("ERR");
       return true;
@@ -312,11 +330,17 @@ bool sdSerialCommand(const String &line) {
     Serial.println(remaining == 0 ? "DONE" : "ERR");
     return true;
   } else if (line == "SDINFO") {  // diagnostico remoto de "no me reconoce la SD"
-    Serial.printf("total=%llu used=%llu\n", sdcard.totalBytes(), sdcard.usedBytes());
+#if BOARD_AMOLED_175C
+    Serial.printf("total=%llu used=%llu\n", (unsigned long long)LittleFS.totalBytes(), (unsigned long long)LittleFS.usedBytes());
+#elif HAS_SD && SD_SPI
+    Serial.printf("total=%llu used=%llu\n", SD.totalBytes(), SD.usedBytes());
+#else
+    Serial.printf("total=%llu used=%llu\n", SD_MMC.totalBytes(), SD_MMC.usedBytes());
+#endif
     Serial.println("DONE");
     return true;
   } else if (line == "LS") {
-    File dir = sdcard.open("/mons");
+    File dir = SpriteFS.open("/mons");
     if (dir) {
       File e;
       while ((e = dir.openNextFile())) {

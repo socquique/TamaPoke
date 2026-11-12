@@ -177,6 +177,25 @@ must be FAT32, as it is never auto-formatted on this board. SD support there is
 untested on hardware; without a card the sprites come from flash. In the Arduino IDE set the same flag
 under *Extra ESP32 compile flags*. Details in `board/board_guition_4848s040.h`.
 
+### Alternative board: Waveshare ESP32-S3-Touch-AMOLED-1.75C (experimental)
+
+The firmware also targets the **ESP32-S3-Touch-AMOLED-1.75C** (same 466×466
+CO5300 panel and CST9217 touch, aluminium case, 32 MB flash, **no microSD** and
+no PCF85063 RTC). Select it with a build flag and its own partition table;
+the script does both:
+
+```bash
+tools/build_175c.sh --out ./out          # -DBOARD_AMOLED_175C=1 + boards/175c/partitions.csv
+tools/build_spritefs.sh ./out/storage.littlefs.bin
+tools/flash_175c.sh --port /dev/ttyACM0 --out ./out
+```
+
+Sprites live in a LittleFS partition in flash (151 normal forms; shinies fall
+back to the normal sprite), the clock is a software clock set from the clock
+screen, and the 1.75C adds a triple-PWR pocket screen lock, BOOT-button mute
+and more reliable strength-training taps. The default build is still the
+original 1.75. Details, pins and flashing in [`PORTING.md`](PORTING.md).
+
 ### Easiest install: the web installer
 
 `web/index.html` flashes the firmware (ESP Web Tools) and pushes the sprites to
@@ -398,6 +417,7 @@ To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in
 
 - **[TamaPoke — Expanded](https://github.com/ShadowEnemyx/TamaPoke/tree/tamapoke-expanded-update)** by **ShadowEnemy** — a substantial community fork (different author/branch): a full **type-matchup battle system**, all **151 + shinies** with a **Pokédex / collection box** and daily goals, **6 UI languages**, **ES8311 sound**, starter choice and a one-click web installer. Worth a look. 🎮
 - **[TamaPoke](https://github.com/DylanPDao/TamaPoke)** by **DylanPDao** — another substantial fork: **gym battles** and **LAN battles** between two devices, **movesets**, a **party + box** system, an **EV/IV** stat system, and coverage extended **up to Gen 3 (386)**. Keeps the PMD sprite pipeline. 🏆
+- **[TamaPoke — Life sim](https://github.com/Mu-Muu/TamaPoke)** by **Mu-Muu** — a gentle, battle-free fork: **all 1025 species** with regions that unlock in order, evolution by age, natures and sickness, real **weather** and a **standby clock**, a farm and album, **English + 简体中文**, points from **chess.com** games, optional **Stack-chan** voice control, and its own web installer. 🌱
 
 ## Credits
 
