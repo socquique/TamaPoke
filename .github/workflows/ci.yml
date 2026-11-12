@@ -33,6 +33,12 @@ jobs:
           --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
           .
 
+      # Waveshare AMOLED 1.75C (experimental): mismo codigo con
+      # -DBOARD_AMOLED_175C=1 y su tabla de particiones (boards/175c/). Se
+      # compila con el mismo script que se usa en casa para que no se oxide.
+      - name: Compile (Waveshare AMOLED 1.75C)
+        run: tools/build_175c.sh --out "$RUNNER_TEMP/out-175c"
+
   generated:
     name: Generated headers up to date
     runs-on: ubuntu-latest
