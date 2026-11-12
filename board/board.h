@@ -19,6 +19,11 @@
 #include "board_waveshare_amoled.h"
 #endif
 
+// panel redondo (AMOLED 466) o cuadrado; la cabecera de placa puede redefinirlo
+#ifndef PANEL_ROUND
+#define PANEL_ROUND 1
+#endif
+
 // SD por SPI (en vez de SDMMC); solo lo activa la cabecera de placa que lo necesite
 #ifndef SD_SPI
 #define SD_SPI 0

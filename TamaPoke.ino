@@ -965,9 +965,18 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
 }
 
 // primera partida: elige inicial entre Bulbasaur / Charmander / Squirtle
+// fondo de los menus a pantalla completa: disco en el AMOLED redondo, rectangulo en panel cuadrado
+static inline void fillBackdrop(uint16_t colour) {
+#if PANEL_ROUND
+  gfx->fillCircle(CX, CY, 231, colour);
+#else
+  gfx->fillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, colour);
+#endif
+}
+
 void renderStarterSelect() {
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  fillBackdrop(UI_BG_DAY);
   const char *t = T(S_CHOOSE_STARTER);
   gfx->setTextColor(UI_INK);
   setSize(2);
@@ -1681,7 +1690,7 @@ static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT"
 
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  fillBackdrop(UI_BG_DAY);
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(T(S_SET_TIME), 3), 44);
@@ -1993,7 +2002,7 @@ void renderCardProgress() {
 
 void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  fillBackdrop(UI_BG_DAY);
   if (cardPage == 0) renderCardProfile();
   else if (cardPage == 1) renderCardStats();
   else if (cardPage == 2) renderCardMedals();
@@ -2029,7 +2038,7 @@ void openKeyboard() {
 
 void renderKeyboard() {
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  fillBackdrop(UI_BG_DAY);
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(centerX(T(S_NAME), 2), 56);
@@ -2106,7 +2115,7 @@ void drawThumb(const uint8_t *b, int x, int y, int s, bool sil) {
 void renderGallery() {
   if (galleryDetail) {  // vista detalle: se redibuja siempre (animada)
     gfx->fillScreen(RGB565_BLACK);
-    gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+    fillBackdrop(UI_BG_DAY);
     const DexEntry &d = DEX_TBL[galleryDetail];
     bool reg = pet.isRegistered(galleryDetail);
     char head[32];
@@ -2139,7 +2148,7 @@ void renderGallery() {
   galleryDirty = false;
 
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  fillBackdrop(UI_BG_DAY);
   char head[24];
   snprintf(head, sizeof(head), T(S_POKEDEX_FMT), pet.registeredCount());
   gfx->setTextColor(UI_INK);

@@ -26,6 +26,7 @@
 // PWM se lee mal (80/255 resultaba demasiado tenue). Esta placa no tiene AMOLED que proteger
 // ni bateria, asi que 170/255 es aceptable; se puede ajustar aqui.
 #define BRIGHTNESS_FLOOR 170
+#define PANEL_ROUND 0   // panel cuadrado: los fondos de menu son rectangulos
 
 // Bus paralelo RGB de 16 bits (datos de pixel por DMA)
 #define RGB_DE 18
