@@ -160,7 +160,7 @@ bool sdBegin() {
   // that mount point, so SpriteFS.open() does not need a prefix.
   sdReady = LittleFS.begin(false, "/littlefs", 10, "storage");
   if (sdReady) {
-    Serial.printf("LittleFS montado: %llu KB usados de %llu KB\n",
+    Serial.printf("LittleFS montado: %llu KB usados de %llu KB\n",
                   LittleFS.usedBytes() / 1024ULL, LittleFS.totalBytes() / 1024ULL);
     LittleFS.mkdir("/mons");
   } else {
@@ -178,8 +178,8 @@ bool sdBegin() {
   sdReady = SD.begin(SD_SPI_CS, sdSpi, SD_SPI_HZ, "/sdcard", 5, false);
   if (!sdReady) sdReady = SD.begin(SD_SPI_CS, sdSpi, 4000000, "/sdcard", 5, false);
   if (sdReady) {
-    Serial.printf("SD montada: %llu MB\n", SD.cardSize() / (1024ULL * 1024ULL));
-    Serial.printf("SD tipo: %d\n", (int)SD.cardType());
+    Serial.printf("SD montada: %llu MB\n", SD.cardSize() / (1024ULL * 1024ULL));
+    Serial.printf("SD tipo: %d\n", (int)SD.cardType());
     SD.mkdir("/mons");
   } else {
     Serial.println("SD no detectada (el juego usa los sprites de flash)");
@@ -189,7 +189,7 @@ bool sdBegin() {
   SD_MMC.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_DATA);
   sdReady = SD_MMC.begin("/sdcard", true /* modo 1-bit */, true /* formatea si no monta */);
   if (sdReady) {
-    Serial.printf("SD montada: %llu MB\n", SD_MMC.cardSize() / (1024ULL * 1024ULL));
+    Serial.printf("SD montada: %llu MB\n", SD_MMC.cardSize() / (1024ULL * 1024ULL));
     SD_MMC.mkdir("/mons");
   } else {
     Serial.println("SD no detectada (el juego usa los sprites de flash)");
