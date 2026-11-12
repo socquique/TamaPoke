@@ -18,3 +18,8 @@
 #else
 #include "board_waveshare_amoled.h"
 #endif
+
+// SD por SPI (en vez de SDMMC); solo lo activa la cabecera de placa que lo necesite
+#ifndef SD_SPI
+#define SD_SPI 0
+#endif

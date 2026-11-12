@@ -172,7 +172,9 @@ arduino-cli compile --fqbn "$FQBN" \
 
 This board has no AXP2101, no battery, no PCF85063 RTC, no ES8311 and no SDMMC
 slot, so those features degrade to no-ops (clock comes from the last save,
-sound off, sprites come from flash only). In the Arduino IDE set the same flag
+sound off). Its microSD slot is SPI (slower sprite loads than SDMMC); the card
+must be FAT32, as it is never auto-formatted on this board. SD support there is
+untested on hardware; without a card the sprites come from flash. In the Arduino IDE set the same flag
 under *Extra ESP32 compile flags*. Details in `board/board_guition_4848s040.h`.
 
 ### Easiest install: the web installer

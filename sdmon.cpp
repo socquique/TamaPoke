@@ -1,7 +1,15 @@
 #include "sdmon.h"
 #include "pin_config.h"
 #include <FS.h>
+#if HAS_SD && SD_SPI
+#include <SPI.h>
+#include <SD.h>
+static SPIClass sdSpi(FSPI);
+static fs::SDFS &sdcard = SD;
+#else
 #include <SD_MMC.h>
+static fs::SDMMCFS &sdcard = SD_MMC;
+#endif
 
 bool sdReady = false;
 bool sdDirty = false;
@@ -13,10 +21,10 @@ bool PmdMon::load(uint8_t dexNum, bool shiny) {
 
   char path[28];
   snprintf(path, sizeof(path), "/mons/p%s%03u.bin", shiny ? "s" : "", dexNum);
-  File f = SD_MMC.open(path, FILE_READ);
+  File f = sdcard.open(path, FILE_READ);
   if (!f && shiny) {  // sin shiny PMD: usa el normal
     snprintf(path, sizeof(path), "/mons/p%03u.bin", dexNum);
-    f = SD_MMC.open(path, FILE_READ);
+    f = sdcard.open(path, FILE_READ);
   }
   if (!f) return false;
 
@@ -95,7 +103,7 @@ void SdThumbs::unload() {
 bool SdThumbs::load() {
   unload();  // recargar sin fugar el blob anterior
   if (!sdReady) return false;
-  File f = SD_MMC.open("/mons/thumbs.bin", FILE_READ);
+  File f = sdcard.open("/mons/thumbs.bin", FILE_READ);
   if (!f) {
     Serial.println("sin thumbs.bin (galeria sin miniaturas)");
     return false;
@@ -141,20 +149,36 @@ const uint8_t *SdThumbs::get(int16_t dex) const {
 }
 
 bool sdBegin() {
-#if HAS_SD
-  SD_MMC.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_DATA);
-  sdReady = SD_MMC.begin("/sdcard", true /* modo 1-bit */, true /* formatea si no monta */);
+#if HAS_SD && SD_SPI
+  // Debe correr despues de gfx->begin(): SCK/MOSI son los del bus 3-wire de la
+  // pantalla, que solo se usa dentro de begin(). El ST7701S se deja deseleccionado
+  // (CS alto) o tomaria el trafico del SD como comandos.
+  pinMode(LCD_CS, OUTPUT);
+  digitalWrite(LCD_CS, HIGH);
+  sdSpi.begin(SD_SPI_SCK, SD_SPI_MISO, SD_SPI_MOSI, -1);
+  // nunca formatea (format_if_empty=false): la tarjeta debe venir en FAT32
+  sdReady = SD.begin(SD_SPI_CS, sdSpi, SD_SPI_HZ, "/sdcard", 5, false);
+  if (!sdReady) sdReady = SD.begin(SD_SPI_CS, sdSpi, 4000000, "/sdcard", 5, false);
   if (sdReady) {
-    Serial.printf("SD montada: %llu MB\n", SD_MMC.cardSize() / (1024ULL * 1024ULL));
-    SD_MMC.mkdir("/mons");
+    Serial.printf("SD montada: %llu MB\n", sdcard.cardSize() / (1024ULL * 1024ULL));
+    Serial.printf("SD tipo: %d\n", (int)SD.cardType());
+    sdcard.mkdir("/mons");
+  } else {
+    Serial.println("SD no detectada (el juego usa los sprites de flash)");
+  }
+  return sdReady;
+#elif HAS_SD
+  sdcard.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_DATA);
+  sdReady = sdcard.begin("/sdcard", true /* modo 1-bit */, true /* formatea si no monta */);
+  if (sdReady) {
+    Serial.printf("SD montada: %llu MB\n", sdcard.cardSize() / (1024ULL * 1024ULL));
+    sdcard.mkdir("/mons");
   } else {
     Serial.println("SD no detectada (el juego usa los sprites de flash)");
   }
   return sdReady;
 #else
-  // placa sin ranura SDMMC (Guition 4848S040): el slot es SPI (CS 42, CLK 48,
-  // MOSI 47, MISO 41, compartido con la pantalla) y se habilitara en una tarea
-  // aparte; de momento el juego va solo con los sprites de flash
+  // placa sin SD: el juego va solo con los sprites de flash
   Serial.println("SD no disponible en esta placa (el juego usa los sprites de flash)");
   return false;
 #endif
@@ -166,10 +190,10 @@ bool SdMon::load(uint8_t dexNum, bool shiny) {
 
   char path[24];
   snprintf(path, sizeof(path), "/mons/%s%03u.bin", shiny ? "s" : "", dexNum);
-  File f = SD_MMC.open(path, FILE_READ);
+  File f = sdcard.open(path, FILE_READ);
   if (!f && shiny) {  // sin variante shiny: usa la normal
     snprintf(path, sizeof(path), "/mons/%03u.bin", dexNum);
-    f = SD_MMC.open(path, FILE_READ);
+    f = sdcard.open(path, FILE_READ);
   }
   if (!f) {
     Serial.printf("no existe %s\n", path);
@@ -261,8 +285,8 @@ bool sdSerialCommand(const String &line) {
     // que quedo a medias lo alargaba en vez de reemplazarlo: quedaba un sprite
     // corrupto y mas grande que el original. Importa mas desde que el instalador
     // reanuda transferencias cortadas, porque reintenta justo los que fallaron.
-    if (SD_MMC.exists(path)) SD_MMC.remove(path);
-    File f = SD_MMC.open(path, FILE_WRITE);
+    if (sdcard.exists(path)) sdcard.remove(path);
+    File f = sdcard.open(path, FILE_WRITE);
     if (!f) {
       Serial.println("ERR");
       return true;
@@ -288,11 +312,11 @@ bool sdSerialCommand(const String &line) {
     Serial.println(remaining == 0 ? "DONE" : "ERR");
     return true;
   } else if (line == "SDINFO") {  // diagnostico remoto de "no me reconoce la SD"
-    Serial.printf("total=%llu used=%llu\n", SD_MMC.totalBytes(), SD_MMC.usedBytes());
+    Serial.printf("total=%llu used=%llu\n", sdcard.totalBytes(), sdcard.usedBytes());
     Serial.println("DONE");
     return true;
   } else if (line == "LS") {
-    File dir = SD_MMC.open("/mons");
+    File dir = sdcard.open("/mons");
     if (dir) {
       File e;
       while ((e = dir.openNextFile())) {

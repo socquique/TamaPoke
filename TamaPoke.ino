@@ -275,7 +275,7 @@ void setup() {
 #endif
 
   pet.begin();
-  sdBegin();
+  sdBegin();  // debe ir despues de gfx->begin(): en Guition el SD comparte SCK/MOSI con la pantalla
   thumbs.load();
 
   // reloj real: aplica el tiempo que estuvo apagado

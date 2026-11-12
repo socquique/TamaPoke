@@ -65,9 +65,16 @@
 
 // --- Capacidades (plan.md seccion 5) -----------------------------------------
 // El panel suelto no lleva AXP2101, PCF85063, ES8311 ni SDMMC. El SD del
-// 4848S040 es SPI (CS 42, CLK 48, MOSI 47, MISO 41, compartidos con el bus de
-// comandos de la pantalla) y queda para una tarea aparte: de momento OFF.
+// 4848S040 es SPI (CS 42, CLK 48, MOSI 47, MISO 41). SCK/MOSI son los mismos
+// pines que el bus 3-wire de comandos de la pantalla, que solo se usa dentro de
+// gfx->begin(): el SD se monta despues, con LCD_CS alto. Sin probar en hardware.
 #define HAS_PMU 0
 #define HAS_RTC 0
 #define HAS_AUDIO 0
-#define HAS_SD 0
+#define HAS_SD 1
+#define SD_SPI 1
+#define SD_SPI_CS 42
+#define SD_SPI_SCK 48   // == LCD_SCLK
+#define SD_SPI_MOSI 47  // == LCD_MOSI
+#define SD_SPI_MISO 41
+#define SD_SPI_HZ 10000000
