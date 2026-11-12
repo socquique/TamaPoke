@@ -236,10 +236,13 @@ void audioSetIdle(bool idle) {
 // placa sin codec ES8311 (Guition 4848S040): sin altavoz; los efectos se
 // ignoran pero el ajuste de audio sigue pudiendo activarse/desactivarse
 static bool gOn = true;
+static uint8_t gVol = 0;  // solo en RAM: sin altavoz no hay nada que persistir
 void audioBegin() {}
 void sfxPlay(uint8_t) {}
 void audioSetEnabled(bool on) { gOn = on; }
 bool audioEnabled() { return gOn; }
+void audioSetVolume(uint8_t level) { gVol = level % VOL_LEVELS; }
+uint8_t audioVolume() { return gVol; }
 void audioSetSleeping(bool) {}
 bool audioBusy() { return false; }
 void audioSetIdle(bool) {}
