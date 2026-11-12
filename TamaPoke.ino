@@ -98,7 +98,7 @@ struct {
   uint8_t act = PMD_IDLE;
   uint32_t t0 = 0;      // inicio de la animacion en curso
   uint32_t until = 0;   // fin del estado actual
-  float x = 233, targetX = 233;
+  float x = LCD_WIDTH / 2, targetX = LCD_WIDTH / 2;
 } beh;
 uint32_t walkLast = 0;  // instante del ultimo paso del paseo (0 = ninguno aun)
 #define PET_GROUND 304  // linea de suelo de la mascota
@@ -149,8 +149,8 @@ int flashIdxForDex(int16_t dex) {
   return (dex >= 1 && dex <= 9) ? IDX[dex] : -1;
 }
 
-#define CX 233  // centro de la pantalla redonda
-#define CY 233
+#define CX (LCD_WIDTH / 2)  // centro de la pantalla redonda
+#define CY (LCD_HEIGHT / 2)
 #define PET_CY 202  // centro vertical del sprite
 
 static const uint16_t INK_K = 0x18C4;  // spriteColor('k')
@@ -313,7 +313,7 @@ void ensureMon() {
   monShinyFor = pet.shiny;
   mon.unload();
   pmd.unload();
-  beh.x = beh.targetX = 233;
+  beh.x = beh.targetX = LCD_WIDTH / 2;
   beh.mode = 0;
   beh.until = 0;
   if (pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) {
@@ -853,7 +853,7 @@ uint16_t inkColor() { return gNight ? UI_INK_NIGHT : UI_INK; }
 // ---------- escena de fondo: bioma del tipo + hora real del RTC ----------
 
 #define C565(r, g, b) ((uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3)))
-#define HORIZON 232  // linea donde el cielo se encuentra con el suelo
+#define HORIZON (LCD_HEIGHT / 2 - 1)  // linea donde el cielo se encuentra con el suelo
 
 uint16_t lerp565(uint16_t a, uint16_t b, int i, int n) {
   if (n <= 0) return a;
@@ -899,7 +899,7 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
 
   // cielo en bandas
   for (int y = 0; y < HORIZON; y += 8)
-    gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, HORIZON));
+    gfx->fillRect(0, y, LCD_WIDTH, 8, lerp565(top, bot, y, HORIZON));
 
   // sol o luna
   if (night) {
@@ -910,7 +910,7 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
     gfx->fillCircle(360, 84, 26, h < 8 ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
     drawClouds(now, C565(0xff, 0xff, 0xff));
   } else {
-    gfx->fillCircle(233, HORIZON - 6, 34, C565(0xff, 0xf1, 0xc8));  // sol poniente
+    gfx->fillCircle(CX, HORIZON - 6, 34, C565(0xff, 0xf1, 0xc8));  // sol poniente
   }
 
   // mar de la playa: una franja de agua sobre la arena
@@ -918,7 +918,7 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
   if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
   if (biome == 1) {
     uint16_t sea = night ? C565(0x1c, 0x34, 0x52) : C565(0x4f, 0x96, 0xc4);
-    gfx->fillRect(0, HORIZON - 26, 466, 26, sea);
+    gfx->fillRect(0, HORIZON - 26, LCD_WIDTH, 26, sea);
     for (int i = 0; i < 3; i++) {
       int wy = HORIZON - 22 + i * 7;
       uint16_t fc = night ? C565(0x3a, 0x58, 0x78) : C565(0xbf, 0xe6, 0xf5);
@@ -928,7 +928,7 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
   }
 
   // suelo
-  gfx->fillRect(0, HORIZON, 466, 466 - HORIZON, soil);
+  gfx->fillRect(0, HORIZON, LCD_WIDTH, LCD_HEIGHT - HORIZON, soil);
   uint16_t hill = lerp565(soil, night ? C565(0x0c, 0x12, 0x24) : C565(0xff, 0xff, 0xff), 3, 16);
   gfx->fillRoundRect(-60, HORIZON - 14, 586, 60, 30, hill);
 
@@ -950,7 +950,7 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
     gfx->fillTriangle(330, HORIZON - 38, 250, HORIZON, 410, HORIZON, dk);
   } else if (biome == 5 && !night) {  // nieve: copos cayendo
     for (int f = 0; f < 10; f++) {
-      int fx = (f * 53 + now / 40) % 466;
+      int fx = (f * 53 + now / 40) % LCD_WIDTH;
       int fy = (f * 90 + now / 18) % HORIZON;
       gfx->fillRect(fx, fy, 3, 3, UI_WHITE);
     }
@@ -1215,7 +1215,7 @@ bool render() {
     }
     char reg[24];
     snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount());
-    gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
+    gfx->fillRect(0, 312, LCD_WIDTH, LCD_HEIGHT - 312, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     gfx->setTextColor(inkColor());
     setSize(2);
     setCur(centerX(reg, 2), 348);
@@ -1231,7 +1231,7 @@ bool render() {
     drawBath();
     drawPoops();
     // panel inferior: base limpia para barras y botones sobre el paisaje
-    gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
+    gfx->fillRect(0, 312, LCD_WIDTH, LCD_HEIGHT - 312, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     drawBars();
     drawButtons();
     drawCelebration();
@@ -1308,7 +1308,7 @@ void startGame() {
   gameMisses = 0;
   gameNewHi = false;
   hitTime = 0;
-  gamePetX = 233;
+  gamePetX = CX;
   lastGameStep = millis();
   respawnBall();
 }
@@ -1501,13 +1501,13 @@ void drawGameScene() {
   else             { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }
   int hor = 376;
   for (int y = 0; y < hor; y += 8)
-    gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, hor));
+    gfx->fillRect(0, y, LCD_WIDTH, 8, lerp565(top, bot, y, hor));
   if (night)
     for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
   uint8_t bio = pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome;
   uint16_t soil = BIOME_SOIL[bio < 6 ? bio : 0];
   if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
-  gfx->fillRect(0, hor, 466, 466 - hor, soil);
+  gfx->fillRect(0, hor, LCD_WIDTH, LCD_HEIGHT - hor, soil);
 }
 
 void renderGame() {
@@ -2245,7 +2245,7 @@ void drawCeremony() {
   if (panic) {
     // final triste: penumbra azulada + lluvia
     for (int i = 0; i < 46; i++) {
-      int rx = (i * 47 + now / 3) % 466;
+      int rx = (i * 47 + now / 3) % LCD_WIDTH;
       int ry = (i * 91 + now / 2) % 470;
       gfx->drawLine(rx, ry, rx - 3, ry + 12, C565(0x6a, 0x84, 0xb0));
     }
@@ -2274,7 +2274,7 @@ void drawCeremony() {
     gfx->drawCircle(CX, gcy, r, C565(0xff, 0xdf, 0x8a));
   }
   for (int i = 0; i < 16; i++) {
-    int px = (i * 71 + 28) % 466;
+    int px = (i * 71 + 28) % LCD_WIDTH;
     int py = 410 - (int)((now / 8 + i * 70) % 360);   // suben y reaparecen abajo
     if (py < 30) continue;
     if (i % 4 == 0) drawMap(SPR_HEART, 32, px - 8, py - 8, 1, false);  // corazoncito
