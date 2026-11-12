@@ -159,3 +159,28 @@ TEST(power, con_la_pantalla_apagada_y_sin_usb_el_bucle_despierta_cinco_veces_por
   CHECK(lightSleepAllowed(c));
   CHECK_EQ(1000 / POWER_SLEEP_MS, 5);                  // antes: 1000 despertares por segundo
 }
+
+TEST(power, el_suelo_de_brillo_por_defecto_es_cero_y_no_cambia_nada) {
+  CHECK_EQ((int)BRIGHTNESS_FLOOR, 0);
+  PowerCtx c = ctx(0);
+  c.sleeping = true;
+  CHECK_EQ((int)brightnessFor(c), 25);
+  c = ctx(400000);
+  CHECK_EQ((int)brightnessFor(c), 8);
+}
+
+TEST(power, un_suelo_distinto_de_cero_sube_lo_oscuro_pero_no_la_pantalla_apagada) {
+  PowerCtx c = ctx(0);
+  c.sleeping = true;
+  CHECK_EQ((int)brightnessForFloor(c, 80), 80);    // durmiendo
+  c.idleMs = 100000;
+  CHECK_EQ((int)brightnessForFloor(c, 80), 80);    // atenuada y durmiendo (10)
+  c = ctx(400000);
+  CHECK_EQ((int)brightnessForFloor(c, 80), 80);    // casi apagada (8)
+  c = ctx(0);
+  CHECK_EQ((int)brightnessForFloor(c, 80), 145);   // el suelo no baja un brillo mayor
+  c.batPct = 5;
+  CHECK_EQ((int)brightnessForFloor(c, 80), 80);    // el suelo gana al tope de bateria baja (60)
+  c.screenOff = true;
+  CHECK_EQ((int)brightnessForFloor(c, 80), 0);     // apagada sigue siendo 0
+}

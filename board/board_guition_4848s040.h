@@ -21,6 +21,10 @@
 #define LCD_SCLK 48
 #define LCD_MOSI 47
 #define LCD_BL 38  // retroiluminacion (PWM)
+// Suelo de brillo (power.h): sin boton PWR ni despertar por tactil, la unica forma de
+// despertar al bicho es pulsar LUZ; con el brillo nocturno de 8-25/255 no se ve. 80/255 es
+// claramente legible en un IPS con retroiluminacion LED y aun ahorra respecto a 145-180.
+#define BRIGHTNESS_FLOOR 80
 
 // Bus paralelo RGB de 16 bits (datos de pixel por DMA)
 #define RGB_DE 18

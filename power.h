@@ -41,8 +41,16 @@ inline uint8_t dimStageFor(uint32_t idleMs) {
 inline bool batteryLow(const PowerCtx &c) { return c.batPct >= 0 && c.batPct < 20 && !c.charging && !c.usb; }
 inline bool batteryCritical(const PowerCtx &c) { return c.batPct >= 0 && c.batPct < 10 && !c.charging && !c.usb; }
 
-// brillo del panel (0-255): el de siempre, con un tope cuando queda poca bateria
-inline uint8_t brightnessFor(const PowerCtx &c) {
+// Suelo de brillo por placa (0-255). Placas sin boton de encendido ni despertar por tactil
+// (Guition) lo suben para que la pantalla dormida/atenuada siga siendo legible y se encuentre
+// el boton LUZ. 0 = comportamiento de siempre (Waveshare). Se define en board/*.h.
+#ifndef BRIGHTNESS_FLOOR
+#define BRIGHTNESS_FLOOR 0
+#endif
+
+// brillo del panel (0-255): el de siempre, con un tope cuando queda poca bateria; con la
+// pantalla encendida nunca baja de `floor` (apagada sigue siendo 0)
+inline uint8_t brightnessForFloor(const PowerCtx &c, uint8_t floor) {
   if (c.screenOff) return 0;
   uint8_t stage = dimStageFor(c.idleMs);
   uint8_t t = c.sleeping ? 25 : (c.usb ? 180 : 145);
@@ -50,8 +58,10 @@ inline uint8_t brightnessFor(const PowerCtx &c) {
   else if (stage == DIM_OFF) t = 8;
   if (batteryCritical(c) && t > 60) t = 60;
   else if (batteryLow(c) && t > 100) t = 100;
+  if (t < floor) t = floor;
   return t;
 }
+inline uint8_t brightnessFor(const PowerCtx &c) { return brightnessForFloor(c, BRIGHTNESS_FLOOR); }
 
 // ms entre frames; 0 = no se dibuja (pantalla apagada). Cada frame cuesta un render
 // completo y el volcado del lienzo por QSPI, y el panel solo cambia si se redibuja.
