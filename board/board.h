@@ -9,6 +9,9 @@
 //     -DBOARD_GUITION_4848S040) para el panel Guition/Sunton ESP32-S3-4848S040
 //     (ST7701S RGB 480x480 + GT911 por I2C, sin PMU/RTC/bateria/audio).
 //
+// HAS_SD significa "hay almacenamiento externo para sprites" (tarjeta SD, o LittleFS
+// en flash en la 1.75C), no necesariamente una tarjeta SD.
+//
 // Cada cabecera de placa define los pines y las capacidades (HAS_*) que el
 // firmware usa para degradar funciones (plan.md: "degradar, no petar").
 // Regla: el codigo de juego/UI nunca toca GPIO crudos; solo macros de placa.

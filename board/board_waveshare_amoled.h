@@ -76,4 +76,4 @@
 #define HAS_RTC 1
 #endif
 #define HAS_AUDIO 1
-#define HAS_SD 1  // en la 1.75C es LittleFS en flash (ver sdmon.cpp)
+#define HAS_SD 1  // "hay almacenamiento de sprites": tarjeta SD en la 1.75; en la 1.75C es LittleFS en flash (ver sdmon.cpp)
