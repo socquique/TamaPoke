@@ -22,9 +22,10 @@
 #define LCD_MOSI 47
 #define LCD_BL 38  // retroiluminacion (PWM)
 // Suelo de brillo (power.h): sin boton PWR ni despertar por tactil, la unica forma de
-// despertar al bicho es pulsar LUZ; con el brillo nocturno de 8-25/255 no se ve. 80/255 es
-// claramente legible en un IPS con retroiluminacion LED y aun ahorra respecto a 145-180.
-#define BRIGHTNESS_FLOOR 80
+// despertar al bicho es pulsar LUZ. La paleta nocturna es muy oscura y un IPS con poco duty
+// PWM se lee mal (80/255 resultaba demasiado tenue). Esta placa no tiene AMOLED que proteger
+// ni bateria, asi que 170/255 es aceptable; se puede ajustar aqui.
+#define BRIGHTNESS_FLOOR 170
 
 // Bus paralelo RGB de 16 bits (datos de pixel por DMA)
 #define RGB_DE 18
