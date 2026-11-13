@@ -7,7 +7,7 @@
 // con strlen(t)*6 y un caracter de dos bytes descuadraria las etiquetas.
 // No estan en CP437: las mayusculas acentuadas salvo E (\220), ni a~/o~ del portugues.
 enum Lang : uint8_t { LANG_ES = 0, LANG_EN, LANG_FR, LANG_DE, LANG_IT, LANG_PT,
-                     LANG_JA, LANG_KO, LANG_COUNT };
+                     LANG_JA, LANG_KO, LANG_NL, LANG_COUNT };
 // idiomas que necesitan una fuente U8g2 y texto UTF-8 en vez de la tabla CP437
 #define LANG_IS_CJK(l) ((l) == LANG_JA || (l) == LANG_KO)
 #define LANG_DEFAULT LANG_EN  // idioma por defecto: ingles

@@ -280,6 +280,36 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "스프라이트 없음", "SD 카드에 넣어주세요",
     "길게 눌러 종료",
   },
+  // ---------------- NL ----------------
+  {
+    "Evolueert!", "Nom nom!", "Hij vindt het lekker!", "Hij heeft honger!", "Heeft een bad nodig!",
+    "Uitgeput...", "Hij is verdrietig...", "Een beetje mollig...", "Hij is SHINY!!", "Hij is blij",
+    "BEDANKT! Vaarwel", "Hij is weggelopen...", "Dag! Zwaait gedag...",
+    "EI", "Legendarisch ei!?", "Zeldzaam ei!", "Tik op het ei...", "Het beweegt!", "Bijna zover!",
+    "POKEDEX %u/151",
+    "%s%s Lv.%u",
+    "%s vrijlaten?", "JA", "NEE",
+    "%u TREFFERS", "KRACHT +%u", "NIEUW RECORD!", "RECORD: %u", "SLA SNEL!",
+    "SCORE: %u", "Zo leuk!", "+geluk",
+    "TIJD INSTELLEN", "UUR", "MIN", "veeg omhoog: annuleer", "Taal",
+    "MEDAILLE!", "GEWELDIG!", "%u DAGEN OP RIJ!",
+    "REEKS %u  best %u", "BAND", "BES ???", "RODE BES", "BLAUWE BES", "GROENE BES",
+    "%s   LEEFTIJD %lud", "tik naam: hernoem",
+    "GEVECHT", "ATK", "DEF", "SNL", "GEW", "KRACHT TRAINEN",
+    "MEDAILLES %d/%d", "tik: terug",
+    "NAAM:", "tik om terug te gaan",
+    "ETEN", "PRET", "ENE", "HYG",
+    "BEST %u",
+    "VOORTGANG", "Lv.%u", "%u min tot Lv.%u", "EVOLUTIE", "Eindvorm",
+    "Klaar om te evolueren!", "Alles >=40 om te evolueren",
+    "Evolueert over %u lv.", "Foutjes: %u",
+    "SND AAN", "SND UIT",
+    "EVOLUEER!", "%s wil je iets vertellen...", "%s voelt zich verlaten...",
+    "Evolueren?", "Vorm houden", "Afscheid nemen?", "Vaarwel", "Samen blijven",
+    "Kies je starter",
+    "Geen sprites", "Zet ze op de SD",
+    "Houd: stop",
+  },
 };
 
 // Nombres de medalla en sus tres longitudes [idioma][medalla].
@@ -292,6 +322,7 @@ static const char *const MED_NAME[LANG_COUNT][MED_COUNT] = {
   { "Niv.10", "Niv.25", "Niv.50", "BAGA", "SEQ 7", "LACO", "FORMA MAX", "EM FORMA" },
   { "Lv.10", "Lv.25", "Lv.50", "きのみ", "7にち", "なかよし", "さいしゅう", "げんき" },
   { "Lv.10", "Lv.25", "Lv.50", "열매", "연속 7일", "유대", "최고 컨디션", "건강함" },
+  { "Lv.10", "Lv.25", "Lv.50", "BES", "7 DAGEN", "BAND", "TOPVORM", "FIT" },
 };
 static const char *const MED_LBL[LANG_COUNT][MED_COUNT] = {
   { "Nv10", "Nv25", "Nv50", "BAYA", "7DIAS", "VINC", "TOPE", "SANO" },
@@ -302,6 +333,7 @@ static const char *const MED_LBL[LANG_COUNT][MED_COUNT] = {
   { "Niv10", "Niv25", "Niv50", "BAGA", "7DIAS", "LACO", "MAX", "FIT" },
   { "Lv10", "Lv25", "Lv50", "きのみ", "7にち", "なかよし", "しんか", "げんき" },
   { "Lv10", "Lv25", "Lv50", "열매", "7일", "유대", "최고", "건강" },
+  { "Lv10", "Lv25", "Lv50", "BES", "7DAG", "BAND", "TOP", "FIT" },
 };
 static const char *const MED_DSC[LANG_COUNT][MED_COUNT] = {
   { "NIVEL 10", "NIVEL 25", "NIVEL 50", "BAYA HALLADA",
@@ -320,6 +352,8 @@ static const char *const MED_DSC[LANG_COUNT][MED_COUNT] = {
     "7にち れんぞく", "なかよし MAX", "さいしゅうしんか", "げんきいっぱい" },
   { "레벨 10", "레벨 25", "레벨 50", "열매 발견",
     "연속 7일", "유대감 최대", "최종 진화", "건강함" },
+  { "LEVEL 10", "LEVEL 25", "LEVEL 50", "BES GEVONDEN",
+    "7 DAGEN OP RIJ", "MAX BAND", "EINDVORM", "IN VORM" },
 };
 
 const char *T(StrId id) { return STRINGS[gLang][id]; }

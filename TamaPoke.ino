@@ -2086,7 +2086,7 @@ void drawClockBtn(int x, int y, const char *l) {
 #define SND_PILL_W 96
 #define BRI_PILL_X (183 + UI_DX)         // pildora de brillo, centrada (cicla los niveles al tocar)
 #define BRI_PILL_W 100
-static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA", "KO" };
+static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA", "KO", "NL" };
 
 // tres barras crecientes (brillo, volumen); las `lit` primeras van rellenas
 static void drawLevelBars(int x, int lit) {
