@@ -47,20 +47,20 @@ inline bool batteryLow(const PowerCtx &c) { return c.batPct >= 0 && c.batPct < 2
 inline bool batteryCritical(const PowerCtx &c) { return c.batPct >= 0 && c.batPct < 10 && !c.charging && !c.usb; }
 
 // Suelo de brillo por placa (0-255). Placas sin boton de encendido ni despertar por tactil
-// (Guition) lo suben para que la pantalla dormida/atenuada siga siendo legible y se encuentre
-// el boton LUZ. 0 = comportamiento de siempre (Waveshare). Se define en board/*.h.
+// (Guition) lo usan para que la pantalla dormida/atenuada siga siendo legible y se encuentre
+// el boton LUZ. Solo rige con el bicho durmiendo o la pantalla atenuada (DIM_LOW/DIM_OFF), y
+// nunca la deja mas brillante que despierta con el mismo nivel de ajustes y la misma bateria:
+// despierta manda el nivel elegido. 0 = comportamiento de siempre (Waveshare). Se define en
+// board.h.
 #ifndef BRIGHTNESS_FLOOR
 #define BRIGHTNESS_FLOOR 0
 #endif
 
-// brillo del panel (0-255): el de siempre, con un tope cuando queda poca bateria y escalado
-// por el nivel elegido en ajustes; con la pantalla encendida nunca baja de `floor` (apagada
-// sigue siendo 0)
-inline uint8_t brightnessForFloor(const PowerCtx &c, uint8_t floor) {
-  if (c.screenOff) return 0;
-  uint8_t stage = dimStageFor(c.idleMs);
-  uint8_t t = c.sleeping ? 25 : (c.usb ? 180 : 145);
-  if (stage == DIM_LOW) t = c.sleeping ? 10 : 60;
+// brillo sin suelo: el de siempre, con un tope cuando queda poca bateria y escalado por el
+// nivel elegido en ajustes (para un escalon de atenuacion y un estado de sueno dados)
+inline uint8_t brightnessBase(const PowerCtx &c, uint8_t stage, bool sleeping) {
+  uint8_t t = sleeping ? 25 : (c.usb ? 180 : 145);
+  if (stage == DIM_LOW) t = sleeping ? 10 : 60;
   else if (stage == DIM_OFF) t = 8;
   if (batteryCritical(c) && t > 60) t = 60;
   else if (batteryLow(c) && t > 100) t = 100;
@@ -68,7 +68,20 @@ inline uint8_t brightnessForFloor(const PowerCtx &c, uint8_t floor) {
     t = (uint8_t)((uint16_t)t * userBrightPct(c.userDim) / 100);
     if (t < 2) t = 2;
   }
-  if (t < floor) t = floor;
+  return t;
+}
+
+// brillo del panel (0-255); apagada sigue siendo 0. El suelo solo sube la pantalla dormida o
+// atenuada, y con tope en el brillo despierto de ese mismo nivel de ajustes y bateria
+inline uint8_t brightnessForFloor(const PowerCtx &c, uint8_t floor) {
+  if (c.screenOff) return 0;
+  uint8_t stage = dimStageFor(c.idleMs);
+  uint8_t t = brightnessBase(c, stage, c.sleeping);
+  if (floor > 0 && (c.sleeping || stage != DIM_AWAKE)) {
+    uint8_t awake = brightnessBase(c, DIM_AWAKE, false);
+    if (floor > awake) floor = awake;
+    if (t < floor) t = floor;
+  }
   return t;
 }
 inline uint8_t brightnessFor(const PowerCtx &c) { return brightnessForFloor(c, BRIGHTNESS_FLOOR); }
