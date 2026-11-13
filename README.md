@@ -162,7 +162,7 @@ arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn "$FQBN" .
 
 The firmware also targets the **ESP32-S3-4848S040** panel (4.0" IPS 480×480,
 **ST7701S** RGB + **GT911** capacitive touch). Select it with a build flag —
-the pin/capability layer in `board/` swaps the QSPI/CO5300 display and the
+the pin/capability layer in `board.h` / `pin_config.h` swaps the QSPI/CO5300 display and the
 CST9217 for the RGB panel and the GT911:
 
 ```bash
@@ -175,7 +175,7 @@ slot, so those features degrade to no-ops (clock comes from the last save,
 sound off). Its microSD slot is SPI (slower sprite loads than SDMMC); the card
 must be FAT32, as it is never auto-formatted on this board. SD support there is
 untested on hardware; without a card the sprites come from flash. In the Arduino IDE set the same flag
-under *Extra ESP32 compile flags*. Details in `board/board_guition_4848s040.h`.
+under *Extra ESP32 compile flags*. Details in `board.h`.
 
 ### Alternative board: Waveshare ESP32-S3-Touch-AMOLED-1.75C (experimental)
 

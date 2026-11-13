@@ -34,7 +34,7 @@ jobs:
           .
 
       # Guition/Sunton 4848S040 (ST7701S RGB 480x480 + GT911): mismo codigo,
-      # la capa board/ elige placa con un flag de compilacion. Se compila aqui
+      # la capa board.h elige placa con un flag de compilacion. Se compila aqui
       # para que la compatibilidad no se oxide.
       - name: Compile (Guition 4848S040)
         run: >

@@ -17,7 +17,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
-#include "pin_config.h"  // pines + capacidades de placa (board/); antes que el driver de tactil
+#include "pin_config.h"  // pines + capacidades de placa (pin_config.h / board.h); antes que el driver de tactil
 #if TOUCH_POLLING
 #include "TouchDrvGT911.hpp"
 #else

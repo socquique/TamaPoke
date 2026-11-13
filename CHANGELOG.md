@@ -25,10 +25,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - **Guition / Sunton ESP32-S3-4848S040** (4.0" IPS 480×480, ST7701S RGB panel
   + GT911 touch) is now a supported build target: build with
   `-DBOARD_GUITION_4848S040`. Pins and per-board capabilities live in the new
-  `board/` layer (`pin_config.h` is now a shim to it). That board has no
+  pin layer (the Guition pins and capabilities sit in the root `board.h`, next
+  to the 1.75C selection; `pin_config.h` keeps the Waveshare pins). That board has no
   PMU/battery/RTC/audio, so those features degrade to no-ops (clock from the
   last save, sound off). See the README for the build flag and
-  `board/board_guition_4848s040.h` for pins.
+  `board.h` for pins.
 - Guition SD support over hardware SPI (CS 42, SCK 48, MOSI 47, MISO 41), so
   the sprite loaders and the `LS`/`PUT`/`SDINFO` protocol work there. The card
   must be FAT32: it is never auto-formatted on this board. Sprite loads are
