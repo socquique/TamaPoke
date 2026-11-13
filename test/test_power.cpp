@@ -161,6 +161,107 @@ TEST(power, con_la_pantalla_apagada_y_sin_usb_el_bucle_despierta_cinco_veces_por
   CHECK_EQ(1000 / POWER_SLEEP_MS, 5);                  // antes: 1000 despertares por segundo
 }
 
+TEST(power, el_suelo_de_brillo_por_defecto_es_cero_y_no_cambia_nada) {
+  CHECK_EQ((int)BRIGHTNESS_FLOOR, 0);
+  PowerCtx c = ctx(0);
+  c.sleeping = true;
+  CHECK_EQ((int)brightnessFor(c), 25);
+  c = ctx(400000);
+  CHECK_EQ((int)brightnessFor(c), 8);
+}
+
+TEST(power, un_suelo_distinto_de_cero_sube_lo_oscuro_pero_no_la_pantalla_apagada) {
+  PowerCtx c = ctx(0);
+  c.sleeping = true;
+  CHECK_EQ((int)brightnessForFloor(c, 80), 80);    // durmiendo
+  c.idleMs = 100000;
+  CHECK_EQ((int)brightnessForFloor(c, 80), 80);    // atenuada y durmiendo (10)
+  c = ctx(400000);
+  CHECK_EQ((int)brightnessForFloor(c, 80), 80);    // casi apagada (8)
+  c = ctx(0);
+  CHECK_EQ((int)brightnessForFloor(c, 80), 145);   // despierta: el suelo no interviene
+  c = ctx(100000);
+  c.batPct = 5;
+  CHECK_EQ((int)brightnessForFloor(c, 80), 60);    // atenuada: el suelo no pasa del brillo despierto con tope de bateria (60)
+  c.batPct = 15;
+  CHECK_EQ((int)brightnessForFloor(c, 80), 80);    // con bateria baja (tope 100) el suelo si se aplica
+  c.screenOff = true;
+  CHECK_EQ((int)brightnessForFloor(c, 80), 0);     // apagada sigue siendo 0
+}
+
+TEST(power, el_suelo_solo_rige_dormido_o_atenuado_y_con_tope_en_el_nivel_despierto) {
+  const uint8_t F = 170;
+  for (uint8_t u = 0; u < 3; u++) {
+    PowerCtx c = ctx(0);
+    c.userDim = u;
+    uint8_t awake = brightnessForFloor(c, 0);
+    CHECK_EQ((int)brightnessForFloor(c, F), (int)awake);       // despierta: manda el nivel, sin suelo
+    uint8_t cap = awake < F ? awake : F;                        // tope: lo que brillaria despierta
+    c.sleeping = true;
+    CHECK_EQ((int)brightnessForFloor(c, F), (int)cap);          // durmiendo
+    c.idleMs = 100000;
+    CHECK_EQ((int)brightnessForFloor(c, F), (int)cap);          // DIM_LOW durmiendo
+    c.sleeping = false;
+    CHECK_EQ((int)brightnessForFloor(c, F), (int)cap);          // DIM_LOW
+    c.idleMs = 400000;
+    CHECK_EQ((int)brightnessForFloor(c, F), (int)cap);          // DIM_OFF
+    c.screenOff = true;
+    CHECK_EQ((int)brightnessForFloor(c, F), 0);                 // apagada: 0
+  }
+  // alto (145 en bateria): dormida sube a 145; medio 87 y bajo 43: atenuada nunca mas que despierta
+  PowerCtx c = ctx(100000);
+  c.usb = true;
+  CHECK_EQ((int)brightnessForFloor(c, F), 170);               // 180 despierta, suelo 170
+  c.userDim = 1;
+  CHECK_EQ((int)brightnessForFloor(c, F), 108);               // 180 al 60 %
+  c.userDim = 2;
+  CHECK_EQ((int)brightnessForFloor(c, F), 54);                // 180 al 30 %
+  c.idleMs = 0;
+  CHECK_EQ((int)brightnessForFloor(c, F), 54);                // despierta: el nivel manda
+}
+
+// referencia: la logica anterior al suelo, escrita aparte, para que Waveshare (suelo 0) no cambie
+static uint8_t brightnessReference(const PowerCtx &c) {
+  if (c.screenOff) return 0;
+  uint8_t stage = c.idleMs > POWER_DIM2_MS ? DIM_OFF : c.idleMs > POWER_DIM1_MS ? DIM_LOW : DIM_AWAKE;
+  uint8_t t = c.sleeping ? 25 : (c.usb ? 180 : 145);
+  if (stage == DIM_LOW) t = c.sleeping ? 10 : 60;
+  else if (stage == DIM_OFF) t = 8;
+  bool nobat = c.batPct >= 0 && !c.charging && !c.usb;
+  if (nobat && c.batPct < 10 && t > 60) t = 60;
+  else if (nobat && c.batPct < 20 && t > 100) t = 100;
+  if (c.userDim) {
+    t = (uint8_t)((uint16_t)t * (c.userDim == 1 ? 60 : c.userDim >= 2 ? 30 : 100) / 100);
+    if (t < 2) t = 2;
+  }
+  return t;
+}
+
+TEST(power, con_suelo_cero_el_brillo_es_identico_al_de_antes_en_todas_las_combinaciones) {
+  const uint32_t idles[] = {0, 90000, 100000, 300000, 400000};
+  const int bats[] = {-1, 0, 5, 9, 10, 15, 19, 20, 80, 100};
+  int n = 0;
+  for (int sl = 0; sl < 2; sl++)
+    for (uint32_t idle : idles)
+      for (int usb = 0; usb < 2; usb++)
+        for (int bat : bats)
+          for (int ch = 0; ch < 2; ch++)
+            for (uint8_t u = 0; u < 3; u++)
+              for (int off = 0; off < 2; off++) {
+                PowerCtx c = {};
+                c.sleeping = sl;
+                c.idleMs = idle;
+                c.usb = usb;
+                c.batPct = bat;
+                c.charging = ch;
+                c.userDim = u;
+                c.screenOff = off;
+                CHECK_EQ((int)brightnessForFloor(c, 0), (int)brightnessReference(c));
+                n++;
+              }
+  CHECK_EQ(n, 2 * 5 * 2 * 10 * 2 * 3 * 2);
+}
+
 TEST(power, el_nivel_de_ajustes_escala_el_brillo_y_respeta_el_orden) {
   PowerCtx c = ctx(0);
   c.userDim = 1;

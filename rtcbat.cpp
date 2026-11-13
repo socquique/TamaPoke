@@ -1,46 +1,29 @@
 #include "batcurve.h"
 #include "rtcbat.h"
-#include "pin_config.h"  // define XPOWERS_CHIP_AXP2101
+#include "pin_config.h"  // define XPOWERS_CHIP_AXP2101 y capacidades (HAS_RTC/HAS_PMU)
 #include <Wire.h>
 #include <time.h>
+
+#if HAS_RTC
 #include <SensorPCF85063.hpp>
-#include <XPowersLib.h>
-
 static SensorPCF85063 rtc;
-static XPowersPMU pmu;
 static bool rtcOk = false;
+#endif
+
+#if HAS_PMU
+#include <XPowersLib.h>
+static XPowersPMU pmu;
 static bool pmuOk = false;
-
-#if BOARD_AMOLED_175C
-// The 1.75C has no PCF85063. Keep a software clock (time()/settimeofday) so the
-// clock screen and the scene hour still work; it is lost when the AXP cuts
-// power, like the original board when its RTC loses backup power.
-#include <sys/time.h>
-static const uint32_t kSoftMinEpoch = 1735689600UL;  // 2025-01-01: below = no time
-static uint32_t softEpoch() {
-  time_t now = time(nullptr);
-  return now < (time_t)kSoftMinEpoch ? 0 : (uint32_t)now;
-}
-static void softSetEpoch(uint32_t e) {
-  if (e < kSoftMinEpoch) return;
-  struct timeval tv = { (time_t)e, 0 };
-  settimeofday(&tv, nullptr);
-}
 #endif
 
+#if HAS_RTC
 bool rtcBegin() {
-#if BOARD_AMOLED_175C
-  return false;  // no PCF85063 on this board: software clock only
-#endif
   rtcOk = rtc.begin(Wire, IIC_SDA, IIC_SCL);
   if (!rtcOk) Serial.println("PCF85063 no detectado");
   return rtcOk;
 }
 
 uint32_t rtcEpoch() {
-#if BOARD_AMOLED_175C
-  return softEpoch();
-#endif
   if (!rtcOk) return 0;
   RTC_DateTime t = rtc.getDateTime();
   if (t.getYear() < 2025 || t.getYear() > 2120) return 0;  // sin hora valida
@@ -56,10 +39,6 @@ uint32_t rtcEpoch() {
 }
 
 void rtcSetEpoch(uint32_t e) {
-#if BOARD_AMOLED_175C
-  softSetEpoch(e);
-  return;
-#endif
   if (!rtcOk) return;
   time_t tt = e;
   struct tm tmv;
@@ -67,7 +46,32 @@ void rtcSetEpoch(uint32_t e) {
   rtc.setDateTime(RTC_DateTime(tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
                                tmv.tm_hour, tmv.tm_min, tmv.tm_sec));
 }
+#elif BOARD_AMOLED_175C
+// The 1.75C has no PCF85063. Keep a software clock (time()/settimeofday) so the
+// clock screen and the scene hour still work; it is lost when the AXP cuts
+// power, like the original board when its RTC loses backup power.
+#include <sys/time.h>
+static const uint32_t kSoftMinEpoch = 1735689600UL;  // 2025-01-01: below = no time
+bool rtcBegin() { return false; }  // no PCF85063 on this board: software clock only
+uint32_t rtcEpoch() {
+  time_t now = time(nullptr);
+  return now < (time_t)kSoftMinEpoch ? 0 : (uint32_t)now;
+}
+void rtcSetEpoch(uint32_t e) {
+  if (e < kSoftMinEpoch) return;
+  struct timeval tv = { (time_t)e, 0 };
+  settimeofday(&tv, nullptr);
+}
+#else
+// placa sin PCF85063 (p. ej. Guition 4848S040): sin hora persistente entre
+// arranques; el juego degrada a reloj del ultimo guardado (sin RTC no hay
+// progreso offline de mas, pero tampoco se peta nada)
+bool rtcBegin() { return false; }
+uint32_t rtcEpoch() { return 0; }
+void rtcSetEpoch(uint32_t) {}
+#endif
 
+#if HAS_PMU
 bool batBegin() {
   pmuOk = pmu.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL);
   if (!pmuOk) { Serial.println("AXP2101 no detectado"); return false; }
@@ -171,3 +175,19 @@ bool pwrShortPressed() {
   return hit;
 #endif
 }
+#else
+// placa sin AXP2101 ni bateria (Guition 4848S040: alimentacion USB-C): toda la
+// gestion de energia es no-op; se comporta como siempre enchufado
+bool batBegin() { return false; }
+void pmuEnablePanel() {}
+void batSetPollMs(uint32_t) {}
+int batPercent() { return -1; }
+bool batCharging() { return false; }
+int batMillivolts() { return 0; }
+bool batShouldShutdown() { return false; }
+void batPowerOff() {}
+bool usbPresent() { return true; }
+bool usbPresentNow() { return true; }
+void pwrSetup() {}
+bool pwrShortPressed() { return false; }
+#endif

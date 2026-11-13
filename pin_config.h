@@ -7,7 +7,9 @@
 //   github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.75C
 //   (examples/arduino/libraries/board_config/pin_config.h)
 
-#include "board.h"
+#include "board.h"  // eleccion de placa (flags) y pines/capacidades de la Guition
+
+#if !defined(BOARD_GUITION_4848S040)  // Waveshare 1.75 / 1.75C (la Guition vive en board.h)
 
 #define XPOWERS_CHIP_AXP2101
 
@@ -55,3 +57,22 @@
   #define SDMMC_CS   41
   #define BOARD_NAME "ESP32-S3-Touch-AMOLED-1.75"
 #endif
+
+// Frecuencia de gfx->begin(): QSPI a 80MHz (el flush del framebuffer es el
+// cuello de botella del fps; a 40MHz ~56ms por frame).
+#define DISPLAY_BEGIN_HZ 80000000
+
+// Tactil CST9217
+#define TOUCH_ADDR 0x5A
+#define TOUCH_POLLING 0  // tiene linea INT: lecturas a puerta por ISR
+
+// Capacidades de la placa: el firmware degrada lo que valga 0.
+#define HAS_PMU 1
+#if BOARD_AMOLED_175C
+#define HAS_RTC 0  // reloj por software (ver rtcbat.cpp)
+#else
+#define HAS_RTC 1
+#endif
+#define HAS_AUDIO 1
+#define HAS_SD 1  // "hay almacenamiento de sprites": tarjeta SD en la 1.75; en la 1.75C es LittleFS en flash (ver sdmon.cpp)
+#endif  // !BOARD_GUITION_4848S040

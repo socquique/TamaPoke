@@ -4,6 +4,11 @@
 #if BOARD_AMOLED_175C
 #include <LittleFS.h>
 static fs::FS &SpriteFS = LittleFS;
+#elif HAS_SD && SD_SPI
+#include <SPI.h>
+#include <SD.h>
+static SPIClass sdSpi(FSPI);
+static fs::FS &SpriteFS = SD;
 #else
 #include <SD_MMC.h>
 static fs::FS &SpriteFS = SD_MMC;
@@ -161,7 +166,26 @@ bool sdBegin() {
   } else {
     Serial.println("LittleFS no montado (flashea tools/flash_175c.sh --fs o el .img)");
   }
-#else
+  return sdReady;
+#elif HAS_SD && SD_SPI
+  // Debe correr despues de gfx->begin(): SCK/MOSI son los del bus 3-wire de la
+  // pantalla, que solo se usa dentro de begin(). El ST7701S se deja deseleccionado
+  // (CS alto) o tomaria el trafico del SD como comandos.
+  pinMode(LCD_CS, OUTPUT);
+  digitalWrite(LCD_CS, HIGH);
+  sdSpi.begin(SD_SPI_SCK, SD_SPI_MISO, SD_SPI_MOSI, -1);
+  // nunca formatea (format_if_empty=false): la tarjeta debe venir en FAT32
+  sdReady = SD.begin(SD_SPI_CS, sdSpi, SD_SPI_HZ, "/sdcard", 5, false);
+  if (!sdReady) sdReady = SD.begin(SD_SPI_CS, sdSpi, 4000000, "/sdcard", 5, false);
+  if (sdReady) {
+    Serial.printf("SD montada: %llu MB\n", SD.cardSize() / (1024ULL * 1024ULL));
+    Serial.printf("SD tipo: %d\n", (int)SD.cardType());
+    SD.mkdir("/mons");
+  } else {
+    Serial.println("SD no detectada (el juego usa los sprites de flash)");
+  }
+  return sdReady;
+#elif HAS_SD
   SD_MMC.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_DATA);
   sdReady = SD_MMC.begin("/sdcard", true /* modo 1-bit */, true /* formatea si no monta */);
   if (sdReady) {
@@ -170,10 +194,13 @@ bool sdBegin() {
   } else {
     Serial.println("SD no detectada (el juego usa los sprites de flash)");
   }
-#endif
   return sdReady;
+#else
+  // placa sin SD: el juego va solo con los sprites de flash
+  Serial.println("SD no disponible en esta placa (el juego usa los sprites de flash)");
+  return false;
+#endif
 }
-
 
 bool SdMon::load(uint8_t dexNum, bool shiny) {
   unload();
@@ -305,6 +332,8 @@ bool sdSerialCommand(const String &line) {
   } else if (line == "SDINFO") {  // diagnostico remoto de "no me reconoce la SD"
 #if BOARD_AMOLED_175C
     Serial.printf("total=%llu used=%llu\n", (unsigned long long)LittleFS.totalBytes(), (unsigned long long)LittleFS.usedBytes());
+#elif HAS_SD && SD_SPI
+    Serial.printf("total=%llu used=%llu\n", SD.totalBytes(), SD.usedBytes());
 #else
     Serial.printf("total=%llu used=%llu\n", SD_MMC.totalBytes(), SD_MMC.usedBytes());
 #endif
