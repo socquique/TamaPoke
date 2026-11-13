@@ -35,6 +35,13 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   must be FAT32: it is never auto-formatted on this board. Sprite loads are
   slower than SDMMC. Untested on hardware.
 
+### Fixed
+
+- **Pokéball minigame no longer quits when you go for a high ball** (#39). Any
+  tap above the record text left the game, and the ball flies up there. Now a
+  tap that reaches the ball always counts as a hit, and only a tap at the very
+  top edge (above the score) leaves.
+
 ## [1.19] - 2026-11-11
 
 ### Added

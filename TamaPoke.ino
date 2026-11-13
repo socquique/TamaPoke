@@ -1691,14 +1691,20 @@ void respawnBall() {
   ballVY = 0;
 }
 
+#define GAME_EXIT_Y 40  // franja de arriba que sale del minijuego (el marcador empieza en y = 30)
+
 void gameTap(int16_t x, int16_t y) {
   if (gameOverUntil) return;
-  if (y < 72) {  // tocar la cabecera = abandonar sin premio
+  float dx = ballX - x, dy = ballY - y;
+  bool hitBall = dx * dx + dy * dy < 74 * 74;
+  // tocar el borde de arriba = abandonar sin premio. Solo si el toque no va a la bola y por
+  // encima del marcador: con y < 72 la franja llegaba al texto del record y a la bola, que
+  // sale a y = 96, y al ir a darle arriba se salia del juego (#39)
+  if (!hitBall && y < GAME_EXIT_Y) {
     gameOpen = false;
     return;
   }
-  float dx = ballX - x, dy = ballY - y;
-  if (dx * dx + dy * dy < 74 * 74) {  // toque a la bola!
+  if (hitBall) {  // toque a la bola!
     gameScore++;
     sfxPlay(SFX_PLAY);
     // golpe mas suave: impulso moderado que crece poco a poco con la puntuacion
