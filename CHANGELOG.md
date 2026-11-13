@@ -6,7 +6,7 @@ bottom of the clock/settings screen (swipe down) and `web/manifest.json`.
 Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 **without** ticking "Erase device" keeps your Pokémon.
 
-## [Unreleased]
+## [1.20] - 2026-11-13
 
 ### Added
 
@@ -23,17 +23,14 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   shows a speaker with three bars and cycles **high** (as before), **medium**,
   **low** and **off**. The level is saved, so it survives a restart or update.
 - **Guition / Sunton ESP32-S3-4848S040** (4.0" IPS 480×480, ST7701S RGB panel
-  + GT911 touch) is now a supported build target: build with
-  `-DBOARD_GUITION_4848S040`. Pins and per-board capabilities live in the new
-  pin layer (the Guition pins and capabilities sit in the root `board.h`, next
-  to the 1.75C selection; `pin_config.h` keeps the Waveshare pins). That board has no
-  PMU/battery/RTC/audio, so those features degrade to no-ops (clock from the
-  last save, sound off). See the README for the build flag and
-  `board.h` for pins.
-- Guition SD support over hardware SPI (CS 42, SCK 48, MOSI 47, MISO 41), so
-  the sprite loaders and the `LS`/`PUT`/`SDINFO` protocol work there. The card
-  must be FAT32: it is never auto-formatted on this board. Sprite loads are
-  slower than SDMMC. Untested on hardware.
+  + GT911 touch), experimental community support by JonAmes and galadril:
+  build with `-DBOARD_GUITION_4848S040`. Its pins and capabilities sit in the
+  root `board.h`, next to the 1.75C. The 466-designed UI is centred on the
+  480 panel, menu backdrops are square, and the sleeping/dimmed screen keeps a
+  minimum brightness so it stays readable on the IPS backlight. Sprites load
+  from a FAT32 microSD over SPI (never auto-formatted). That board has no
+  PMU/battery/RTC/audio, so those degrade to no-ops (clock from the last save,
+  sound off). See the README for the build flag.
 
 ### Fixed
 

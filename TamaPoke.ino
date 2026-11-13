@@ -42,7 +42,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.19"
+#define FW_VERSION "1.20"
 
 #if defined(BOARD_GUITION_4848S040)
 // ST7701S: la secuencia de init viaja por SPI de 3 hilos y los pixels por el
