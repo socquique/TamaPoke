@@ -196,6 +196,50 @@ screen, and the 1.75C adds a triple-PWR pocket screen lock, BOOT-button mute
 and more reliable strength-training taps. The default build is still the
 original 1.75. Details, pins and flashing in [`PORTING.md`](PORTING.md).
 
+### Alternative board: SpotPear 1.28" AI Ball (experimental)
+
+The SpotPear **"AI Voice Robot Ball"** (ESP32-S3 N16R8, round 1.28" **GC9A01A**
+240×240 SPI LCD, **CST816D** touch, ES8311 + speaker, microSD, battery) runs
+TamaPoke too. Select it with a build flag:
+
+```bash
+arduino-cli compile --fqbn "$FQBN" \
+  --build-property "compiler.cpp.extra_flags=-DBOARD_SPOTPEAR_BALL128" .
+```
+
+The panel is half the size of the AMOLED's, and this port doesn't redesign the UI.
+The unchanged 466 layout is drawn into a 480×480 PSRAM canvas, and every frame
+is shrunk 2:1 (each 2×2 block averaged into one pixel) on its way to the panel;
+touch points are scaled back up ×2. Everything works, but text is small.
+A native 240 px layout is a possible follow-up. A frame flush (shrink + SPI at
+80 MHz) takes about 38 ms (49 ms at 40 MHz), well inside the game's 85–100 ms
+frame period, so it runs at the same pace as on the AMOLED.
+
+What degrades: there is no AXP2101 and no PCF85063, as on the Guition, so the
+clock comes from the last save. The battery gauge at the top of the screen
+reads the battery from an ADC pin with the same table as the stock XiaoZhi
+firmware, and shows the charging bolt. The ball can't tell whether USB is
+plugged in, so the firmware treats it as always on USB (no light sleep, no
+low-battery saving or shutdown). The power button isn't wired up yet. Sound,
+the microSD sprites and saving work as on the original board.
+
+Sprites: put a microSD card in the ball and send them over USB with
+`python3 tools/send_sd.py --port <port>` (see below), or use the web
+installer's "Load sprites" button.
+
+**Flashing replaces the stock XiaoZhi firmware entirely** (no voice/AI). Back
+it up first if you may want it back, and erase once so its OTA data can't boot
+the old app slot:
+
+```bash
+esptool.py --chip esp32s3 -p <port> read_flash 0 0x1000000 xiaozhi-backup.bin
+esptool.py --chip esp32s3 -p <port> erase_flash
+arduino-cli upload -p <port> --fqbn "$FQBN" \
+  --build-property "compiler.cpp.extra_flags=-DBOARD_SPOTPEAR_BALL128" .
+```
+
+Pins and details in `board.h`.
+
 ### Easiest install: the web installer
 
 `web/index.html` flashes the firmware (ESP Web Tools) and pushes the sprites to

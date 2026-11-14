@@ -77,3 +77,27 @@ TEST(batcurve, sin_semilla_arranca_en_la_curva) {
   m.reset();
   CHECK_EQ(m.pct, -1);
 }
+
+// SpotPear 1.28 AI Ball: XiaoZhi's raw-ADC table (GPIO1, 12 dB, 12 bit), linear in between
+TEST(batcurve, bola_tabla_adc_de_xiaozhi) {
+  CHECK_EQ(ballBatPercentFromRaw(0), 0);
+  CHECK_EQ(ballBatPercentFromRaw(1979), 0);
+  CHECK_EQ(ballBatPercentFromRaw(1980), 0);
+  CHECK_EQ(ballBatPercentFromRaw(2081), 20);
+  CHECK_EQ(ballBatPercentFromRaw(2163), 40);
+  CHECK_EQ(ballBatPercentFromRaw(2250), 60);
+  CHECK_EQ(ballBatPercentFromRaw(2340), 80);
+  CHECK_EQ(ballBatPercentFromRaw(2385), 86);  // measured on the ball while charging
+  CHECK_EQ(ballBatPercentFromRaw(2480), 100);
+  CHECK_EQ(ballBatPercentFromRaw(4095), 100);
+}
+
+TEST(batcurve, bola_tabla_adc_monotona) {
+  int prev = 0;
+  for (int raw = 1900; raw <= 2600; raw++) {
+    int p = ballBatPercentFromRaw(raw);
+    CHECK(p >= prev);
+    CHECK(p >= 0 && p <= 100);
+    prev = p;
+  }
+}

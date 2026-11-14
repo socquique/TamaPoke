@@ -31,6 +31,26 @@ inline int batPercentFromMv(int mv) {
   return 0;
 }
 
+// SpotPear 1.28 AI Ball (no PMU): raw 12-bit ADC on GPIO1 at 12 dB, through a
+// divider whose ratio isn't documented. Table and interpolation copied from
+// XiaoZhi (78/xiaozhi-esp32 boards/spotpear/sp-esp32-s3-1.28-box/power_manager.h).
+struct BatRawPoint { int16_t raw; uint8_t pct; };
+static const BatRawPoint BALL_BAT_RAW[] = {
+  { 1980, 0 }, { 2081, 20 }, { 2163, 40 }, { 2250, 60 }, { 2340, 80 }, { 2480, 100 },
+};
+inline int ballBatPercentFromRaw(int raw) {
+  const int n = sizeof(BALL_BAT_RAW) / sizeof(BALL_BAT_RAW[0]);
+  if (raw <= BALL_BAT_RAW[0].raw) return 0;
+  if (raw >= BALL_BAT_RAW[n - 1].raw) return 100;
+  for (int i = 1; i < n; i++) {
+    if (raw < BALL_BAT_RAW[i].raw) {
+      int dr = BALL_BAT_RAW[i].raw - BALL_BAT_RAW[i - 1].raw, dp = BALL_BAT_RAW[i].pct - BALL_BAT_RAW[i - 1].pct;
+      return BALL_BAT_RAW[i - 1].pct + (raw - BALL_BAT_RAW[i - 1].raw) * dp / dr;
+    }
+  }
+  return 100;
+}
+
 // Suaviza la tension (media movil exponencial, 1/4 por lectura), hace que el porcentaje mostrado solo
 // baje mientras dura la descarga (el pico de carga justo tras desenchufar, o un bache por carga, no lo
 // suben ni lo hacen bailar) y decide el apagado: la tension suavizada tiene que estar bajo el limite
