@@ -11,6 +11,9 @@ void Pet::begin() {
     load();
   }
   lastTick = millis();
+  syncAnchorEpoch = prefs.getUInt("seen", 0);
+  syncAnchorMs = lastTick;
+  syncAnchorReady = true;
 }
 
 void Pet::newEgg() {
@@ -47,15 +50,22 @@ static uint8_t dropTo(uint8_t v, uint8_t d, uint8_t fl) {
 }
 
 void Pet::setClock(uint32_t nowEpoch) {
+  syncAnchorEpoch = nowEpoch;
+  syncAnchorMs = millis();
+  syncAnchorReady = true;
   lastSeenEpoch = nowEpoch;
   if (nowEpoch) save();  // persiste ya: un corte de luz no pierde la referencia
 }
 
 void Pet::syncClock(uint32_t nowEpoch) {
-  uint32_t seen = prefs.getUInt("seen", 0);
+  uint32_t seen = syncAnchorReady ? syncAnchorEpoch : prefs.getUInt("seen", 0);
+  uint32_t liveMs = syncAnchorReady ? millis() - syncAnchorMs : 0;
   lastSeenEpoch = nowEpoch;
   if (nowEpoch == 0) return;
-  uint32_t mins = (seen && nowEpoch > seen) ? (nowEpoch - seen) / 60 : 0;
+  uint32_t mins = clockOfflineMinutes(seen, nowEpoch, liveMs);
+  syncAnchorEpoch = nowEpoch;
+  syncAnchorMs = millis();
+  syncAnchorReady = true;
   if (mins < 2 || ceremony != CER_NONE || starterPick) {
     save();  // primera vez, sin tiempo que aplicar o aun eligiendo inicial
     return;

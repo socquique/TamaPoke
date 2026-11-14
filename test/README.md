@@ -29,6 +29,7 @@ python3 test/test_tools.py    # solo las herramientas de tools/
 | `test_screenlock.cpp` | PWR triple-press, lock hint timing, unlocked reboot, BOOT gesture reset, render/brightness/sleep policy and rollover; `screenlock.cpp` also checks 22 gesture/lock scenarios at compile time |
 | `test_bootbutton.cpp` | 1.75C BOOT button: debounce, single/double/long press timing and edge cases |
 | `test_trainingtouch.cpp` | 1.75C strength training: tap target, hold-to-exit button, CST9217 report decoding |
+| `test_clockzone.cpp` | timezone: unset = old UTC pass-through, NVS setting and restart, bad strings, phone CTS offset applied once, local midnight, no double-counted ageing on resync |
 | `test_tools.py` | los scripts de `tools/` compilan, los datos de la Pokedex son coherentes y `dex.h` sigue coincidiendo con lo que genera `tools/gen_dex.py` |
 
 ## Como esta montado

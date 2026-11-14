@@ -350,6 +350,25 @@ The idle screen paints the sky from the **RTC's real time** (dawn / day / dusk /
 night with moon and stars) and the ground from the **type's biome** (meadow,
 beach, forest, volcano, mountain, snow). Sleeping forces night.
 
+### Optional: network time and timezone
+
+Out of the box nothing changes: you set the clock by hand on the clock screen
+and no radio is switched on. If you want, the clock can also set itself, over
+the USB serial console (115200):
+
+- **Wi-Fi NTP:** `WIFISSID <name>` and `WIFIPASS <password>` (kept in the
+  board's NVS, never in the firmware), then `WIFISYNC`. After that it syncs on
+  every boot and turns Wi-Fi off again.
+- **Phone over Bluetooth:** `BTPAIR`, then pair **TamaPoke** in the phone's
+  Bluetooth settings. It reads the phone's time and, from then on, listens for
+  45 s at boot if Wi-Fi isn't set up or fails.
+- **Timezone:** network time is UTC, so also set your zone, e.g. `TZ JST-9` or
+  `TZ CET-1CEST,M3.5.0,M10.5.0/3` (POSIX format; saved, `TZCLR` removes it).
+  Without a zone the clock behaves as before. A board whose clock was set by
+  hand needs setting once more after choosing a zone.
+
+Details in [`TIMESYNC.md`](TIMESYNC.md).
+
 ## Layout
 
 - `TamaPoke.ino` — init, game loop, render of every screen, gestures, serial console, audio
@@ -399,7 +418,7 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
 `SHINY` · `NICK <x>` · `BYE` / `RUN` (farewell / runaway) · `ABANDON` (force the
 runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio test) ·
 `REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
-`TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
+`TIME <epoch>` / `RTCSET <epoch>` · `TZ <posix>` / `TZ?` / `TZCLR` (timezone) · `WIFISSID` / `WIFIPASS` / `WIFISYNC` / `WIFI?` / `WIFICLR` (NTP) · `BTPAIR` / `BTSYNC` / `BT?` / `BTCLR` (phone time over Bluetooth; see [`TIMESYNC.md`](TIMESYNC.md)) · `HEALTH` (uptime + heap for the soak test) ·
 `LS` / `PUT` (SD files).
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
