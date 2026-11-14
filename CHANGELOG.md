@@ -13,6 +13,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - **Dutch (Nederlands), the ninth language.** Full UI and the medal texts,
   appended after Korean so saved language settings keep their meaning. Species
   names stay English, as Dutch uses the English names for gen 1.
+- **SpotPear 1.28" AI Ball** (experimental): build with
+  `-DBOARD_SPOTPEAR_BALL128`. Replaces the ball's XiaoZhi firmware. The
+  unchanged UI is drawn at 480×480 and shrunk 2:1 to the 240×240 GC9A01 panel,
+  with touch (CST816D) scaled back up. Sound, microSD sprites and the battery
+  gauge work; no RTC. The other boards' builds are unchanged. See the
+  README.
 
 ## [1.20] - 2026-11-13
 

@@ -11,6 +11,8 @@
 // 1.75C:         ESP32S3 Dev Module | Flash 32MB | PSRAM OPI | CDC On Boot
 //                -DBOARD_AMOLED_175C=1 + boards/175c/partitions.csv
 //                (tools/build_175c.sh). See PORTING.md and board.h.
+// SpotPear 1.28 AI Ball: same as the original 1.75 + -DBOARD_SPOTPEAR_BALL128
+//                (experimental; 480 canvas shrunk 2:1 to the 240 panel). See board.h.
 //
 // Los sprites y la tabla de especies se generan con tools/sprites.py (emit).
 
@@ -22,6 +24,15 @@
 #include "TouchDrvGT911.hpp"
 #else
 #include "TouchDrvCSTXXX.hpp"
+#endif
+// I2C bus and pins of the touch chip: the shared Wire bus unless the board
+// gives the touch its own (SpotPear 1.28 AI Ball: Wire1 on 11/7)
+#ifndef TOUCH_WIRE
+#define TOUCH_WIRE Wire
+#endif
+#ifndef TP_SDA
+#define TP_SDA IIC_SDA
+#define TP_SCL IIC_SCL
 #endif
 #include <U8g2lib.h>  // fuentes CJK (japones); ver applyLangFont()
 #include <esp_sleep.h>
@@ -74,6 +85,50 @@ void displaySetBrightness(uint8_t v) {
   }
   ledcWrite(LCD_BL, v);
 }
+#elif defined(BOARD_SPOTPEAR_BALL128)
+// SpotPear 1.28 AI Ball: GC9A01A 240x240 over SPI. The UI still draws into the
+// 480x480 canvas below; Arduino_Canvas_Half::flush() averages every 2x2 block
+// into one panel pixel (halfscale.h) and streams the 240x240 frame.
+#include "halfscale.h"
+Arduino_DataBus *bus = new Arduino_ESP32SPI(LCD_DC, LCD_CS, LCD_SCLK, LCD_MOSI, GFX_NOT_DEFINED /* MISO */);
+Arduino_GC9A01 *panel = new Arduino_GC9A01(bus, LCD_RESET, 0 /*rotation*/, true /*ips*/, PANEL_WIDTH, PANEL_HEIGHT);
+// backlight is active LOW: duty 255 = off
+void displaySetBrightness(uint8_t v) {
+  static bool attached = false;
+  if (!attached) {
+    ledcAttach(LCD_BL, 5000, 8);
+    attached = true;
+  }
+  ledcWrite(LCD_BL, 255 - v);
+}
+#define HALF_BAND 8  // panel rows per SPI burst (240 % 8 == 0); buffer stays in internal RAM
+class Arduino_Canvas_Half : public Arduino_Canvas {
+public:
+  using Arduino_Canvas::Arduino_Canvas;
+  void flush(bool force_flush = false) override {
+    if (!_framebuffer) return;
+    static uint16_t band[PANEL_WIDTH * HALF_BAND];
+    static uint32_t frames = 0, totalUs = 0;
+    uint32_t t0 = micros();
+    const uint16_t *src = _framebuffer;
+    panel->startWrite();  // one SPI transaction for the whole frame
+    panel->writeAddrWindow(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+    for (int y = 0; y < PANEL_HEIGHT; y += HALF_BAND) {
+      for (int k = 0; k < HALF_BAND; k++, src += 2 * WIDTH)
+        halfscaleRows565(src, src + WIDTH, band + k * PANEL_WIDTH, PANEL_WIDTH);
+      bus->writePixels(band, PANEL_WIDTH * HALF_BAND);
+    }
+    panel->endWrite();
+    // report the cost once, averaged over the first 30 frames (for the fps note)
+    if (frames < 30) {
+      totalUs += micros() - t0;
+      if (++frames == 30)
+        Serial.printf("flush 480->240: %lu us/frame avg over 30 frames (SPI %d MHz)\n",
+                      (unsigned long)(totalUs / 30), DISPLAY_BEGIN_HZ / 1000000);
+    }
+  }
+};
+#define CANVAS_CLASS Arduino_Canvas_Half
 #else
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -82,10 +137,15 @@ Arduino_CO5300 *panel = new Arduino_CO5300(
 void displaySetBrightness(uint8_t v) { panel->setBrightness(v); }
 #endif
 // Framebuffer completo en PSRAM: dibujamos todo y hacemos flush() (sin parpadeo)
-Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
+#ifndef CANVAS_CLASS
+#define CANVAS_CLASS Arduino_Canvas
+#endif
+Arduino_Canvas *gfx = new CANVAS_CLASS(LCD_WIDTH, LCD_HEIGHT, panel);
 
 #if TOUCH_POLLING
 TouchDrvGT911 touch;
+#elif defined(BOARD_SPOTPEAR_BALL128)
+TouchDrvCST816 touch;
 #else
 TouchDrvCST92xx touch;
 #endif
@@ -388,6 +448,14 @@ void updateScreenLock(uint32_t now) {
 }
 
 void setup() {
+#if defined(BOARD_SPOTPEAR_BALL128)
+  // Hold the power latch first: on battery the board switches off without it.
+  pinMode(POWER_LATCH_PIN, OUTPUT);
+  digitalWrite(POWER_LATCH_PIN, HIGH);
+  // Backlight off (active LOW) until the first frame and displaySetBrightness()
+  pinMode(LCD_BL, OUTPUT);
+  digitalWrite(LCD_BL, HIGH);
+#endif
   Serial.setRxBufferSize(8192);  // la transferencia a SD llega en bloques de 2 KB
   Serial.begin(115200);
   // CRITICO: sin esto, Serial.print BLOQUEA el juego cuando no hay un
@@ -428,7 +496,7 @@ void setup() {
   // I2C desde handleTouch. begin() solo comprueba presencia y lee la resolucion.
   bool touchOk = false;
   for (int i = 0; i < 3 && !touchOk; i++) {  // a veces falla al primer intento
-    touchOk = touch.begin(Wire, TOUCH_ADDR, IIC_SDA, IIC_SCL);
+    touchOk = touch.begin(TOUCH_WIRE, TOUCH_ADDR, TP_SDA, TP_SCL);
     if (!touchOk) delay(150);
   }
   if (!touchOk) Serial.println("GT911 no detectado");
@@ -440,15 +508,23 @@ void setup() {
   touch.setPins(TP_RESET, TP_INT);
   bool touchOk = false;
   for (int i = 0; i < 3 && !touchOk; i++) {  // a veces falla al primer intento
-    touchOk = touch.begin(Wire, TOUCH_ADDR, IIC_SDA, IIC_SCL);
+    touchOk = touch.begin(TOUCH_WIRE, TOUCH_ADDR, TP_SDA, TP_SCL);
     if (!touchOk) delay(150);
   }
+#if defined(BOARD_SPOTPEAR_BALL128)
+  if (!touchOk) Serial.println("CST816 no detectado");
+  // CST816 reports panel pixels (0..239); handleTouch() scales them to the 480 canvas
+  touch.setMaxCoordinates(PANEL_WIDTH, PANEL_HEIGHT);
+  touch.setMirrorXY(false, false);
+  touch.setSwapXY(false);
+#else
   if (!touchOk) Serial.println("CST9217 no detectado");
   // begin() deja el chip en modo comando (lee la identidad y no sale);
   // hace falta un reset por hardware para que vuelva a reportar toques
   touch.reset();
   touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
   touch.setMirrorXY(true, true);  // panel montado 180 deg; same on official 1.75C widgets demo
+#endif
   // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
   pinMode(TP_INT, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
@@ -971,10 +1047,15 @@ void handleTouch() {
   // El contador de rechazos salio 0 en ambos casos, asi que NO funciona
   // saltandose lecturas cuando el chip no contesta: lo que hace es despertarlo,
   // para que la lectura siguiente no se encuentre el CST9217 dormido.
-  Wire.beginTransmission(TOUCH_ADDR);
-  if (Wire.endTransmission() != 0) return;  // no responde: se reintenta en 20 ms
+  TOUCH_WIRE.beginTransmission(TOUCH_ADDR);
+  if (TOUCH_WIRE.endTransmission() != 0) return;  // no responde: se reintenta en 20 ms
   int16_t x, y;
   bool pressed = touch.getPoint(&x, &y, 1) > 0;
+#if defined(BOARD_SPOTPEAR_BALL128)
+  // panel pixel (0..239, edge reads clamped) -> 480 canvas the UI is laid out in
+  x = constrain(x, 0, PANEL_WIDTH - 1) * 2;
+  y = constrain(y, 0, PANEL_HEIGHT - 1) * 2;
+#endif
 #if BOARD_AMOLED_175C
   if (touchNeedsRelease) {
     wasPressed = pressed;

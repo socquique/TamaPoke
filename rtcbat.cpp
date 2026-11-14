@@ -175,6 +175,50 @@ bool pwrShortPressed() {
   return hit;
 #endif
 }
+#elif defined(BOARD_SPOTPEAR_BALL128)
+// SpotPear 1.28 AI Ball: battery but no PMU. Only the gauge is real: the
+// percentage comes from the raw ADC on GPIO1 (XiaoZhi's table, batcurve.h) and
+// charging from GPIO41. There is no VBUS sense, so "USB present" stays true
+// (no light sleep, no low-battery saving or shutdown), as before.
+static uint32_t pollMs = 2000, powerCacheT = 0;
+static int cachedPct = -1;
+static bool cachedCharging = false;
+static uint16_t rawHist[3];  // moving average of the last 3 polls, like XiaoZhi
+static uint8_t rawCount = 0, rawNext = 0;
+
+bool batBegin() {
+  pinMode(BAT_CHARGE_PIN, INPUT_PULLUP);
+  analogSetPinAttenuation(BAT_ADC_PIN, ADC_11db);  // 11 dB == IDF's 12 dB, XiaoZhi's setting
+  return true;
+}
+void pmuEnablePanel() {}
+void batSetPollMs(uint32_t ms) { pollMs = ms; }
+
+static void refreshPower() {
+  uint32_t now = millis();
+  if (powerCacheT && now - powerCacheT < pollMs) return;
+  powerCacheT = now ? now : 1;
+  uint32_t sum = 0;
+  for (int i = 0; i < 8; i++) sum += analogRead(BAT_ADC_PIN);
+  rawHist[rawNext] = sum / 8;
+  rawNext = (rawNext + 1) % 3;
+  if (rawCount < 3) rawCount++;
+  uint32_t avg = 0;
+  for (uint8_t i = 0; i < rawCount; i++) avg += rawHist[i];
+  cachedPct = ballBatPercentFromRaw(avg / rawCount);
+  // XiaoZhi: a full battery is not shown as charging
+  cachedCharging = digitalRead(BAT_CHARGE_PIN) == HIGH && cachedPct < 100;
+}
+
+int batPercent() { refreshPower(); return cachedPct; }
+bool batCharging() { refreshPower(); return cachedCharging; }
+int batMillivolts() { return 0; }  // divider ratio unknown: no real battery voltage
+bool batShouldShutdown() { return false; }
+void batPowerOff() {}
+bool usbPresent() { return true; }
+bool usbPresentNow() { return true; }
+void pwrSetup() {}
+bool pwrShortPressed() { return false; }
 #else
 // placa sin AXP2101 ni bateria (Guition 4848S040: alimentacion USB-C): toda la
 // gestion de energia es no-op; se comporta como siempre enchufado

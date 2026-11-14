@@ -9,7 +9,7 @@
 
 #include "board.h"  // eleccion de placa (flags) y pines/capacidades de la Guition
 
-#if !defined(BOARD_GUITION_4848S040)  // Waveshare 1.75 / 1.75C (la Guition vive en board.h)
+#if !defined(BOARD_GUITION_4848S040) && !defined(BOARD_SPOTPEAR_BALL128)  // Waveshare 1.75 / 1.75C (Guition y SpotPear viven en board.h)
 
 #define XPOWERS_CHIP_AXP2101
 
@@ -75,4 +75,4 @@
 #endif
 #define HAS_AUDIO 1
 #define HAS_SD 1  // "hay almacenamiento de sprites": tarjeta SD en la 1.75; en la 1.75C es LittleFS en flash (ver sdmon.cpp)
-#endif  // !BOARD_GUITION_4848S040
+#endif  // !BOARD_GUITION_4848S040 && !BOARD_SPOTPEAR_BALL128
