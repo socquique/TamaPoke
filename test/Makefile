@@ -9,13 +9,13 @@ SRC_DIR  := ..
 BUILD    := build
 BIN      := $(BUILD)/tamapoke_tests
 
-SOURCES := main.cpp shim/shim.cpp test_pet.cpp test_dex.cpp test_i18n.cpp test_blit.cpp test_batcurve.cpp test_power.cpp test_bootbutton.cpp test_screenlock.cpp test_trainingtouch.cpp \
+SOURCES := main.cpp shim/shim.cpp test_pet.cpp test_dex.cpp test_i18n.cpp test_blit.cpp test_batcurve.cpp test_power.cpp test_bootbutton.cpp test_screenlock.cpp test_trainingtouch.cpp test_halfscale.cpp \
            $(SRC_DIR)/pet.cpp $(SRC_DIR)/i18n.cpp $(SRC_DIR)/screenlock.cpp $(SRC_DIR)/trainingtouch.cpp
 
 .PHONY: all run clean asan
 all: run
 
-$(BIN): $(SOURCES) framework.h $(SRC_DIR)/bootbutton.h $(SRC_DIR)/screenlock.h $(SRC_DIR)/trainingtouch.h shim/Arduino.h shim/Preferences.h
+$(BIN): $(SOURCES) framework.h $(SRC_DIR)/bootbutton.h $(SRC_DIR)/screenlock.h $(SRC_DIR)/trainingtouch.h $(SRC_DIR)/halfscale.h shim/Arduino.h shim/Preferences.h
 	@mkdir -p $(BUILD)
 	$(CXX) $(CXXFLAGS) -I shim -o $@ $(SOURCES) $(LDFLAGS)
 

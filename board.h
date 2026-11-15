@@ -7,6 +7,7 @@
 //       Experimental community support. Build with -DBOARD_AMOLED_175C=1 and the
 //       partition table in boards/175c/partitions.csv (tools/build_175c.sh does both).
 //   (Guition 4848S040: ver mas abajo, se elige con -DBOARD_GUITION_4848S040)
+//   (SpotPear 1.28" AI Ball: ver mas abajo, se elige con -DBOARD_SPOTPEAR_BALL128)
 //
 // The default build (CI, web installer, Arduino IDE without extra flags) is the
 // original 1.75 and is unchanged by the 1.75C code, which is all behind this flag.
@@ -105,6 +106,78 @@
 #define SD_SPI_MOSI 47  // == LCD_MOSI
 #define SD_SPI_MISO 41
 #define SD_SPI_HZ 10000000
+
+#elif defined(BOARD_SPOTPEAR_BALL128)
+// SpotPear "AI Voice Robot Ball" (ESP32-S3 N16R8, 1.28" round GC9A01A 240x240,
+// CST816D touch, ES8311, microSD, battery). Experimental. The stock XiaoZhi
+// firmware is replaced entirely. Pins from 78/xiaozhi-esp32
+// main/boards/spotpear/sp-esp32-s3-1.28-box/config.h and the SpotPear wiki.
+//
+// The UI is NOT redrawn for 240 px: it is drawn unchanged into a 480x480 canvas
+// (466 design centred by UI_DX = 7, as on the Guition) and every flush averages
+// each 2x2 block into one panel pixel (halfscale.h). Touch is scaled x2 back.
+
+// --- Display GC9A01A over SPI ---------------------------------------------
+#define LCD_WIDTH 480     // logical canvas the UI draws into
+#define LCD_HEIGHT 480
+#define PANEL_WIDTH 240   // physical panel
+#define PANEL_HEIGHT 240
+#define PANEL_ROUND 1
+#define LCD_SCLK 4
+#define LCD_MOSI 2
+#define LCD_CS 5
+#define LCD_DC 47
+#define LCD_RESET 38
+#define LCD_BL 42         // backlight, PWM, ACTIVE LOW
+// Orientation: Arduino_GC9A01 rotation 0 (MADCTL 0x08) is upright and not
+// mirrored on the ball (XiaoZhi's "mirror X" is relative to esp_lcd's default)
+// SPI clock. Measured flush (2:1 shrink + transfer): 49 ms at 40 MHz,
+// 38 ms at 80 MHz, image clean at 80 on the ball
+#define DISPLAY_BEGIN_HZ 80000000
+
+// --- Touch CST816D, on its OWN I2C bus (Wire1) ------------------------------
+#define TP_SDA 11
+#define TP_SCL 7
+#define TP_INT 12
+#define TP_RESET 6
+#define TOUCH_ADDR 0x15
+#define TOUCH_POLLING 0   // has an INT line
+#define TOUCH_WIRE Wire1
+
+// --- Audio: ES8311 on Wire (same I2S pins as the 1.75C) ---------------------
+#define IIC_SDA 15
+#define IIC_SCL 14
+#define I2S_MCK_IO 16
+#define I2S_BCK_IO 9
+#define I2S_WS_IO 45
+#define I2S_DO_IO 8
+#define I2S_DI_IO 10
+#define PA 46
+
+// --- microSD, SDMMC 1-bit ---------------------------------------------------
+#define SDMMC_CLK 17
+#define SDMMC_CMD 18
+#define SDMMC_DATA 21
+
+// --- Power and buttons ------------------------------------------------------
+// The board only stays on from battery while GPIO3 is held HIGH: setup()
+// drives it first thing.
+#define POWER_LATCH_PIN 3
+// Battery gauge (rtcbat.cpp): raw ADC on GPIO1 mapped with XiaoZhi's table
+// (batcurve.h), charge status on GPIO41 (pull-up, HIGH = charging). No VBUS
+// sense, so the firmware still treats the ball as always on USB.
+#define BAT_ADC_PIN 1
+#define BAT_CHARGE_PIN 41
+#define BOOT_BUTTON_PIN 0
+
+// --- Capabilities -----------------------------------------------------------
+// No AXP2101 and no PCF85063: same degrade paths as the Guition.
+#define HAS_PMU 0
+#define HAS_RTC 0
+#define HAS_AUDIO 1
+#define HAS_SD 1
+#define SD_SPI 0
+#define BOARD_NAME "SpotPear ESP32-S3 1.28 AI Ball"
 #endif
 
 // panel redondo (AMOLED 466) o cuadrado; la placa puede redefinirlo

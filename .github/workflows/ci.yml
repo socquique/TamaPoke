@@ -43,6 +43,15 @@ jobs:
           --build-property "compiler.cpp.extra_flags=-DBOARD_GUITION_4848S040"
           .
 
+      # SpotPear 1.28" AI Ball (GC9A01 240x240 + CST816, experimental): same
+      # code and FQBN, the UI is drawn at 480 and shrunk 2:1 on flush.
+      - name: Compile (SpotPear 1.28 AI Ball)
+        run: >
+          arduino-cli compile --warnings=all
+          --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
+          --build-property "compiler.cpp.extra_flags=-DBOARD_SPOTPEAR_BALL128"
+          .
+
       # Waveshare AMOLED 1.75C (experimental): mismo codigo con
       # -DBOARD_AMOLED_175C=1 y su tabla de particiones (boards/175c/). Se
       # compila con el mismo script que se usa en casa para que no se oxide.
