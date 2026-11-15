@@ -8,6 +8,13 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ## [Unreleased]
 
+### Fixed
+
+- **Updating from the web installer wiped the save (#30).** The installer
+  flashed one combined image from `0x0`, and its padding overwrote the NVS where
+  the pet lives, even without ticking "Erase device". It now flashes the
+  bootloader, partition table and app separately and leaves the NVS alone.
+
 ### Added
 
 - **Dutch (Nederlands), the ninth language.** Full UI and the medal texts,
