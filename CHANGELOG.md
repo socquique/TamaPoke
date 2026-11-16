@@ -6,7 +6,14 @@ bottom of the clock/settings screen (swipe down) and `web/manifest.json`.
 Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 **without** ticking "Erase device" keeps your Pokémon.
 
-## [Unreleased]
+## [1.21] - 2026-11-16
+
+### Changed
+
+- **A screen turned off with PWR now only wakes with PWR** (original 1.75,
+  #43). Brushing the screen in a pocket used to turn it back on and drain the
+  battery. Touch no longer wakes it (or the CPU) while it's off; the normal
+  dimming after a while without touching still wakes with a tap.
 
 ### Fixed
 
@@ -14,7 +21,6 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   found and tested by LivesAtHome). The touch library reads with `readBytes()`,
   which waited Stream's default 1000 ms when the dozing chip answered short; it
   now gives up after 20 ms.
-
 - **Updating from the web installer wiped the save (#30).** The installer
   flashed one combined image from `0x0`, and its padding overwrote the NVS where
   the pet lives, even without ticking "Erase device". It now flashes the

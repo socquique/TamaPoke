@@ -53,7 +53,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.20"
+#define FW_VERSION "1.21"
 
 #if defined(BOARD_GUITION_4848S040)
 // ST7701S: la secuencia de init viaja por SPI de 3 hilos y los pixels por el
@@ -764,6 +764,8 @@ void idleWait(PowerCtx c) {
 #if !TOUCH_POLLING
   // no sleep during a gesture/radio operation or while QSPI DMA is in flight
   bool locked = screenIsLocked();
+  // con la pantalla apagada por PWR el tactil no despierta la CPU (#43)
+  bool touchWake = !locked && !screenOff;
   bool controlsBusy = false;
 #if BOARD_AMOLED_175C
   // PWR must wake at its FIRST edge, then stay awake through
@@ -773,7 +775,7 @@ void idleWait(PowerCtx c) {
   if (!controlsBusy && lightSleepAllowed(c) && millis() - lastRender >= 100 && !audioBusy()) {
     c.usb = usbPresentNow();
     if (!lightSleepAllowed(c)) { delay(idleDelayMs(c)); return; }
-    if (!locked && digitalRead(TP_INT) == LOW) { gTouchIrq = true; delay(1); return; }
+    if (touchWake && digitalRead(TP_INT) == LOW) { gTouchIrq = true; delay(1); return; }
 #if BOARD_AMOLED_175C
     if (digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED ||
         (!locked && digitalRead(BOOT_BUTTON_PIN) == LOW)) { delay(1); return; }
@@ -785,7 +787,7 @@ void idleWait(PowerCtx c) {
       if ((int32_t)due < (int32_t)ms) ms = (int32_t)due > 1 ? due : 1;
     }
     esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000);
-    if (!locked) gpio_wakeup_enable((gpio_num_t)TP_INT, GPIO_INTR_LOW_LEVEL);
+    if (touchWake) gpio_wakeup_enable((gpio_num_t)TP_INT, GPIO_INTR_LOW_LEVEL);
 #if BOARD_AMOLED_175C
     gpio_wakeup_enable((gpio_num_t)PWR_SENSE_PIN, GPIO_INTR_HIGH_LEVEL);
     if (!locked) gpio_wakeup_enable((gpio_num_t)BOOT_BUTTON_PIN, GPIO_INTR_LOW_LEVEL);
@@ -796,7 +798,7 @@ void idleWait(PowerCtx c) {
     gpio_wakeup_disable((gpio_num_t)PWR_SENSE_PIN);
     if (!locked) gpio_wakeup_disable((gpio_num_t)BOOT_BUTTON_PIN);
 #endif
-    if (!locked) {
+    if (touchWake) {
       gpio_wakeup_disable((gpio_num_t)TP_INT);
       gpio_set_intr_type((gpio_num_t)TP_INT, GPIO_INTR_NEGEDGE);
       if (digitalRead(TP_INT) == LOW) gTouchIrq = true;
@@ -1027,6 +1029,14 @@ void handleTouch() {
   static uint32_t lastPoll = 0;
   if (millis() - lastPoll < 20) return;  // 50 Hz le sobra a un dedo
   lastPoll = millis();
+  // Pantalla apagada con PWR (1.75 original): solo PWR la enciende. Un roce en
+  // el bolsillo la encendia y gastaba la bateria (#43). El atenuado normal por
+  // inactividad (dimStage) si se despierta tocando.
+  if (screenOff) {
+    gTouchIrq = false;
+    wasPressed = false;
+    return;
+  }
   // solo tocamos el bus si el chip aviso por INT o si el dedo sigue abajo (hay
   // que detectar el levantamiento). Leer el CST9217 dormido se colgaba ~1s y
   // congelaba el loop entero; SensorLib no respeta el timeout de Wire.
