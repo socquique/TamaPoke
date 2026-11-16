@@ -470,6 +470,12 @@ void setup() {
   // tactil; el cuelgue del tactil dormido se resuelve gateando por INT, ver
   // handleTouch).
   Wire.setTimeOut(50);
+  // Ese es el timeout del bus. SensorLib lee con requestFrom() + readBytes(), y
+  // readBytes() usa el de Stream (setTimeout, con "o" minuscula), 1000 ms por
+  // defecto: si el chip dormido devuelve menos bytes, el bucle se congelaba 1 s
+  // (#46). requestFrom() es sincrono, asi que los bytes ya estan o no llegaran.
+  Wire.setTimeout(20);
+  TOUCH_WIRE.setTimeout(20);  // la SpotPear lleva el tactil en Wire1
 
 #if HAS_PMU
   // CRITICO: encender la alimentacion del panel (BLDO1=OLED VDD 3.3V) ANTES de

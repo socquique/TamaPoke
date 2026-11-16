@@ -10,6 +10,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **Touch could freeze the game for exactly one second** after a pause (#46,
+  found and tested by LivesAtHome). The touch library reads with `readBytes()`,
+  which waited Stream's default 1000 ms when the dozing chip answered short; it
+  now gives up after 20 ms.
+
 - **Updating from the web installer wiped the save (#30).** The installer
   flashed one combined image from `0x0`, and its padding overwrote the NVS where
   the pet lives, even without ticking "Erase device". It now flashes the
