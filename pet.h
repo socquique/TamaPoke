@@ -89,7 +89,7 @@ public:
   bool lovesBerry(uint8_t color) const {
     return !isEgg() && (speciesId % 3) == color;  // gusto oculto por especie
   }
-  void playResult(uint8_t score);  // recompensa del minijuego (entrena VEL)
+  void playResult(uint16_t fullScore);  // recompensa del minijuego (entrena VEL)
   uint8_t trainStrength(uint16_t hits);  // saco de entrenamiento (entrena FUE)
 
   // stats de combate: base real de gen 1 x genes + nivel + entrenamiento

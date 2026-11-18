@@ -467,8 +467,10 @@ void Pet::feedCandy() {
   save();
 }
 
-void Pet::playResult(uint8_t score) {
+void Pet::playResult(uint16_t fullScore) {
   if (ceremony != CER_NONE || isEgg()) return;
+  // el record guarda la puntuacion entera; las recompensas, topadas a 255 como antes (#48)
+  uint8_t score = fullScore > 255 ? 255 : (uint8_t)fullScore;
   uint8_t v = trSpe + score / 5;  // jugar entrena la velocidad
   trSpe = v > 100 ? 100 : v;
   joy = clamp100(joy + 5 + (score > 15 ? 30 : score * 2));
@@ -477,7 +479,7 @@ void Pet::playResult(uint8_t score) {
   int burn = (int)weight - score * 2;  // el ejercicio quema peso
   weight = burn > 0 ? burn : 0;
   if (score >= 5) heartUntil = millis() + HEART_MS;
-  if (score > gameHi) gameHi = score;  // nuevo record
+  if (fullScore > gameHi) gameHi = fullScore;  // nuevo record
   addBond(2);
   registerCare();
   save();

@@ -6,6 +6,18 @@ bottom of the clock/settings screen (swipe down) and `web/manifest.json`.
 Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 **without** ticking "Erase device" keeps your Pokémon.
 
+## [Unreleased]
+
+### Fixed
+
+- **The screen could turn itself on or off** (original 1.75). A failed I2C read
+  of the PMU came back as 0xFF in XPowersLib, which looked like a PWR press.
+  The PWR check now reads the register itself and ignores a failed read. Found
+  by Mu-Muu (#47).
+- **The ball minigame score went back to 0 after 255** (#48, reported by
+  duseillierflorian-sudo). The score is 16-bit now and the record keeps it in
+  full; the rewards still count at most 255, as before.
+
 ## [1.21] - 2026-11-16
 
 ### Changed

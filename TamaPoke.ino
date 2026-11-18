@@ -200,7 +200,8 @@ bool gameOpen = false;
 uint32_t gameOverUntil = 0;
 float ballX, ballY, ballVX, ballVY, gamePetX;
 uint32_t lastGameStep = 0;  // ultima llamada a stepGame(): fisica por tiempo real, no por frame
-uint8_t gameScore, gameMisses;
+uint16_t gameScore;  // 16 bits: con uint8_t volvia a 0 al pasar de 255 (#48)
+uint8_t gameMisses;
 float hitX, hitY;             // ultimo golpe (anillo de impacto)
 uint32_t hitTime = 0;
 bool gameNewHi = false;

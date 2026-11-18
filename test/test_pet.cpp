@@ -467,6 +467,15 @@ TEST(play, minijuego_entrena_velocidad_y_guarda_record) {
   CHECK_MSG(p.gameHi == 20, "un resultado peor no baja el record");
 }
 
+TEST(play, record_pasa_de_255_y_la_recompensa_se_topa) {
+  Pet p;
+  makePet(p, 4);
+  p.trSpe = 0;
+  p.playResult(300);  // con uint8_t habria llegado como 44 (#48)
+  CHECK_EQ(p.gameHi, (uint16_t)300);
+  CHECK_EQ(p.trSpe, (uint8_t)51);  // 255/5: la recompensa se calcula con 255
+}
+
 TEST(play, jugar_sube_felicidad_y_cansa) {
   Pet p;
   makePet(p, 4);

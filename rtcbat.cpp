@@ -169,8 +169,12 @@ bool pwrShortPressed() {
   return false;  // raw GPIO3 goes to PwrButton in the sketch (triple press)
 #else
   if (!pmuOk) return false;
-  pmu.getIrqStatus();
-  bool hit = pmu.isPekeyShortPressIrq();
+  // INTSTS2 a mano: getIrqStatus() de XPowersLib 0.3.3 guarda una lectura I2C
+  // fallida (-1) como 0xFF, que parece una pulsacion corta de PWR y encendia o
+  // apagaba la pantalla sola (lo encontro Mu-Muu, #47).
+  int st = pmu.readRegister(XPOWERS_AXP2101_INTSTS2);
+  if (st < 0) return false;
+  bool hit = st & (XPOWERS_AXP2101_PKEY_SHORT_IRQ >> 8);
   if (hit) pmu.clearIrqStatus();
   return hit;
 #endif
