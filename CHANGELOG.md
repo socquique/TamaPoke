@@ -49,6 +49,13 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   with touch (CST816D) scaled back up. Sound, microSD sprites and the battery
   gauge work; no RTC. The other boards' builds are unchanged. See the
   README.
+- **Optional network time and timezone.** Over the serial console you can
+  store Wi-Fi details for NTP at boot (`WIFISSID`/`WIFIPASS`/`WIFISYNC`), pair a
+  phone over Bluetooth to read its time (`BTPAIR`/`BTSYNC`), and set a POSIX
+  timezone (`TZ JST-9`, `TZCLR`) that the scene, the clock screen and the pet's
+  day follow. All opt-in: with none of it set up, no radio is turned on and the
+  clock works exactly as before. Re-syncing the time doesn't count the same
+  minutes of ageing twice. See `TIMESYNC.md`.
 
 ## [1.20] - 2026-11-13
 
