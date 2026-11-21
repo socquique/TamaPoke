@@ -5,7 +5,7 @@
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
 ![Firmware](https://img.shields.io/badge/firmware-v1.17-8A2BE2)
 [![CI](https://github.com/socquique/TamaPoke/actions/workflows/ci.yml/badge.svg)](https://github.com/socquique/TamaPoke/actions/workflows/ci.yml)
-![Code](https://img.shields.io/badge/code-MIT-blue)
+![Code](https://img.shields.io/badge/code-CC%20BY--NC--SA%204.0-blue)
 ![Languages](https://img.shields.io/badge/languages-9-FFCB05)
 [![Stars](https://img.shields.io/github/stars/socquique/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/socquique/TamaPoke/stargazers)
 
@@ -14,7 +14,7 @@ A gen-1-Pokémon-inspired tamagotchi for the
 over QSPI, CST9217 touch over I2C). Raise any of the 151, evolve it, train it
 and complete them all (shinies included).
 
-> **Personal, non-commercial fan project.** Code is MIT; the sprites are from
+> **Personal, non-commercial fan project.** Code is CC BY-NC-SA 4.0 (no selling it or devices that run it); the sprites are from
 > PMD SpriteCollab (CC BY-NC, Pokémon © Nintendo/Game Freak), and the 3D case is
 > CC BY-NC-SA. See **[License](#license)** and **Credits**.
 
@@ -474,7 +474,7 @@ who built one and reported what they found.
 
 ## License
 
-- **Source code** (firmware + tooling): **[MIT](LICENSE)**.
+- **Source code** (firmware + tooling): **[CC BY-NC-SA 4.0](LICENSE)**. You can build, modify and fork it, but not sell it or devices/kits that run it, and forks keep the same license. Versions up to v1.21 were MIT and stay MIT.
 - **Sprites & names**: © Nintendo / Game Freak / The Pokémon Company; pixel art
   from [PMD SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (CC BY-NC 4.0).
   **Non-commercial use only.**

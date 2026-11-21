@@ -8,6 +8,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ## [Unreleased]
 
+### Changed
+
+- **License: the code is now CC BY-NC-SA 4.0 instead of MIT.** You can still
+  build, modify and fork it, but not sell it or devices and kits that run it,
+  and forks keep the same license. Versions up to 1.21 stay MIT.
+
 ### Fixed
 
 - **The screen could turn itself on or off** (original 1.75). A failed I2C read
