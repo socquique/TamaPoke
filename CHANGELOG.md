@@ -8,6 +8,8 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ## [Unreleased]
 
+## [1.22] - 2026-11-23
+
 ### Changed
 
 - **License: the code is now CC BY-NC-SA 4.0 instead of MIT.** You can still
