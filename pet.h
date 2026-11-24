@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <Preferences.h>
+#include "clockzone.h"
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
@@ -174,6 +175,8 @@ public:
 private:
   Preferences prefs;
   uint32_t lastTick = 0;
+  uint32_t syncAnchorEpoch = 0, syncAnchorMs = 0;
+  bool syncAnchorReady = false;
   uint32_t eatUntil = 0;
   uint32_t heartUntil = 0;
   uint32_t evolveUntil = 0;
@@ -193,7 +196,7 @@ private:
   uint32_t medalUntil = 0;     // celebracion de medalla en pantalla
   uint32_t milestoneUntil = 0; // celebracion de hito de racha
 
-  uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
+  uint32_t today() const { return clockLocalDay(lastSeenEpoch); }
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void addBond(uint8_t amt);
   void checkMedals();

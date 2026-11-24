@@ -1,5 +1,6 @@
 #include "framework.h"
 #include "shim/Arduino.h"
+#include "../clockzone.h"
 #include <cstdio>
 #include <cstring>
 
@@ -19,6 +20,7 @@ void testFail(const char *file, int line, const std::string &msg) {
 }
 
 int main(int argc, char **argv) {
+  clockZoneBegin();
   const char *filter = argc > 1 ? argv[1] : 0;
   mockSerialSilence(true);
 
